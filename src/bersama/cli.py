@@ -6,8 +6,10 @@ import sys
 from bersama.claiming import ClaimWorkspaceGateway, ImplementationClaimService
 from bersama.config import ConfigError, load_config
 from bersama.github_issues import GitHubIssueGateway
+from bersama.execution import HarnessExecutionService
 from bersama.orchestrator import build_run_plan
 from bersama.prd_preparation import GitWorkspaceGateway, PrdPreparationService
+from bersama.integration import IntegrationService, IntegrationWorkspaceGateway
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -56,6 +58,32 @@ def build_parser() -> argparse.ArgumentParser:
         help="Path to the YAML config file. Defaults to ./bersama.yaml",
     )
     claim_parser.set_defaults(handler=_claim_issue_command)
+
+    execute_parser = subparsers.add_parser(
+        "execute-run",
+        help="Execute the agent harness for a claimed Implementation Issue.",
+    )
+    execute_parser.add_argument("repo_name", help="Named repo from the YAML config.")
+    execute_parser.add_argument("issue_number", type=int, help="Implementation Issue number.")
+    execute_parser.add_argument(
+        "--config",
+        default="bersama.yaml",
+        help="Path to the YAML config file. Defaults to ./bersama.yaml",
+    )
+    execute_parser.set_defaults(handler=_execute_run_command)
+
+    integrate_parser = subparsers.add_parser(
+        "integrate-run",
+        help="Integrate a successful Agent Run by merging its implementation branch back into its parent PRD branch.",
+    )
+    integrate_parser.add_argument("repo_name", help="Named repo from the YAML config.")
+    integrate_parser.add_argument("issue_number", type=int, help="Implementation Issue number.")
+    integrate_parser.add_argument(
+        "--config",
+        default="bersama.yaml",
+        help="Path to the YAML config file. Defaults to ./bersama.yaml",
+    )
+    integrate_parser.set_defaults(handler=_integrate_run_command)
 
     return parser
 
@@ -139,3 +167,58 @@ def _claim_issue_command(args: argparse.Namespace) -> int:
     print(f"Implementation branch: {result.implementation_branch}")
     print(f"Worktree: {result.worktree_path}")
     return 0
+
+
+def _execute_run_command(args: argparse.Namespace) -> int:
+    config = load_config(args.config)
+
+    service = HarnessExecutionService(
+        issues=GitHubIssueGateway(),
+    )
+    try:
+        result = service.execute_run(
+            repo_name=args.repo_name,
+            issue_number=args.issue_number,
+            config=config,
+        )
+    except Exception as exc:
+        print(f"Execution setup failed: {exc}", file=sys.stderr)
+        return 1
+
+    if result.status == "succeeded":
+        print(f"Harness execution succeeded for issue #{result.issue_number}")
+        print(f"Exit code: {result.exit_code}")
+        print(f"New commit: Yes")
+        print(f"Log path: {result.log_path}")
+        print(f"Run state: {result.run_state_path}")
+        return 0
+    else:
+        print(f"Harness execution failed for issue #{result.issue_number}: {result.failure_reason}", file=sys.stderr)
+        print(f"Exit code: {result.exit_code}", file=sys.stderr)
+        print(f"New commit: {'Yes' if result.new_commits else 'No'}", file=sys.stderr)
+        return 1
+
+
+def _integrate_run_command(args: argparse.Namespace) -> int:
+    config = load_config(args.config)
+    repo = config.repo(args.repo_name)
+
+    service = IntegrationService(
+        issues=GitHubIssueGateway(),
+        workspace=IntegrationWorkspaceGateway(),
+    )
+    result = service.integrate_issue(
+        repo_path=str(repo.repo_path),
+        worktree_root=str(repo.worktree_root),
+        issue_number=args.issue_number,
+    )
+
+    if result.succeeded:
+        print(f"Successfully integrated issue #{result.issue_number}")
+        print(f"Implementation branch: {result.implementation_branch}")
+        print(f"PRD branch: {result.prd_branch}")
+        return 0
+    else:
+        print(f"Failed to integrate issue #{result.issue_number}: {result.failure_message}", file=sys.stderr)
+        print(f"Failure type: {result.failure_type}", file=sys.stderr)
+        return 1

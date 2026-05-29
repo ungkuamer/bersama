@@ -1,0 +1,286 @@
+from __future__ import annotations
+
+import json
+from pathlib import Path
+import subprocess
+
+from bersama.config import AppConfig, HarnessConfig, RepoConfig
+from bersama.execution import HarnessExecutionService
+from bersama.github_issues import GitHubIssueRecord
+
+
+class FakeIssueGateway:
+    def __init__(self, *issues: GitHubIssueRecord) -> None:
+        self.issues = {issue.number: issue for issue in issues}
+
+    def view_issue(self, number: int) -> GitHubIssueRecord:
+        return self.issues[number]
+
+
+def setup_test_git_repo(tmp_path: Path) -> tuple[Path, Path, Path]:
+    """Helper to initialize repository and checkout worktree. Returns (repo_path, worktree_root, worktree_path)."""
+    # 1. Initialize main repo
+    repo_path = tmp_path / "repo"
+    repo_path.mkdir()
+    subprocess.run(["git", "init", "-b", "main"], cwd=repo_path, check=True, capture_output=True)
+    subprocess.run(["git", "config", "user.name", "Test User"], cwd=repo_path, check=True, capture_output=True)
+    subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=repo_path, check=True, capture_output=True)
+
+    dummy = repo_path / "dummy.txt"
+    dummy.write_text("initial")
+    subprocess.run(["git", "add", "dummy.txt"], cwd=repo_path, check=True, capture_output=True)
+    subprocess.run(["git", "commit", "-m", "initial commit"], cwd=repo_path, check=True, capture_output=True)
+
+    # Create prd branch
+    prd_branch = "prd/1-parent-prd"
+    subprocess.run(["git", "checkout", "-b", prd_branch], cwd=repo_path, check=True, capture_output=True)
+
+    # Create implementation branch
+    impl_branch = "impl/1/8-child-impl"
+    subprocess.run(["git", "checkout", "-b", impl_branch], cwd=repo_path, check=True, capture_output=True)
+
+    # Checkout main branch so that impl_branch can be checked out by worktree
+    subprocess.run(["git", "checkout", "main"], cwd=repo_path, check=True, capture_output=True)
+
+    # Set up worktree root and worktree
+    worktree_root = tmp_path / "worktrees"
+    worktree_root.mkdir()
+    worktree_path = worktree_root / "issue-8"
+    subprocess.run(
+        ["git", "worktree", "add", str(worktree_path), impl_branch],
+        cwd=repo_path,
+        check=True,
+        capture_output=True,
+    )
+
+    # Set up Git config inside worktree so commits succeed there as well
+    subprocess.run(["git", "config", "user.name", "Test User"], cwd=worktree_path, check=True, capture_output=True)
+    subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=worktree_path, check=True, capture_output=True)
+
+    return repo_path, worktree_root, worktree_path
+
+
+def get_mock_issues() -> FakeIssueGateway:
+    impl_issue_record = GitHubIssueRecord(
+        number=8,
+        title="Execute agent harness",
+        body="""
+## Parent PRD
+#1
+
+## What to Build
+Run the harness.
+
+## Acceptance Criteria
+- [ ] Done.
+
+## Blocked By
+None
+
+## Orchestration
+- Agent Run: run-123
+- Claimed At: 2026-05-29T16:00:00Z
+- Implementation Branch: impl/1/8-child-impl
+""".strip(),
+        labels=("implementation",),
+        state="open",
+    )
+
+    parent_prd_record = GitHubIssueRecord(
+        number=1,
+        title="Parent PRD Title",
+        body="""
+## Problem Statement
+Parent PRD.
+
+## Orchestration
+- PRD Branch: prd/1-parent-prd
+""".strip(),
+        labels=("prd",),
+        state="open",
+    )
+
+    return FakeIssueGateway(impl_issue_record, parent_prd_record)
+
+
+def test_successful_execution(tmp_path: Path) -> None:
+    repo_path, worktree_root, worktree_path = setup_test_git_repo(tmp_path)
+    issues = get_mock_issues()
+
+    # Create AppConfig
+    harnesses = {
+        "local-agent": HarnessConfig(
+            name="local-agent",
+            command="bash",
+            args_template=("-c", "echo 'success' > result.txt && git add result.txt && git commit -m 'harness commit'"),
+        )
+    }
+    repos = {
+        "demo": RepoConfig(
+            name="demo",
+            repo_path=repo_path,
+            main_branch="main",
+            worktree_root=worktree_root,
+            global_concurrency=2,
+            per_prd_concurrency=1,
+            default_harness="local-agent",
+        )
+    }
+    config = AppConfig(repos=repos, harnesses=harnesses)
+
+    service = HarnessExecutionService(issues=issues)
+    result = service.execute_run(
+        repo_name="demo",
+        issue_number=8,
+        config=config,
+    )
+
+    assert result.status == "succeeded"
+    assert result.exit_code == 0
+    assert result.new_commits is True
+    assert result.failure_reason is None
+
+    # Check Log File
+    log_file = worktree_path / "harness.log"
+    assert log_file.exists()
+
+    # Check Run State JSON
+    state_file = worktree_path / "run-state.json"
+    assert state_file.exists()
+    state = json.loads(state_file.read_text())
+    assert state["status"] == "succeeded"
+    assert state["issue_number"] == 8
+    assert state["prd_branch"] == "prd/1-parent-prd"
+    assert state["implementation_branch"] == "impl/1/8-child-impl"
+    assert "started_at" in state
+    assert "finished_at" in state
+
+
+def test_execution_failure_by_non_zero_exit(tmp_path: Path) -> None:
+    repo_path, worktree_root, worktree_path = setup_test_git_repo(tmp_path)
+    issues = get_mock_issues()
+
+    harnesses = {
+        "local-agent": HarnessConfig(
+            name="local-agent",
+            command="bash",
+            args_template=("-c", "exit 42"),
+        )
+    }
+    repos = {
+        "demo": RepoConfig(
+            name="demo",
+            repo_path=repo_path,
+            main_branch="main",
+            worktree_root=worktree_root,
+            global_concurrency=2,
+            per_prd_concurrency=1,
+            default_harness="local-agent",
+        )
+    }
+    config = AppConfig(repos=repos, harnesses=harnesses)
+
+    service = HarnessExecutionService(issues=issues)
+    result = service.execute_run(
+        repo_name="demo",
+        issue_number=8,
+        config=config,
+    )
+
+    assert result.status == "failed"
+    assert result.exit_code == 42
+    assert result.new_commits is False
+    assert "non-zero exit code 42" in result.failure_reason
+
+    # Check Run State JSON
+    state_file = worktree_path / "run-state.json"
+    assert state_file.exists()
+    state = json.loads(state_file.read_text())
+    assert state["status"] == "failed"
+    assert "non-zero exit code 42" in state["failure_reason"]
+
+
+def test_execution_failure_by_no_commits(tmp_path: Path) -> None:
+    repo_path, worktree_root, worktree_path = setup_test_git_repo(tmp_path)
+    issues = get_mock_issues()
+
+    harnesses = {
+        "local-agent": HarnessConfig(
+            name="local-agent",
+            command="bash",
+            args_template=("-c", "echo 'nothing committed'"),
+        )
+    }
+    repos = {
+        "demo": RepoConfig(
+            name="demo",
+            repo_path=repo_path,
+            main_branch="main",
+            worktree_root=worktree_root,
+            global_concurrency=2,
+            per_prd_concurrency=1,
+            default_harness="local-agent",
+        )
+    }
+    config = AppConfig(repos=repos, harnesses=harnesses)
+
+    service = HarnessExecutionService(issues=issues)
+    result = service.execute_run(
+        repo_name="demo",
+        issue_number=8,
+        config=config,
+    )
+
+    assert result.status == "failed"
+    assert result.exit_code == 0
+    assert result.new_commits is False
+    assert "created no new commits" in result.failure_reason
+
+    # Check Run State JSON
+    state_file = worktree_path / "run-state.json"
+    assert state_file.exists()
+    state = json.loads(state_file.read_text())
+    assert state["status"] == "failed"
+    assert "created no new commits" in state["failure_reason"]
+
+
+def test_execution_env_context_delivery(tmp_path: Path) -> None:
+    repo_path, worktree_root, worktree_path = setup_test_git_repo(tmp_path)
+    issues = get_mock_issues()
+
+    # The harness will write the env vars to a file, add it, and commit it
+    harnesses = {
+        "local-agent": HarnessConfig(
+            name="local-agent",
+            command="bash",
+            args_template=(
+                "-c",
+                "echo $BERSAMA_ISSUE_NUMBER:$BERSAMA_PARENT_PRD_NUMBER:$BERSAMA_PRD_BRANCH:$BERSAMA_IMPLEMENTATION_BRANCH > env.txt && git add env.txt && git commit -m 'env check'",
+            ),
+        )
+    }
+    repos = {
+        "demo": RepoConfig(
+            name="demo",
+            repo_path=repo_path,
+            main_branch="main",
+            worktree_root=worktree_root,
+            global_concurrency=2,
+            per_prd_concurrency=1,
+            default_harness="local-agent",
+        )
+    }
+    config = AppConfig(repos=repos, harnesses=harnesses)
+
+    service = HarnessExecutionService(issues=issues)
+    result = service.execute_run(
+        repo_name="demo",
+        issue_number=8,
+        config=config,
+    )
+
+    assert result.status == "succeeded"
+
+    env_file = worktree_path / "env.txt"
+    assert env_file.exists()
+    assert env_file.read_text().strip() == "8:1:prd/1-parent-prd:impl/1/8-child-impl"
