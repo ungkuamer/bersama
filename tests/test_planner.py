@@ -251,3 +251,28 @@ def test_non_ready_unclaimed_issue_is_not_claimable() -> None:
     decision = result.decisions[0]
 
     assert decision.kind is PlannerDecisionKind.UNREADY
+
+
+def test_closed_claims_do_not_count_against_concurrency_limits() -> None:
+    closed_claim = implementation_issue(
+        number=4,
+        labels=("implementation",),
+        state="closed",
+        orchestration_lines=(
+            "Agent Run: run-123",
+            "Claimed At: 2026-05-29T13:30:00Z",
+            "Implementation Branch: impl/1/4-implementation",
+        ),
+    )
+    ready_same_prd = implementation_issue(number=6, parent_prd=1)
+
+    result = plan(
+        closed_claim,
+        ready_same_prd,
+        global_concurrency=2,
+        per_prd_concurrency=1,
+    )
+    decision_by_issue = {decision.issue_number: decision for decision in result.decisions}
+
+    assert decision_by_issue[6].kind is PlannerDecisionKind.CLAIMABLE
+

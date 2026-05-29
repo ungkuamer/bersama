@@ -63,7 +63,10 @@ def plan_issue_actions(
         record.number: _parse_issue_record(record) for record in issue_records
     }
     active_claims_by_prd = _count_active_claims_by_prd(
-        parsed_by_number, stale_claim_timeout=stale_claim_timeout, now=now
+        parsed_by_number,
+        issue_records_by_number,
+        stale_claim_timeout=stale_claim_timeout,
+        now=now,
     )
     global_slots = max(0, global_concurrency - sum(active_claims_by_prd.values()))
     remaining_prd_slots = {
@@ -235,6 +238,7 @@ def _parse_issue_record(record: GitHubIssueRecord) -> ParsedIssue:
 
 def _count_active_claims_by_prd(
     parsed_by_number: dict[int, ParsedIssue],
+    issue_records_by_number: dict[int, GitHubIssueRecord],
     *,
     stale_claim_timeout: timedelta,
     now: datetime,
@@ -242,6 +246,9 @@ def _count_active_claims_by_prd(
     counts: dict[int, int] = {}
     for parsed in parsed_by_number.values():
         if not isinstance(parsed, ImplementationIssue):
+            continue
+        record = issue_records_by_number.get(parsed.issue.number)
+        if record is None or record.state != "open":
             continue
         if parsed.parent_prd_number is None or not _has_claim_metadata(parsed):
             continue

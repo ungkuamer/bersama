@@ -16,22 +16,37 @@ class GitHubIssueRecord:
 
 
 class CommandRunner(Protocol):
-    def __call__(self, command: tuple[str, ...]) -> str: ...
+    def __call__(self, command: tuple[str, ...], *, cwd: str | Path | None = None) -> str: ...
 
 
-def run_subprocess(command: tuple[str, ...]) -> str:
+def run_subprocess(command: tuple[str, ...], *, cwd: str | Path | None = None) -> str:
     completed = subprocess.run(
         command,
         check=True,
         capture_output=True,
         text=True,
+        cwd=cwd,
     )
     return completed.stdout
 
 
 class GitHubIssueGateway:
-    def __init__(self, runner: CommandRunner = run_subprocess) -> None:
+    def __init__(
+        self,
+        runner: CommandRunner = run_subprocess,
+        *,
+        cwd: str | Path | None = None,
+    ) -> None:
         self._runner = runner
+        self._cwd = cwd
+
+    def _run(self, command: tuple[str, ...]) -> str:
+        if self._cwd is not None:
+            try:
+                return self._runner(command, cwd=self._cwd)
+            except TypeError:
+                return self._runner(command)
+        return self._runner(command)
 
     def list_issues(
         self,
@@ -51,11 +66,11 @@ class GitHubIssueGateway:
         if label is not None:
             command.extend(["--label", label])
 
-        output = self._runner(tuple(command))
+        output = self._run(tuple(command))
         return self._parse_issue_records(output)
 
     def view_issue(self, number: int) -> GitHubIssueRecord:
-        output = self._runner(
+        output = self._run(
             (
                 "gh",
                 "issue",
@@ -71,34 +86,60 @@ class GitHubIssueGateway:
         if not labels:
             return
 
-        self._runner(
-            (
-                "gh",
-                "issue",
-                "edit",
-                str(number),
-                "--add-label",
-                ",".join(labels),
+        try:
+            self._run(
+                (
+                    "gh",
+                    "issue",
+                    "edit",
+                    str(number),
+                    "--add-label",
+                    ",".join(labels),
+                )
             )
-        )
+        except Exception as exc:
+            import sys
+            # Attempt to create any missing labels, then retry
+            for label in labels:
+                try:
+                    self._run(("gh", "label", "create", label, "--color", "ededed"))
+                except Exception:
+                    pass
+            try:
+                self._run(
+                    (
+                        "gh",
+                        "issue",
+                        "edit",
+                        str(number),
+                        "--add-label",
+                        ",".join(labels),
+                    )
+                )
+            except Exception as retry_exc:
+                print(f"Warning: Failed to add labels {labels} to issue #{number}: {retry_exc}", file=sys.stderr)
 
     def remove_labels(self, number: int, *labels: str) -> None:
         if not labels:
             return
 
-        self._runner(
-            (
-                "gh",
-                "issue",
-                "edit",
-                str(number),
-                "--remove-label",
-                ",".join(labels),
+        try:
+            self._run(
+                (
+                    "gh",
+                    "issue",
+                    "edit",
+                    str(number),
+                    "--remove-label",
+                    ",".join(labels),
+                )
             )
-        )
+        except Exception as exc:
+            import sys
+            print(f"Warning: Failed to remove labels {labels} from issue #{number}: {exc}", file=sys.stderr)
 
     def update_body(self, number: int, body: str) -> None:
-        self._runner(
+        self._run(
             (
                 "gh",
                 "issue",
@@ -110,7 +151,7 @@ class GitHubIssueGateway:
         )
 
     def add_comment(self, number: int, body: str) -> None:
-        self._runner(
+        self._run(
             (
                 "gh",
                 "issue",
@@ -122,7 +163,7 @@ class GitHubIssueGateway:
         )
 
     def close_issue(self, number: int) -> None:
-        self._runner(("gh", "issue", "close", str(number)))
+        self._run(("gh", "issue", "close", str(number)))
 
     def _parse_issue_records(self, output: str) -> tuple[GitHubIssueRecord, ...]:
         payload = json.loads(output)

@@ -27,6 +27,11 @@ def build_parser() -> argparse.ArgumentParser:
         default="bersama.yaml",
         help="Path to the YAML config file. Defaults to ./bersama.yaml",
     )
+    run_parser.add_argument(
+        "--continuous",
+        action="store_true",
+        help="Continuously claim and execute ready issues until no more claimable issues remain.",
+    )
     run_parser.set_defaults(handler=_run_command)
 
     prepare_prd_parser = subparsers.add_parser(
@@ -98,6 +103,28 @@ def build_parser() -> argparse.ArgumentParser:
     )
     reconcile_parser.set_defaults(handler=_reconcile_command)
 
+    dashboard_parser = subparsers.add_parser(
+        "dashboard",
+        help="Start the read-only FastAPI dashboard backend.",
+    )
+    dashboard_parser.add_argument(
+        "--config",
+        default="bersama.yaml",
+        help="Path to the YAML config file. Defaults to ./bersama.yaml",
+    )
+    dashboard_parser.add_argument(
+        "--host",
+        default="127.0.0.1",
+        help="Host to bind the server to. Defaults to 127.0.0.1",
+    )
+    dashboard_parser.add_argument(
+        "--port",
+        type=int,
+        default=8000,
+        help="Port to bind the server to. Defaults to 8000",
+    )
+    dashboard_parser.set_defaults(handler=_dashboard_command)
+
     return parser
 
 
@@ -123,15 +150,19 @@ def _run_command(args: argparse.Namespace) -> int:
     print(f"Harness: {plan.harness_name}")
     print("Command: " + " ".join(plan.command))
 
+    repo = config.repo(args.repo_name)
+    issues_gateway = GitHubIssueGateway(cwd=repo.repo_path)
+
     from bersama.orchestrator import Orchestrator
-    orchestrator = Orchestrator()
-    orchestrator.run(args.repo_name, config)
+    orchestrator = Orchestrator(issues_gateway=issues_gateway)
+    orchestrator.run(args.repo_name, config, continuous=args.continuous)
     return 0
 
 
-def _reconcile_safe(repo_name: str) -> None:
+def _reconcile_safe(repo_name: str, config: AppConfig) -> None:
     try:
-        service = ReconciliationService(issues=GitHubIssueGateway())
+        repo = config.repo(repo_name)
+        service = ReconciliationService(issues=GitHubIssueGateway(cwd=repo.repo_path))
         service.reconcile()
     except Exception as exc:
         print(f"Warning: Issue state reconciliation failed: {exc}", file=sys.stderr)
@@ -142,7 +173,7 @@ def _prepare_prd_command(args: argparse.Namespace) -> int:
     repo = config.repo(args.repo_name)
 
     service = PrdPreparationService(
-        issues=GitHubIssueGateway(),
+        issues=GitHubIssueGateway(cwd=repo.repo_path),
         workspace=GitWorkspaceGateway(),
     )
     result = service.prepare_issue(
@@ -162,7 +193,7 @@ def _prepare_prd_command(args: argparse.Namespace) -> int:
     print(f"Prepared PRD issue #{result.issue_number}")
     print(f"PRD branch: {result.prd_branch} ({branch_state})")
     print(f"Issue body updated: {'yes' if result.updated_issue_body else 'no'}")
-    _reconcile_safe(args.repo_name)
+    _reconcile_safe(args.repo_name, config)
     return 0
 
 
@@ -171,7 +202,7 @@ def _claim_issue_command(args: argparse.Namespace) -> int:
     repo = config.repo(args.repo_name)
 
     service = ImplementationClaimService(
-        issues=GitHubIssueGateway(),
+        issues=GitHubIssueGateway(cwd=repo.repo_path),
         workspace=ClaimWorkspaceGateway(),
     )
     result = service.claim_issue(
@@ -186,22 +217,23 @@ def _claim_issue_command(args: argparse.Namespace) -> int:
             f"Failed to claim implementation issue #{result.issue_number}: {result.failure_message}",
             file=sys.stderr,
         )
-        _reconcile_safe(args.repo_name)
+        _reconcile_safe(args.repo_name, config)
         return 1
 
     print(f"Claimed implementation issue #{result.issue_number}")
     print(f"Agent run: {result.agent_run_id}")
     print(f"Implementation branch: {result.implementation_branch}")
     print(f"Worktree: {result.worktree_path}")
-    _reconcile_safe(args.repo_name)
+    _reconcile_safe(args.repo_name, config)
     return 0
 
 
 def _execute_run_command(args: argparse.Namespace) -> int:
     config = load_config(args.config)
+    repo = config.repo(args.repo_name)
 
     service = HarnessExecutionService(
-        issues=GitHubIssueGateway(),
+        issues=GitHubIssueGateway(cwd=repo.repo_path),
     )
     try:
         result = service.execute_run(
@@ -211,10 +243,10 @@ def _execute_run_command(args: argparse.Namespace) -> int:
         )
     except Exception as exc:
         print(f"Execution setup failed: {exc}", file=sys.stderr)
-        _reconcile_safe(args.repo_name)
+        _reconcile_safe(args.repo_name, config)
         return 1
 
-    _reconcile_safe(args.repo_name)
+    _reconcile_safe(args.repo_name, config)
     if result.status == "succeeded":
         print(f"Harness execution succeeded for issue #{result.issue_number}")
         print(f"Exit code: {result.exit_code}")
@@ -234,7 +266,7 @@ def _integrate_run_command(args: argparse.Namespace) -> int:
     repo = config.repo(args.repo_name)
 
     service = IntegrationService(
-        issues=GitHubIssueGateway(),
+        issues=GitHubIssueGateway(cwd=repo.repo_path),
         workspace=IntegrationWorkspaceGateway(),
     )
     result = service.integrate_issue(
@@ -243,7 +275,7 @@ def _integrate_run_command(args: argparse.Namespace) -> int:
         issue_number=args.issue_number,
     )
 
-    _reconcile_safe(args.repo_name)
+    _reconcile_safe(args.repo_name, config)
     if result.succeeded:
         print(f"Successfully integrated issue #{result.issue_number}")
         print(f"Implementation branch: {result.implementation_branch}")
@@ -256,7 +288,21 @@ def _integrate_run_command(args: argparse.Namespace) -> int:
 
 
 def _reconcile_command(args: argparse.Namespace) -> int:
-    service = ReconciliationService(issues=GitHubIssueGateway())
+    config = load_config(args.config)
+    repo = config.repo(args.repo_name)
+    service = ReconciliationService(issues=GitHubIssueGateway(cwd=repo.repo_path))
     service.reconcile()
     print(f"Successfully reconciled issue states for repo: {args.repo_name}")
+    return 0
+
+
+def _dashboard_command(args: argparse.Namespace) -> int:
+    import uvicorn
+    from bersama.dashboard import create_dashboard_app
+
+    config = load_config(args.config)
+    app = create_dashboard_app(config=config)
+
+    print(f"Starting dashboard backend on http://{args.host}:{args.port}")
+    uvicorn.run(app, host=args.host, port=args.port)
     return 0

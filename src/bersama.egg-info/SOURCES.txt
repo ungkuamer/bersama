@@ -5,6 +5,7 @@ src/bersama/__main__.py
 src/bersama/claiming.py
 src/bersama/cli.py
 src/bersama/config.py
+src/bersama/dashboard.py
 src/bersama/execution.py
 src/bersama/github_issues.py
 src/bersama/integration.py
@@ -22,10 +23,12 @@ src/bersama.egg-info/top_level.txt
 tests/test_claiming.py
 tests/test_cli.py
 tests/test_config.py
+tests/test_dashboard.py
 tests/test_execution.py
 tests/test_github_issues.py
 tests/test_integration.py
 tests/test_issue_parser.py
+tests/test_orchestrator.py
 tests/test_planner.py
 tests/test_prd_preparation.py
 tests/test_reconciliation.py

@@ -24,6 +24,11 @@ class RunPlan:
     command: tuple[str, ...]
 
 
+class SafeFormatDict(dict):
+    def __missing__(self, key: str) -> str:
+        return f"{{{key}}}"
+
+
 def build_run_plan(config: AppConfig, repo_name: str) -> RunPlan:
     repo = config.repo(repo_name)
     harness = config.harness(repo.default_harness)
@@ -39,7 +44,7 @@ def build_run_plan(config: AppConfig, repo_name: str) -> RunPlan:
     }
 
     rendered_args = tuple(
-        part.format(**format_context) for part in harness.args_template
+        part.format_map(SafeFormatDict(format_context)) for part in harness.args_template
     )
     command = (harness.command, *rendered_args)
 
@@ -203,11 +208,26 @@ class Orchestrator:
 
         return workflow.compile()
 
-    def run(self, repo_name: str, config: AppConfig) -> None:
+    def run(self, repo_name: str, config: AppConfig, continuous: bool = False) -> None:
         compiled_graph = self.build_workflow()
-        initial_state: OrchestrationState = {
-            "repo_name": repo_name,
-            "config": config,
-            "claimable_issues": [],
-        }
-        compiled_graph.invoke(initial_state)
+        if continuous:
+            while True:
+                initial_state: OrchestrationState = {
+                    "repo_name": repo_name,
+                    "config": config,
+                    "claimable_issues": [],
+                }
+                result_state = compiled_graph.invoke(initial_state)
+                if result_state.get("claimable_issues"):
+                    print("\n--- Continuous execution: claimable issues found. Looping to next planning pass... ---\n")
+                    continue
+                else:
+                    break
+        else:
+            initial_state: OrchestrationState = {
+                "repo_name": repo_name,
+                "config": config,
+                "claimable_issues": [],
+            }
+            compiled_graph.invoke(initial_state)
+

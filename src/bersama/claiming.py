@@ -73,6 +73,22 @@ class ClaimWorkspaceGateway:
     ) -> str:
         worktree_path = str(Path(worktree_root) / f"issue-{issue_number}")
         self._run(("mkdir", "-p", worktree_root), cwd=repo_path)
+
+        # Robustly clean up any stale worktree at this path
+        if Path(worktree_path).exists():
+            try:
+                self._run(("git", "worktree", "remove", "--force", worktree_path), cwd=repo_path)
+            except Exception:
+                import shutil
+                try:
+                    shutil.rmtree(worktree_path)
+                except Exception:
+                    pass
+            try:
+                self._run(("git", "worktree", "prune"), cwd=repo_path)
+            except Exception:
+                pass
+
         self._run(("git", "fetch", "origin", branch_name), cwd=repo_path)
         self._run(
             ("git", "worktree", "add", worktree_path, branch_name),

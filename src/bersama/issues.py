@@ -99,7 +99,14 @@ def _parse_implementation_issue(issue: GitHubIssue) -> ImplementationIssue:
     sections = _parse_sections(issue.body)
     diagnostics: list[Diagnostic] = []
 
-    parent_prd_body = sections.get("Parent PRD")
+    def get_section(names: list[str]) -> str | None:
+        for name in names:
+            for key, val in sections.items():
+                if key.strip().lower() == name.lower():
+                    return val
+        return None
+
+    parent_prd_body = get_section(["Parent PRD", "Parent"])
     if parent_prd_body is None:
         parent_prd_number = None
         diagnostics.append(_missing("missing-parent-prd", "Missing Parent PRD section."))
@@ -117,11 +124,14 @@ def _parse_implementation_issue(issue: GitHubIssue) -> ImplementationIssue:
         else:
             parent_prd_number = parent_refs[0]
 
-    what_to_build = sections.get("What to Build", "").strip()
-    if "What to Build" not in sections:
+    what_to_build_body = get_section(["What to Build", "What to build"])
+    if what_to_build_body is None:
+        what_to_build = ""
         diagnostics.append(_missing("missing-what-to-build", "Missing What to Build section."))
+    else:
+        what_to_build = what_to_build_body.strip()
 
-    acceptance_criteria_body = sections.get("Acceptance Criteria")
+    acceptance_criteria_body = get_section(["Acceptance Criteria", "Acceptance criteria"])
     if acceptance_criteria_body is None:
         acceptance_criteria = ()
         diagnostics.append(
@@ -133,7 +143,7 @@ def _parse_implementation_issue(issue: GitHubIssue) -> ImplementationIssue:
             for match in CHECKLIST_ITEM_RE.finditer(acceptance_criteria_body)
         )
 
-    blocked_by_body = sections.get("Blocked By")
+    blocked_by_body = get_section(["Blocked By", "Blocked by"])
     if blocked_by_body is None:
         blocked_by = ()
         diagnostics.append(_missing("missing-blocked-by", "Missing Blocked By section."))
@@ -142,7 +152,7 @@ def _parse_implementation_issue(issue: GitHubIssue) -> ImplementationIssue:
         if blocked_by_diagnostic is not None:
             diagnostics.append(blocked_by_diagnostic)
 
-    orchestration = _parse_orchestration(sections.get("Orchestration"))
+    orchestration = _parse_orchestration(get_section(["Orchestration"]))
 
     return ImplementationIssue(
         issue=issue,

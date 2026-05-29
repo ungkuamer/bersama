@@ -25,6 +25,7 @@ class IssueGateway(Protocol):
     def add_comment(self, number: int, body: str) -> None: ...
     def add_labels(self, number: int, *labels: str) -> None: ...
     def remove_labels(self, number: int, *labels: str) -> None: ...
+    def update_body(self, number: int, body: str) -> None: ...
 
 
 def _utc_now() -> str:
@@ -75,6 +76,28 @@ class ReconciliationService:
 
             parsed = parsed_by_number[record.number]
 
+            # C. Auto-clear orchestration metadata if user manually added ready-for-agent
+            if "ready-for-agent" in record.labels:
+                if isinstance(parsed, ImplementationIssue) and (parsed.orchestration.agent_run_id or parsed.orchestration.claimed_at):
+                    from bersama.issues import upsert_section
+                    # Clear Orchestration section to allow a clean new claim
+                    cleared_body = upsert_section(record.body, "Orchestration", "")
+                    self._issues.update_body(record.number, cleared_body)
+                    self._issues.add_comment(
+                        record.number,
+                        f"Cleared previous claim metadata on issue #{record.number} because it was marked ready-for-agent."
+                    )
+                    # Re-parse this record with cleared body so that subsequent checks see it as clean!
+                    parsed_by_number[record.number] = parse_issue(
+                        GitHubIssue(
+                            number=record.number,
+                            title=record.title,
+                            body=cleared_body,
+                            labels=record.labels,
+                        )
+                    )
+                    parsed = parsed_by_number[record.number]
+
             # A. Check for Malformed / Invalid Issues
             if parsed.diagnostics:
                 is_invalid_state = any(
@@ -95,6 +118,24 @@ class ReconciliationService:
                         f"**Diagnostics:**\n{diags_text}"
                     )
                     self._issues.add_comment(record.number, comment_body)
+            else:
+                # If there are no diagnostics, but the issue still has "needs-info" or "needs-triage" labels,
+                # remove them and restore "ready-for-agent" if applicable.
+                removed_labels = []
+                if "needs-info" in record.labels:
+                    self._issues.remove_labels(record.number, "needs-info")
+                    removed_labels.append("needs-info")
+                if "needs-triage" in record.labels:
+                    self._issues.remove_labels(record.number, "needs-triage")
+                    removed_labels.append("needs-triage")
+
+                if removed_labels and isinstance(parsed, ImplementationIssue) and not parsed.orchestration.claimed_at:
+                    if "ready-for-agent" not in record.labels:
+                        self._issues.add_labels(record.number, "ready-for-agent")
+                    self._issues.add_comment(
+                        record.number,
+                        f"Issue #{record.number} has been resolved and is now ready for agent execution."
+                    )
 
             # B. Check for Stale Claims
             if isinstance(parsed, ImplementationIssue) and not parsed.diagnostics:

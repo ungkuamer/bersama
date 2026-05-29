@@ -436,3 +436,38 @@ repos:
     captured = capsys.readouterr()
     assert exit_code == 0
     assert "Successfully reconciled issue states for repo: demo" in captured.out
+
+
+def test_dashboard_command_starts_server(capsys, tmp_path: Path) -> None:
+    config_path = write_config(
+        tmp_path,
+        """
+harnesses:
+  local:
+    command: codex
+repos:
+  demo:
+    repo_path: /repos/demo
+    main_branch: main
+    worktree_root: /worktrees/demo
+    default_harness: local
+""".strip(),
+    )
+
+    with patch("uvicorn.run") as mock_run:
+        exit_code = main(
+            [
+                "dashboard",
+                "--config",
+                str(config_path),
+                "--host",
+                "127.0.0.1",
+                "--port",
+                "8080",
+            ]
+        )
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert "Starting dashboard backend on http://127.0.0.1:8080" in captured.out
+    mock_run.assert_called_once()

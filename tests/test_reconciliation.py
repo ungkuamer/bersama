@@ -46,6 +46,16 @@ class FakeIssueGateway:
         )
         self.removed_labels.append((number, labels))
 
+    def update_body(self, number: int, body: str) -> None:
+        record = self._records[number]
+        self._records[number] = GitHubIssueRecord(
+            number=record.number,
+            title=record.title,
+            body=body,
+            labels=record.labels,
+            state=record.state,
+        )
+
 
 def test_malformed_missing_info_moves_to_needs_info() -> None:
     # An implementation issue missing Acceptance Criteria and Blocked By
@@ -297,3 +307,35 @@ None
     service.reconcile()
 
     assert len(gateway.added_labels) == 0
+
+
+def test_resolved_issue_self_heals() -> None:
+    # An implementation issue that has "needs-info" but no longer has diagnostics (resolved)
+    resolved = GitHubIssueRecord(
+        number=10,
+        title="Implementation Task",
+        body="""
+## Parent PRD
+#2
+
+## What to Build
+Do something.
+
+## Acceptance Criteria
+- [ ] Done 1.
+
+## Blocked By
+None
+        """.strip(),
+        labels=("implementation", "needs-info"),
+        state="open",
+    )
+    gateway = FakeIssueGateway(resolved)
+    service = ReconciliationService(issues=gateway)
+    service.reconcile()
+
+    # Verify needs-info is removed and ready-for-agent is restored
+    assert (10, ("needs-info",)) in gateway.removed_labels
+    assert (10, ("ready-for-agent",)) in gateway.added_labels
+    assert len(gateway.comments) == 1
+    assert "has been resolved and is now ready for agent execution" in gateway.comments[0][1]

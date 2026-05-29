@@ -25,6 +25,32 @@ class ExecutionResult:
     run_state_path: str | None = None
 
 
+def extract_last_agent_message(log_path: Path) -> str | None:
+    if not log_path.exists():
+        return None
+    try:
+        content = log_path.read_text(encoding="utf-8")
+        lines = content.splitlines()
+        message_lines = []
+        in_codex_block = False
+        for line in lines:
+            stripped = line.strip()
+            if stripped == "codex":
+                message_lines = []
+                in_codex_block = True
+            elif in_codex_block:
+                if stripped in ("exec", "user", "OpenAI Codex", "workdir:", "session id:", "--------"):
+                    in_codex_block = False
+                else:
+                    message_lines.append(line)
+        
+        if message_lines:
+            return "\n".join(message_lines).strip()
+    except Exception:
+        pass
+    return None
+
+
 class HarnessExecutionService:
     def __init__(self, *, issues: IssueGateway) -> None:
         self._issues = issues
@@ -170,17 +196,31 @@ class HarnessExecutionService:
                 status = "succeeded"
                 failure_reason = None
             else:
-                status = "failed"
-                if exit_code != 0:
-                    failure_reason = f"Harness exited with non-zero exit code {exit_code}."
-                else:
-                    failure_reason = "Harness exited with code 0 but created no new commits."
+                agent_msg = None
+                if exit_code == 0 and not new_commits:
+                    agent_msg = extract_last_agent_message(log_path)
 
-                self._issues.add_labels(issue_number, "needs-triage")
-                self._issues.add_comment(
-                    issue_number,
-                    f"Harness execution failed.\n\n**Diagnostics:**\n{failure_reason}"
-                )
+                if agent_msg:
+                    status = "paused"
+                    failure_reason = None
+                    self._issues.add_labels(issue_number, "needs-info")
+                    self._issues.add_comment(
+                        issue_number,
+                        f"🤖 **Agent Question / Clarification:**\n\n{agent_msg}\n\n"
+                        f"*(Please reply with your answers/confirmations and mark this issue as `ready-for-agent` to resume the run.)*"
+                    )
+                else:
+                    status = "failed"
+                    if exit_code != 0:
+                        failure_reason = f"Harness exited with non-zero exit code {exit_code}."
+                    else:
+                        failure_reason = "Harness exited with code 0 but created no new commits."
+
+                    self._issues.add_labels(issue_number, "needs-triage")
+                    self._issues.add_comment(
+                        issue_number,
+                        f"Harness execution failed.\n\n**Diagnostics:**\n{failure_reason}"
+                    )
 
             # 12. Update final run-state
             run_state.update({
