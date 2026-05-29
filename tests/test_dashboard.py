@@ -723,3 +723,81 @@ def test_integrate_implementation_issue_endpoint_returns_server_error_for_unexpe
     assert response.json() == {
         "detail": "Implementation issue integration failed for repo 'demo': GitHub issue access failed"
     }
+
+
+def test_get_repos_endpoint_returns_repos() -> None:
+    app = create_dashboard_app(config=build_config())
+    response = TestClient(app).get("/api/repos")
+    assert response.status_code == 200
+    repos = response.json()
+    assert len(repos) == 1
+    assert repos[0]["name"] == "demo"
+    assert repos[0]["main_branch"] == "main"
+
+
+def test_get_issues_endpoint_returns_hierarchical_issues() -> None:
+    class CustomFakeIssueGateway:
+        def __init__(self, *issues: GitHubIssueRecord) -> None:
+            self.issues = {issue.number: issue for issue in issues}
+
+        def list_issues(self, *, state: str = "open", label: str | None = None) -> list[GitHubIssueRecord]:
+            return list(self.issues.values())
+
+        def view_issue(self, number: int) -> GitHubIssueRecord:
+            return self.issues[number]
+
+    prd_issue = GitHubIssueRecord(
+        number=15,
+        title="PRD Title",
+        body="Some PRD.",
+        labels=("prd",),
+        state="open",
+    )
+    impl_issue = build_claimed_issue()
+    app = create_dashboard_app(
+        config=build_config(),
+        issue_gateway_factory=lambda: CustomFakeIssueGateway(prd_issue, impl_issue),
+    )
+    response = TestClient(app).get("/api/issues?repo=demo")
+    assert response.status_code == 200
+    issues = response.json()
+    assert len(issues) == 1
+    assert issues[0]["number"] == 15
+    assert len(issues[0]["children"]) == 1
+    assert issues[0]["children"][0]["number"] == 18
+    assert issues[0]["children"][0]["status"] == "unready"
+
+
+def test_get_runs_endpoint_scans_worktree(tmp_path: Path) -> None:
+    import json
+    from dataclasses import replace
+    config = build_config()
+    config.repos["demo"] = replace(config.repos["demo"], worktree_root=tmp_path)
+    
+    issue_dir = tmp_path / "issue-18"
+    issue_dir.mkdir(parents=True)
+    run_state = {
+        "status": "running",
+        "issue_number": 18,
+        "prd_branch": "prd/15",
+        "implementation_branch": "impl/18",
+        "started_at": "2026-05-29T20:00:00Z",
+    }
+    (issue_dir / "run-state.json").write_text(json.dumps(run_state))
+    (issue_dir / "harness.log").write_text("Harness execution logtail output")
+
+    app = create_dashboard_app(config=config)
+    
+    response = TestClient(app).get("/api/runs?repo=demo")
+    assert response.status_code == 200
+    runs = response.json()
+    assert len(runs) == 1
+    assert runs[0]["issue_number"] == 18
+    assert runs[0]["status"] == "running"
+
+    log_response = TestClient(app).get("/api/runs/18/log?repo=demo&limit=10")
+    assert log_response.status_code == 200
+    log_data = log_response.json()
+    assert log_data["issue_number"] == 18
+    assert log_data["content"] == "Harness execution logtail output"
+

@@ -41,6 +41,15 @@ def create_dashboard_app(
 ) -> FastAPI:
     app = FastAPI()
 
+    from fastapi.middleware.cors import CORSMiddleware
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
     def build_service(repo: RepoConfig) -> ReconciliationService:
         del repo
         return ReconciliationService(issues=GitHubIssueGateway())
@@ -310,5 +319,185 @@ def create_dashboard_app(
             "implementation_branch": result.implementation_branch,
             "prd_branch": result.prd_branch,
         }
+
+    import json
+
+    @app.get("/api/repos")
+    def get_repos() -> list[dict[str, object]]:
+        return [
+            {
+                "name": repo.name,
+                "repo_path": str(repo.repo_path),
+                "main_branch": repo.main_branch,
+                "worktree_root": str(repo.worktree_root),
+                "global_concurrency": repo.global_concurrency,
+                "per_prd_concurrency": repo.per_prd_concurrency,
+                "default_harness": repo.default_harness,
+            }
+            for repo in config.repos.values()
+        ]
+
+    @app.get("/api/issues")
+    def get_issues(repo: str) -> list[dict[str, object]]:
+        try:
+            repo_cfg = config.repo(repo)
+        except ConfigError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+        gateway = issues_factory()
+        if hasattr(gateway, "_cwd"):
+            gateway._cwd = repo_cfg.repo_path
+
+        try:
+            issue_records = gateway.list_issues(state="all")
+        except Exception as exc:
+            raise HTTPException(
+                status_code=500, detail=f"Failed to list GitHub issues: {exc}"
+            ) from exc
+
+        parsed_by_number = {}
+        for record in issue_records:
+            try:
+                parsed_by_number[record.number] = parse_issue(
+                    GitHubIssue(
+                        number=record.number,
+                        title=record.title,
+                        body=record.body,
+                        labels=record.labels,
+                    )
+                )
+            except Exception:
+                pass
+
+        issue_dicts = {}
+        for record in issue_records:
+            parsed = parsed_by_number.get(record.number)
+            if parsed is None:
+                continue
+
+            res = {
+                "number": record.number,
+                "title": record.title,
+                "labels": list(record.labels),
+                "state": record.state,
+                "kind": parsed.kind.value,
+            }
+
+            if parsed.kind.value == "prd":
+                res["prd_branch"] = parsed.orchestration.prd_branch
+                res["children"] = []
+            elif parsed.kind.value == "implementation":
+                res["parent_prd_number"] = parsed.parent_prd_number
+                res["implementation_branch"] = parsed.orchestration.implementation_branch
+                res["blocked_by"] = list(parsed.blocked_by)
+
+                active_blockers = []
+                for blocker_num in parsed.blocked_by:
+                    blocker_parsed = parsed_by_number.get(blocker_num)
+                    if blocker_parsed and blocker_parsed.issue.state == "open":
+                        active_blockers.append(blocker_num)
+                res["active_blockers"] = active_blockers
+
+                status = "unknown"
+                started_at = None
+                finished_at = None
+                failure_reason = None
+
+                if record.state == "closed":
+                    status = "succeeded"
+                else:
+                    worktree_path = Path(repo_cfg.worktree_root) / f"issue-{record.number}"
+                    run_state_path = worktree_path / "run-state.json"
+                    if run_state_path.exists():
+                        try:
+                            run_state_data = json.loads(run_state_path.read_text(encoding="utf-8"))
+                            status = run_state_data.get("status", "unknown")
+                            started_at = run_state_data.get("started_at")
+                            finished_at = run_state_data.get("finished_at")
+                            failure_reason = run_state_data.get("failure_reason")
+                        except Exception:
+                            pass
+                    else:
+                        if "ready-for-agent" in record.labels:
+                            if active_blockers:
+                                status = "blocked"
+                            else:
+                                status = "ready"
+                        else:
+                            status = "unready"
+
+                res["status"] = status
+                res["started_at"] = started_at
+                res["finished_at"] = finished_at
+                res["failure_reason"] = failure_reason
+
+            issue_dicts[record.number] = res
+
+        flat_results = []
+        for number, item in issue_dicts.items():
+            if item["kind"] == "implementation" and item.get("parent_prd_number") is not None:
+                parent_num = item["parent_prd_number"]
+                if parent_num in issue_dicts and issue_dicts[parent_num]["kind"] == "prd":
+                    issue_dicts[parent_num]["children"].append(item)
+                    continue
+            flat_results.append(item)
+
+        return flat_results
+
+    @app.get("/api/runs")
+    def get_runs(repo: str) -> list[dict[str, object]]:
+        try:
+            repo_cfg = config.repo(repo)
+        except ConfigError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+        runs_list = []
+        worktree_root = Path(repo_cfg.worktree_root)
+        if worktree_root.exists() and worktree_root.is_dir():
+            for child in worktree_root.iterdir():
+                if child.is_dir() and child.name.startswith("issue-"):
+                    run_state_path = child / "run-state.json"
+                    if run_state_path.exists():
+                        try:
+                            run_state_data = json.loads(run_state_path.read_text(encoding="utf-8"))
+                            runs_list.append(run_state_data)
+                        except Exception:
+                            pass
+
+        runs_list.sort(key=lambda r: r.get("issue_number", 0))
+        return runs_list
+
+    @app.get("/api/runs/{issue_number}/log")
+    def get_run_log(issue_number: int, repo: str, limit: int = 100) -> dict[str, object]:
+        try:
+            repo_cfg = config.repo(repo)
+        except ConfigError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+        worktree_path = Path(repo_cfg.worktree_root) / f"issue-{issue_number}"
+        log_path = worktree_path / "harness.log"
+
+        if not log_path.exists():
+            raise HTTPException(status_code=404, detail=f"Log file not found for issue #{issue_number}")
+
+        try:
+            lines = log_path.read_text(encoding="utf-8").splitlines()
+            tail_lines = lines[-limit:] if limit > 0 else lines
+            content = "\n".join(tail_lines)
+            return {
+                "issue_number": issue_number,
+                "log_path": str(log_path),
+                "lines_returned": len(tail_lines),
+                "content": content,
+            }
+        except Exception as exc:
+            raise HTTPException(
+                status_code=500, detail=f"Failed to read log file: {exc}"
+            ) from exc
+
+    dist_dir = Path("dashboard/dist")
+    if dist_dir.exists() and dist_dir.is_dir():
+        from fastapi.staticfiles import StaticFiles
+        app.mount("/", StaticFiles(directory=str(dist_dir), html=True), name="static")
 
     return app
