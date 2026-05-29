@@ -17,7 +17,9 @@ import {
   Play,
   Pause,
   Server,
-  GitMerge
+  GitMerge,
+  ArrowDown,
+  Download
 } from 'lucide-react'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -106,6 +108,12 @@ const detailFromResponse = async (response: Response): Promise<string | undefine
   return undefined;
 }
 
+const LOG_BOTTOM_THRESHOLD_PX = 80;
+
+const isNearBottom = (element: HTMLElement): boolean => {
+  return element.scrollHeight - element.scrollTop - element.clientHeight <= LOG_BOTTOM_THRESHOLD_PX;
+}
+
 export default function App() {
   const [repos, setRepos] = useState<Repo[]>([]);
   const [selectedRepo, setSelectedRepo] = useState<string>('');
@@ -122,13 +130,21 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const [preparePrdState, setPreparePrdState] = useState<Record<number, PrdPreparationState>>({});
   const [integrateIssueState, setIntegrateIssueState] = useState<Record<number, ImplementationIntegrationState>>({});
+  const [hasNewPausedLogOutput, setHasNewPausedLogOutput] = useState<boolean>(false);
+  const logAutoScrollActiveRef = useRef<boolean>(true);
   
   // UI States
   const [expandedPrds, setExpandedPrds] = useState<Record<number, boolean>>({});
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState<string>('');
   
-  const terminalEndRef = useRef<HTMLDivElement>(null);
+  const terminalViewportRef = useRef<HTMLDivElement>(null);
+  const previousLogContentRef = useRef<string | null>(null);
+  const previousSelectedRunIssueRef = useRef<number | null>(null);
+
+  const setLogAutoScroll = (isActive: boolean) => {
+    logAutoScrollActiveRef.current = isActive;
+  };
 
   // Fetch initial repositories list
   useEffect(() => {
@@ -239,6 +255,13 @@ export default function App() {
 
   // Fetch logs whenever selected run or limit changes
   useEffect(() => {
+    if (previousSelectedRunIssueRef.current !== selectedRunIssue) {
+      previousLogContentRef.current = null;
+      setLogAutoScroll(true);
+      setHasNewPausedLogOutput(false);
+      previousSelectedRunIssueRef.current = selectedRunIssue;
+    }
+
     if (selectedRunIssue !== null) {
       fetchLogs(selectedRunIssue);
     } else {
@@ -263,10 +286,63 @@ export default function App() {
     return () => clearInterval(interval);
   }, [selectedRunIssue, pollLogsActive, runs]);
 
-  // Scroll terminal to bottom without moving the page
+  const scrollLogToBottom = () => {
+    const viewport = terminalViewportRef.current;
+    if (!viewport) return;
+
+    viewport.scrollTop = viewport.scrollHeight;
+  };
+
+  const jumpToLatestLogOutput = () => {
+    setLogAutoScroll(true);
+    setHasNewPausedLogOutput(false);
+    scrollLogToBottom();
+  };
+
+  const handleLogScroll = () => {
+    const viewport = terminalViewportRef.current;
+    if (!viewport) return;
+
+    const nearBottom = isNearBottom(viewport);
+    setLogAutoScroll(nearBottom);
+    if (nearBottom) {
+      setHasNewPausedLogOutput(false);
+    }
+  };
+
+  const exportLoadedLogTail = () => {
+    if (!logTail) return;
+
+    const blob = new Blob([logTail.content], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `implementation-issue-${logTail.issue_number}-log-tail.txt`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  };
+
+  // Scroll terminal to bottom without moving the page.
   useEffect(() => {
-    if (terminalEndRef.current) {
-      terminalEndRef.current.scrollTop = terminalEndRef.current.scrollHeight;
+    if (!logTail) {
+      previousLogContentRef.current = null;
+      return;
+    }
+
+    const previousLogContent = previousLogContentRef.current;
+    const hasNewContent = previousLogContent !== null && previousLogContent !== logTail.content;
+    previousLogContentRef.current = logTail.content;
+
+    if (logAutoScrollActiveRef.current) {
+      scrollLogToBottom();
+      setHasNewPausedLogOutput(false);
+      return;
+    }
+
+    if (hasNewContent) {
+      setHasNewPausedLogOutput(true);
     }
   }, [logTail]);
 
@@ -631,6 +707,7 @@ export default function App() {
                 <div className="flex items-center gap-2 text-[10px] font-mono">
                   {/* Lines Limit */}
                   <select 
+                    aria-label="Log tail limit"
                     value={logsLimit} 
                     onChange={(e) => setLogsLimit(Number(e.target.value))}
                     className="bg-zinc-900 text-zinc-400 border border-zinc-800 rounded px-1.5 py-0.5 focus:outline-none"
@@ -654,6 +731,20 @@ export default function App() {
                   >
                     {pollLogsActive ? 'STREAM ON' : 'STREAM OFF'}
                   </button>
+
+                  {logTail && (
+                    <Button
+                      type="button"
+                      size="icon-xs"
+                      variant="outline"
+                      onClick={exportLoadedLogTail}
+                      aria-label={`Export loaded tail for Implementation Issue #${logTail.issue_number}`}
+                      title="Export loaded tail"
+                      className="border-zinc-800 bg-zinc-900 text-zinc-400 hover:bg-zinc-800 hover:text-white"
+                    >
+                      <Download data-icon="inline-start" />
+                    </Button>
+                  )}
                 </div>
               )}
             </CardHeader>
@@ -675,7 +766,14 @@ export default function App() {
                     <span className="shrink-0">{logTail.lines_returned} lines</span>
                   </div>
                   
-                  <div ref={terminalEndRef} className="grow p-4 bg-[#030304] overflow-y-auto">
+                  <div
+                    ref={terminalViewportRef}
+                    role="log"
+                    aria-label={`Issue #${logTail.issue_number} harness log tail`}
+                    aria-live="polite"
+                    onScroll={handleLogScroll}
+                    className="relative grow p-4 bg-[#030304] overflow-y-auto"
+                  >
                     <div className="space-y-1 font-mono text-zinc-300 whitespace-pre-wrap leading-relaxed select-text">
                       {logTail.content ? (
                         logTail.content.split('\n').map((line, idx) => (
@@ -690,6 +788,19 @@ export default function App() {
                         </div>
                       )}
                     </div>
+                    {hasNewPausedLogOutput && (
+                      <Button
+                        type="button"
+                        size="xs"
+                        variant="outline"
+                        onClick={jumpToLatestLogOutput}
+                        aria-label="Jump to latest log output"
+                        className="sticky bottom-2 ml-auto border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 font-mono text-[9px] uppercase tracking-wider"
+                      >
+                        <ArrowDown data-icon="inline-start" />
+                        Latest output
+                      </Button>
+                    )}
                   </div>
                 </div>
               )}

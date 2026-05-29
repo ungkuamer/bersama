@@ -173,6 +173,32 @@ const mockLogs = {
   content: "harness execution started...\nbuilding assets..."
 };
 
+const updatedMockLogs = {
+  issue_number: 8,
+  log_path: "/path/to/demo/worktrees/issue-8/harness.log",
+  lines_returned: 3,
+  content: "harness execution started...\nbuilding assets...\nnew output arrived"
+};
+
+const setLogScrollMetrics = (
+  element: HTMLElement,
+  metrics: { scrollTop: number; clientHeight: number; scrollHeight: number }
+) => {
+  Object.defineProperty(element, 'scrollTop', {
+    value: metrics.scrollTop,
+    writable: true,
+    configurable: true
+  });
+  Object.defineProperty(element, 'clientHeight', {
+    value: metrics.clientHeight,
+    configurable: true
+  });
+  Object.defineProperty(element, 'scrollHeight', {
+    value: metrics.scrollHeight,
+    configurable: true
+  });
+};
+
 describe('Bersama Dashboard Frontend', () => {
   beforeEach(() => {
     vi.resetAllMocks();
@@ -262,6 +288,198 @@ describe('Bersama Dashboard Frontend', () => {
       expect(screen.getByText(/harness execution started/i)).toBeInTheDocument();
       expect(screen.getByText(/building assets/i)).toBeInTheDocument();
     });
+  });
+
+  it('auto-scrolls the Agent Run log when new output arrives near the bottom', async () => {
+    let logRequests = 0;
+    mockFetch.mockImplementation((url: string) => {
+      if (url.endsWith('/api/repos')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(mockRepos)
+        });
+      }
+      if (url.includes('/api/issues')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(mockIssues)
+        });
+      }
+      if (url.includes('/api/runs/8/log')) {
+        logRequests += 1;
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(logRequests >= 2 ? updatedMockLogs : mockLogs)
+        });
+      }
+      if (url.includes('/api/runs')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(mockRuns)
+        });
+      }
+      return Promise.reject(new Error(`Unhandled mock fetch for ${url}`));
+    });
+
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole('button', { name: /View Log/i }));
+
+    const logViewer = await screen.findByRole('log', { name: /Issue #8 harness log tail/i });
+    await screen.findByText(/building assets/i);
+    setLogScrollMetrics(logViewer, { scrollTop: 500, clientHeight: 100, scrollHeight: 620 });
+
+    fireEvent.change(screen.getByLabelText(/Log tail limit/i), { target: { value: '50' } });
+
+    await screen.findByText(/new output arrived/i);
+    expect(logViewer.scrollTop).toBe(logViewer.scrollHeight);
+    expect(screen.queryByRole('button', { name: /Jump to latest log output/i })).not.toBeInTheDocument();
+  });
+
+  it('keeps the Agent Run log scroll position when new output arrives after the user scrolled up', async () => {
+    let logRequests = 0;
+    mockFetch.mockImplementation((url: string) => {
+      if (url.endsWith('/api/repos')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(mockRepos)
+        });
+      }
+      if (url.includes('/api/issues')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(mockIssues)
+        });
+      }
+      if (url.includes('/api/runs/8/log')) {
+        logRequests += 1;
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(logRequests >= 2 ? updatedMockLogs : mockLogs)
+        });
+      }
+      if (url.includes('/api/runs')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(mockRuns)
+        });
+      }
+      return Promise.reject(new Error(`Unhandled mock fetch for ${url}`));
+    });
+
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole('button', { name: /View Log/i }));
+
+    const logViewer = await screen.findByRole('log', { name: /Issue #8 harness log tail/i });
+    await screen.findByText(/building assets/i);
+    setLogScrollMetrics(logViewer, { scrollTop: 120, clientHeight: 100, scrollHeight: 620 });
+    fireEvent.scroll(logViewer);
+
+    fireEvent.change(screen.getByLabelText(/Log tail limit/i), { target: { value: '50' } });
+
+    await screen.findByText(/new output arrived/i);
+    expect(logViewer.scrollTop).toBe(120);
+    expect(screen.getByRole('button', { name: /Jump to latest log output/i })).toBeInTheDocument();
+  });
+
+  it('resumes Agent Run log auto-scroll after jumping to the latest output', async () => {
+    let logRequests = 0;
+    const finalMockLogs = {
+      ...updatedMockLogs,
+      lines_returned: 4,
+      content: `${updatedMockLogs.content}\nfinal output`
+    };
+    mockFetch.mockImplementation((url: string) => {
+      if (url.endsWith('/api/repos')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(mockRepos)
+        });
+      }
+      if (url.includes('/api/issues')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(mockIssues)
+        });
+      }
+      if (url.includes('/api/runs/8/log')) {
+        logRequests += 1;
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(logRequests >= 3 ? finalMockLogs : logRequests >= 2 ? updatedMockLogs : mockLogs)
+        });
+      }
+      if (url.includes('/api/runs')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(mockRuns)
+        });
+      }
+      return Promise.reject(new Error(`Unhandled mock fetch for ${url}`));
+    });
+
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole('button', { name: /View Log/i }));
+
+    const logViewer = await screen.findByRole('log', { name: /Issue #8 harness log tail/i });
+    await screen.findByText(/building assets/i);
+    setLogScrollMetrics(logViewer, { scrollTop: 120, clientHeight: 100, scrollHeight: 620 });
+    fireEvent.scroll(logViewer);
+
+    fireEvent.change(screen.getByLabelText(/Log tail limit/i), { target: { value: '50' } });
+    const jumpButton = await screen.findByRole('button', { name: /Jump to latest log output/i });
+    fireEvent.click(jumpButton);
+
+    expect(logViewer.scrollTop).toBe(logViewer.scrollHeight);
+    expect(screen.queryByRole('button', { name: /Jump to latest log output/i })).not.toBeInTheDocument();
+
+    setLogScrollMetrics(logViewer, { scrollTop: 500, clientHeight: 100, scrollHeight: 650 });
+    fireEvent.change(screen.getByLabelText(/Log tail limit/i), { target: { value: '100' } });
+
+    await screen.findByText(/final output/i);
+    expect(logViewer.scrollTop).toBe(logViewer.scrollHeight);
+  });
+
+  it('exports the currently loaded Agent Run log tail with an issue-specific tail filename', async () => {
+    const createObjectURL = vi.fn<(object: Blob | MediaSource) => string>(() => 'blob:tail-export');
+    const revokeObjectURL = vi.fn();
+    const anchorClick = vi.fn();
+    const createdAnchors: HTMLAnchorElement[] = [];
+    const originalCreateElement = document.createElement.bind(document);
+
+    Object.defineProperty(URL, 'createObjectURL', {
+      value: createObjectURL,
+      configurable: true
+    });
+    Object.defineProperty(URL, 'revokeObjectURL', {
+      value: revokeObjectURL,
+      configurable: true
+    });
+    vi.spyOn(document, 'createElement').mockImplementation((tagName: string) => {
+      const element = originalCreateElement(tagName);
+      if (tagName.toLowerCase() === 'a') {
+        element.click = anchorClick;
+        createdAnchors.push(element as HTMLAnchorElement);
+      }
+      return element;
+    });
+
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole('button', { name: /View Log/i }));
+    await screen.findByText(/building assets/i);
+
+    fireEvent.click(screen.getByRole('button', { name: /Export loaded tail for Implementation Issue #8/i }));
+
+    const exportedBlob = createObjectURL.mock.calls[0][0] as Blob;
+    await expect(exportedBlob.text()).resolves.toBe(mockLogs.content);
+
+    expect(createObjectURL).toHaveBeenCalledWith(expect.any(Blob));
+    expect(anchorClick).toHaveBeenCalled();
+    expect(revokeObjectURL).toHaveBeenCalledWith('blob:tail-export');
+    expect(createdAnchors[0].download).toBe('implementation-issue-8-log-tail.txt');
   });
 
   it('shows Prepare PRD only for open unprepared PRD Issues', async () => {
