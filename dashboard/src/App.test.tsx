@@ -161,6 +161,153 @@ const mockClaimedAfterActionIssues = [
   }
 ];
 
+const mockStartIssues = [
+  {
+    number: 6,
+    title: "Start PRD Title",
+    labels: ["prd"],
+    state: "open",
+    kind: "prd",
+    prd_branch: "prd/6-start-prd",
+    children: [
+      {
+        number: 31,
+        title: "Claimed start candidate",
+        labels: ["implementation"],
+        state: "open",
+        kind: "implementation",
+        parent_prd_number: 6,
+        implementation_branch: "impl/6/31-claimed-start-candidate",
+        agent_run_id: "run-claimed-31",
+        claimed_at: "2026-05-29T21:40:00Z",
+        blocked_by: [],
+        active_blockers: [],
+        status: "claimed"
+      },
+      {
+        number: 32,
+        title: "Unclaimed start candidate",
+        labels: ["implementation"],
+        state: "open",
+        kind: "implementation",
+        parent_prd_number: 6,
+        implementation_branch: undefined,
+        blocked_by: [],
+        active_blockers: [],
+        status: "unready"
+      },
+      {
+        number: 33,
+        title: "Running start candidate",
+        labels: ["implementation"],
+        state: "open",
+        kind: "implementation",
+        parent_prd_number: 6,
+        implementation_branch: "impl/6/33-running-start-candidate",
+        blocked_by: [],
+        active_blockers: [],
+        status: "running",
+        started_at: "2026-05-29T21:41:00Z"
+      },
+      {
+        number: 34,
+        title: "Failed start candidate",
+        labels: ["implementation"],
+        state: "open",
+        kind: "implementation",
+        parent_prd_number: 6,
+        implementation_branch: "impl/6/34-failed-start-candidate",
+        blocked_by: [],
+        active_blockers: [],
+        status: "failed",
+        started_at: "2026-05-29T21:42:00Z"
+      },
+      {
+        number: 35,
+        title: "Blocked start candidate",
+        labels: ["implementation"],
+        state: "open",
+        kind: "implementation",
+        parent_prd_number: 6,
+        implementation_branch: undefined,
+        blocked_by: [31],
+        active_blockers: [31],
+        status: "blocked"
+      },
+      {
+        number: 36,
+        title: "Ready start candidate",
+        labels: ["implementation", "ready-for-agent"],
+        state: "open",
+        kind: "implementation",
+        parent_prd_number: 6,
+        implementation_branch: undefined,
+        blocked_by: [],
+        active_blockers: [],
+        status: "ready"
+      },
+      {
+        number: 37,
+        title: "Succeeded start candidate",
+        labels: ["implementation"],
+        state: "open",
+        kind: "implementation",
+        parent_prd_number: 6,
+        implementation_branch: "impl/6/37-succeeded-start-candidate",
+        blocked_by: [],
+        active_blockers: [],
+        status: "succeeded",
+        finished_at: "2026-05-29T21:43:00Z"
+      }
+    ]
+  }
+];
+
+const mockStartedAfterActionIssues = [
+  {
+    number: 6,
+    title: "Start PRD Title",
+    labels: ["prd"],
+    state: "open",
+    kind: "prd",
+    prd_branch: "prd/6-start-prd",
+    children: [
+      {
+        number: 31,
+        title: "Claimed start candidate",
+        labels: ["implementation"],
+        state: "open",
+        kind: "implementation",
+        parent_prd_number: 6,
+        implementation_branch: "impl/6/31-claimed-start-candidate",
+        agent_run_id: "run-claimed-31",
+        claimed_at: "2026-05-29T21:40:00Z",
+        blocked_by: [],
+        active_blockers: [],
+        status: "running",
+        started_at: "2026-05-29T21:50:00Z"
+      }
+    ]
+  }
+];
+
+const mockStartedRun = [
+  {
+    issue_number: 31,
+    status: "running",
+    prd_branch: "prd/6-start-prd",
+    implementation_branch: "impl/6/31-claimed-start-candidate",
+    started_at: "2026-05-29T21:50:00Z"
+  }
+];
+
+const mockStartedLogs = {
+  issue_number: 31,
+  log_path: "/path/to/demo/worktrees/issue-31/harness.log",
+  lines_returned: 1,
+  content: "agent run accepted"
+};
+
 const mockIntegratedAfterActionIssues = [
   {
     number: 4,
@@ -1096,6 +1243,161 @@ describe('Bersama Dashboard Frontend', () => {
     fireEvent.click(screen.getByRole('button', { name: /Submit claim for Implementation Issue #21/i }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent("Implementation Issue is already claimed.");
+    expect(screen.queryByText(/SYSTEM FAULT/i)).not.toBeInTheDocument();
+  });
+
+  it('shows Start Agent Run only for Claimed Implementation Issues', async () => {
+    mockFetch.mockImplementation((url: string) => {
+      if (url.endsWith('/api/repos')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(mockRepos)
+        });
+      }
+      if (url.includes('/api/issues')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(mockStartIssues)
+        });
+      }
+      if (url.includes('/api/runs')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve([])
+        });
+      }
+      return Promise.reject(new Error(`Unhandled mock fetch for ${url}`));
+    });
+
+    render(<App />);
+
+    await screen.findByText('Claimed start candidate');
+
+    expect(screen.getByRole('button', { name: /Start Agent Run for Implementation Issue #31/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Start Agent Run for Implementation Issue #32/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Start Agent Run for Implementation Issue #33/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Start Agent Run for Implementation Issue #34/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Start Agent Run for Implementation Issue #35/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Start Agent Run for Implementation Issue #36/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Start Agent Run for Implementation Issue #37/i })).not.toBeInTheDocument();
+  });
+
+  it('starts a Claimed Implementation Issue through the repo-scoped backend route, refreshes data, and selects its log view after success', async () => {
+    let issuesRequests = 0;
+    let runsRequests = 0;
+    let finishStart: (() => void) | undefined;
+    const startResponse = new Promise((resolve) => {
+      finishStart = () => resolve({
+        ok: true,
+        json: () => Promise.resolve({
+          ok: true,
+          status: "started",
+          issue_number: 31,
+          agent_run_id: "run-claimed-31",
+          run_state_path: "/path/to/demo/worktrees/issue-31/run-state.json",
+          log_path: "/path/to/demo/worktrees/issue-31/harness.log"
+        })
+      });
+    });
+
+    mockFetch.mockImplementation((url: string, options?: RequestInit) => {
+      if (url.endsWith('/api/repos')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(mockRepos)
+        });
+      }
+      if (url.includes('/api/issues')) {
+        issuesRequests += 1;
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(
+            issuesRequests >= 2 ? mockStartedAfterActionIssues : mockStartIssues
+          )
+        });
+      }
+      if (url.includes('/api/runs/31/log')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(mockStartedLogs)
+        });
+      }
+      if (url.includes('/api/runs')) {
+        runsRequests += 1;
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(
+            runsRequests >= 2 ? mockStartedRun : []
+          )
+        });
+      }
+      if (url.endsWith('/dashboard/repos/demo/implementation-issues/31/start')) {
+        expect(options?.method).toBe('POST');
+        return startResponse;
+      }
+      return Promise.reject(new Error(`Unhandled mock fetch for ${url}`));
+    });
+
+    render(<App />);
+
+    const startButton = await screen.findByRole('button', {
+      name: /Start Agent Run for Implementation Issue #31/i
+    });
+    fireEvent.click(startButton);
+
+    expect(await screen.findByRole('button', { name: /Starting Agent Run for Implementation Issue #31/i })).toBeDisabled();
+    finishStart?.();
+
+    await waitFor(() => {
+      expect(screen.getByText(/Started Agent Run run-claimed-31 for Implementation Issue #31/i)).toBeInTheDocument();
+      expect(screen.getByText(/Issue #31 Harness Log/i)).toBeInTheDocument();
+      expect(screen.getByText(/agent run accepted/i)).toBeInTheDocument();
+      expect(issuesRequests).toBeGreaterThanOrEqual(2);
+      expect(runsRequests).toBeGreaterThanOrEqual(2);
+    });
+
+    expect(mockFetch).toHaveBeenCalledWith('http://localhost:8000/dashboard/repos/demo/implementation-issues/31/start', {
+      method: 'POST'
+    });
+  });
+
+  it('shows known start failures locally on the affected Implementation Issue row', async () => {
+    mockFetch.mockImplementation((url: string) => {
+      if (url.endsWith('/api/repos')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(mockRepos)
+        });
+      }
+      if (url.includes('/api/issues')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(mockStartIssues)
+        });
+      }
+      if (url.includes('/api/runs')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve([])
+        });
+      }
+      if (url.endsWith('/dashboard/repos/demo/implementation-issues/31/start')) {
+        return Promise.resolve({
+          ok: false,
+          status: 400,
+          json: () => Promise.resolve({ detail: "Implementation Issue worktree does not exist: /worktrees/demo/issue-31" })
+        });
+      }
+      return Promise.reject(new Error(`Unhandled mock fetch for ${url}`));
+    });
+
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole('button', {
+      name: /Start Agent Run for Implementation Issue #31/i
+    }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent("Implementation Issue worktree does not exist: /worktrees/demo/issue-31");
     expect(screen.queryByText(/SYSTEM FAULT/i)).not.toBeInTheDocument();
   });
 });

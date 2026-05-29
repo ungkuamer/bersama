@@ -95,6 +95,11 @@ type ImplementationClaimState = {
   message: string;
 }
 
+type ImplementationStartState = {
+  status: 'loading' | 'succeeded' | 'failed';
+  message: string;
+}
+
 type PrdPreparationResponse = {
   prd_branch?: string;
 }
@@ -104,6 +109,10 @@ type ImplementationIntegrationResponse = {
 }
 
 type ImplementationClaimResponse = {
+  agent_run_id?: string;
+}
+
+type ImplementationStartResponse = {
   agent_run_id?: string;
 }
 
@@ -148,6 +157,7 @@ export default function App() {
   const [claimIssueState, setClaimIssueState] = useState<Record<number, ImplementationClaimState>>({});
   const [claimFormIssue, setClaimFormIssue] = useState<number | null>(null);
   const [claimAgentRunIds, setClaimAgentRunIds] = useState<Record<number, string>>({});
+  const [startIssueState, setStartIssueState] = useState<Record<number, ImplementationStartState>>({});
   const [integrateIssueState, setIntegrateIssueState] = useState<Record<number, ImplementationIntegrationState>>({});
   const [hasNewPausedLogOutput, setHasNewPausedLogOutput] = useState<boolean>(false);
   const logAutoScrollActiveRef = useRef<boolean>(true);
@@ -543,6 +553,59 @@ export default function App() {
       ...prev,
       [issueNumber]: prev[issueNumber] || buildAgentRunId(issueNumber)
     }));
+  };
+
+  const startImplementationIssue = async (issueNumber: number) => {
+    if (!selectedRepo) return;
+
+    setStartIssueState(prev => ({
+      ...prev,
+      [issueNumber]: {
+        status: 'loading',
+        message: 'Starting Agent Run...'
+      }
+    }));
+
+    try {
+      const res = await fetch(
+        `${API_BASE}/dashboard/repos/${encodeURIComponent(selectedRepo)}/implementation-issues/${issueNumber}/start`,
+        { method: 'POST' }
+      );
+      if (!res.ok) {
+        throw new Error(await detailFromResponse(res) || `HTTP error ${res.status}`);
+      }
+      const data = await res.json() as ImplementationStartResponse;
+      const startedAgentRunId = data.agent_run_id;
+      setStartIssueState(prev => ({
+        ...prev,
+        [issueNumber]: {
+          status: 'succeeded',
+          message: startedAgentRunId
+            ? `Started Agent Run ${startedAgentRunId} for Implementation Issue #${issueNumber}.`
+            : `Started Agent Run for Implementation Issue #${issueNumber}.`
+        }
+      }));
+      await fetchData(false);
+      setSelectedRunIssue(issueNumber);
+    } catch (err: unknown) {
+      if (err instanceof TypeError) {
+        setStartIssueState(prev => {
+          const next = { ...prev };
+          delete next[issueNumber];
+          return next;
+        });
+        setError(`Failed to connect to backend: ${err.message}`);
+        return;
+      }
+      const message = messageFromError(err);
+      setStartIssueState(prev => ({
+        ...prev,
+        [issueNumber]: {
+          status: 'failed',
+          message: message || 'Implementation Issue start failed.'
+        }
+      }));
+    }
   };
 
   const getStatusBadge = (status?: string) => {
@@ -1057,6 +1120,9 @@ export default function App() {
                                   const canIntegrateIssue = c.state !== 'closed' && c.status === 'succeeded';
                                   const integrateState = integrateIssueState[c.number];
                                   const isIntegratingIssue = integrateState?.status === 'loading';
+                                  const canStartIssue = c.state !== 'closed' && c.status === 'claimed';
+                                  const startState = startIssueState[c.number];
+                                  const isStartingIssue = startState?.status === 'loading';
 
                                   return (
                                     <div 
@@ -1159,6 +1225,19 @@ export default function App() {
                                             </div>
                                           )}
 
+                                          {startState && startState.status !== 'loading' && (
+                                            <div
+                                              className={`rounded border px-2 py-1 text-[9.5px] font-mono ${
+                                                startState.status === 'succeeded'
+                                                  ? 'bg-emerald-950/20 border-emerald-950/60 text-emerald-300'
+                                                  : 'bg-red-950/25 border-red-950/70 text-red-300'
+                                              }`}
+                                              role={startState.status === 'failed' ? 'alert' : 'status'}
+                                            >
+                                              {startState.message}
+                                            </div>
+                                          )}
+
                                           {isClaimFormOpen && (
                                             <form
                                               className="rounded border border-zinc-900 bg-zinc-950/70 px-2 py-2 flex flex-col gap-2"
@@ -1254,6 +1333,25 @@ export default function App() {
                                           >
                                             <GitMerge data-icon="inline-start" className={isIntegratingIssue ? 'animate-pulse' : ''} />
                                             {isIntegratingIssue ? 'Integrating' : 'Integrate'} #{c.number}
+                                          </Button>
+                                        )}
+
+                                        {canStartIssue && (
+                                          <Button
+                                            type="button"
+                                            size="xs"
+                                            variant="outline"
+                                            aria-label={
+                                              isStartingIssue
+                                                ? `Starting Agent Run for Implementation Issue #${c.number}`
+                                                : `Start Agent Run for Implementation Issue #${c.number}`
+                                            }
+                                            onClick={() => startImplementationIssue(c.number)}
+                                            disabled={isStartingIssue}
+                                            className="font-mono text-[9px] uppercase tracking-wider border-zinc-700 bg-zinc-950 text-zinc-200 hover:bg-zinc-900"
+                                          >
+                                            <Play data-icon="inline-start" className={isStartingIssue ? 'animate-pulse' : ''} />
+                                            {isStartingIssue ? 'Starting' : 'Start'} #{c.number}
                                           </Button>
                                         )}
 
