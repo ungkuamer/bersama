@@ -5,6 +5,8 @@ from fastapi.testclient import TestClient
 from bersama.claiming import ClaimResult
 from bersama.config import AppConfig, HarnessConfig, RepoConfig
 from bersama.dashboard import create_dashboard_app
+from bersama.execution import ExecutionResult
+from bersama.github_issues import GitHubIssueRecord
 from bersama.prd_preparation import PrdPreparationResult
 
 
@@ -45,6 +47,42 @@ class FakeImplementationClaimService:
         return self._result
 
 
+class FakeExecutionService:
+    def __init__(self, result: ExecutionResult | None = None) -> None:
+        self.calls: list[tuple[str, int]] = []
+        self._result = result or ExecutionResult(
+            issue_number=18,
+            status="succeeded",
+            exit_code=0,
+            new_commits=True,
+            log_path="/worktrees/demo/issue-18/harness.log",
+            run_state_path="/worktrees/demo/issue-18/run-state.json",
+        )
+
+    def execute_run(
+        self, *, repo_name: str, issue_number: int, config: AppConfig
+    ) -> ExecutionResult:
+        del config
+        self.calls.append((repo_name, issue_number))
+        return self._result
+
+
+class FakeReconciliationRunner:
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def reconcile(self) -> None:
+        self.calls += 1
+
+
+class FakeIssueGateway:
+    def __init__(self, *issues: GitHubIssueRecord) -> None:
+        self.issues = {issue.number: issue for issue in issues}
+
+    def view_issue(self, number: int) -> GitHubIssueRecord:
+        return self.issues[number]
+
+
 def build_config() -> AppConfig:
     return AppConfig(
         repos={
@@ -65,6 +103,30 @@ def build_config() -> AppConfig:
                 args_template=(),
             )
         },
+    )
+
+
+def build_claimed_issue(*, body_suffix: str = "") -> GitHubIssueRecord:
+    return GitHubIssueRecord(
+        number=18,
+        title="Implementation child",
+        body=(
+            "## Parent PRD\n"
+            "#15\n\n"
+            "## What to Build\n"
+            "Build it.\n\n"
+            "## Acceptance Criteria\n"
+            "- [ ] Done.\n\n"
+            "## Blocked By\n"
+            "None\n\n"
+            "## Orchestration\n"
+            "- Agent Run: run-123\n"
+            "- Claimed At: 2026-05-29T20:07:02Z\n"
+            "- Implementation Branch: impl/15/18-implementation-child\n"
+            f"{body_suffix}"
+        ),
+        labels=("implementation",),
+        state="open",
     )
 
 
@@ -298,3 +360,150 @@ def test_claim_implementation_issue_endpoint_returns_server_error_for_unexpected
     assert response.json() == {
         "detail": "Implementation issue claim failed for repo 'demo': GitHub issue access failed"
     }
+
+
+def test_start_implementation_issue_endpoint_returns_accepted_and_schedules_background_run(
+    tmp_path: Path,
+) -> None:
+    worktree_root = tmp_path / "worktrees" / "demo"
+    issue_worktree = worktree_root / "issue-18"
+    issue_worktree.mkdir(parents=True)
+
+    config = AppConfig(
+        repos={
+            "demo": RepoConfig(
+                name="demo",
+                repo_path=Path("/repos/demo"),
+                main_branch="main",
+                worktree_root=worktree_root,
+                global_concurrency=1,
+                per_prd_concurrency=1,
+                default_harness="local",
+            )
+        },
+        harnesses=build_config().harnesses,
+    )
+
+    execution_service = FakeExecutionService()
+    reconciliation_service = FakeReconciliationRunner()
+    issue_gateway = FakeIssueGateway(build_claimed_issue())
+    scheduled_jobs: list[tuple[object, tuple[object, ...], dict[str, object]]] = []
+
+    app = create_dashboard_app(
+        config=config,
+        execution_service_factory=lambda repo: execution_service,
+        reconciliation_service_factory=lambda repo: reconciliation_service,
+        issue_gateway_factory=lambda: issue_gateway,
+        background_task_scheduler=lambda task, *args, **kwargs: scheduled_jobs.append(
+            (task, args, kwargs)
+        ),
+    )
+
+    response = TestClient(app).post("/dashboard/repos/demo/implementation-issues/18/start")
+
+    assert response.status_code == 202
+    assert response.json() == {
+        "ok": True,
+        "repo": "demo",
+        "action": "start-implementation-issue",
+        "issue_number": 18,
+        "agent_run_id": "run-123",
+        "status": "started",
+        "run_state_path": str(issue_worktree / "run-state.json"),
+        "log_path": str(issue_worktree / "harness.log"),
+    }
+    assert execution_service.calls == []
+    assert reconciliation_service.calls == 0
+    assert len(scheduled_jobs) == 1
+
+    task, args, kwargs = scheduled_jobs[0]
+    task(*args, **kwargs)
+
+    assert execution_service.calls == [("demo", 18)]
+    assert reconciliation_service.calls == 1
+
+
+def test_start_implementation_issue_endpoint_rejects_unclaimed_issue(tmp_path: Path) -> None:
+    worktree_root = tmp_path / "worktrees" / "demo"
+    worktree_root.mkdir(parents=True)
+    config = AppConfig(
+        repos={
+            "demo": RepoConfig(
+                name="demo",
+                repo_path=Path("/repos/demo"),
+                main_branch="main",
+                worktree_root=worktree_root,
+                global_concurrency=1,
+                per_prd_concurrency=1,
+                default_harness="local",
+            )
+        },
+        harnesses=build_config().harnesses,
+    )
+    unclaimed_issue = GitHubIssueRecord(
+        number=18,
+        title="Implementation child",
+        body=(
+            "## Parent PRD\n#15\n\n"
+            "## What to Build\nBuild it.\n\n"
+            "## Acceptance Criteria\n- [ ] Done.\n\n"
+            "## Blocked By\nNone\n"
+        ),
+        labels=("implementation", "ready-for-agent"),
+        state="open",
+    )
+    issue_gateway = FakeIssueGateway(unclaimed_issue)
+    scheduled_jobs: list[tuple[object, tuple[object, ...], dict[str, object]]] = []
+
+    app = create_dashboard_app(
+        config=config,
+        issue_gateway_factory=lambda: issue_gateway,
+        background_task_scheduler=lambda task, *args, **kwargs: scheduled_jobs.append(
+            (task, args, kwargs)
+        ),
+    )
+
+    response = TestClient(app).post("/dashboard/repos/demo/implementation-issues/18/start")
+
+    assert response.status_code == 400
+    assert response.json() == {
+        "detail": "Implementation Issue is not claimed."
+    }
+    assert scheduled_jobs == []
+
+
+def test_start_implementation_issue_endpoint_rejects_missing_worktree(tmp_path: Path) -> None:
+    worktree_root = tmp_path / "worktrees" / "demo"
+    worktree_root.mkdir(parents=True)
+    config = AppConfig(
+        repos={
+            "demo": RepoConfig(
+                name="demo",
+                repo_path=Path("/repos/demo"),
+                main_branch="main",
+                worktree_root=worktree_root,
+                global_concurrency=1,
+                per_prd_concurrency=1,
+                default_harness="local",
+            )
+        },
+        harnesses=build_config().harnesses,
+    )
+    issue_gateway = FakeIssueGateway(build_claimed_issue())
+    scheduled_jobs: list[tuple[object, tuple[object, ...], dict[str, object]]] = []
+
+    app = create_dashboard_app(
+        config=config,
+        issue_gateway_factory=lambda: issue_gateway,
+        background_task_scheduler=lambda task, *args, **kwargs: scheduled_jobs.append(
+            (task, args, kwargs)
+        ),
+    )
+
+    response = TestClient(app).post("/dashboard/repos/demo/implementation-issues/18/start")
+
+    assert response.status_code == 400
+    assert response.json() == {
+        "detail": f"Implementation Issue worktree does not exist: {worktree_root / 'issue-18'}"
+    }
+    assert scheduled_jobs == []

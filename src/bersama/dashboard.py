@@ -1,19 +1,25 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from fastapi import BackgroundTasks, FastAPI, HTTPException
 from pydantic import BaseModel
 
 from bersama.claiming import ClaimWorkspaceGateway, ImplementationClaimService
 from bersama.config import AppConfig, ConfigError, RepoConfig
+from bersama.execution import HarnessExecutionService
 from bersama.github_issues import GitHubIssueGateway
+from bersama.issues import GitHubIssue, ImplementationIssue, parse_issue
 from bersama.prd_preparation import GitWorkspaceGateway, PrdPreparationService
 from bersama.reconciliation import ReconciliationService
 
 ReconciliationServiceFactory = Callable[[RepoConfig], ReconciliationService]
 PrdPreparationServiceFactory = Callable[[RepoConfig], PrdPreparationService]
 ImplementationClaimServiceFactory = Callable[[RepoConfig], ImplementationClaimService]
+ExecutionServiceFactory = Callable[[RepoConfig], HarnessExecutionService]
+IssueGatewayFactory = Callable[[], GitHubIssueGateway]
+BackgroundTaskScheduler = Callable[..., object]
 
 
 class ClaimImplementationIssueRequest(BaseModel):
@@ -26,6 +32,9 @@ def create_dashboard_app(
     reconciliation_service_factory: ReconciliationServiceFactory | None = None,
     prd_preparation_service_factory: PrdPreparationServiceFactory | None = None,
     implementation_claim_service_factory: ImplementationClaimServiceFactory | None = None,
+    execution_service_factory: ExecutionServiceFactory | None = None,
+    issue_gateway_factory: IssueGatewayFactory | None = None,
+    background_task_scheduler: BackgroundTaskScheduler | None = None,
 ) -> FastAPI:
     app = FastAPI()
 
@@ -47,6 +56,10 @@ def create_dashboard_app(
             workspace=ClaimWorkspaceGateway(),
         )
 
+    def build_execution_service(repo: RepoConfig) -> HarnessExecutionService:
+        del repo
+        return HarnessExecutionService(issues=GitHubIssueGateway())
+
     service_factory = reconciliation_service_factory or build_service
     prd_service_factory = (
         prd_preparation_service_factory or build_prd_preparation_service
@@ -54,6 +67,60 @@ def create_dashboard_app(
     claim_service_factory = (
         implementation_claim_service_factory or build_implementation_claim_service
     )
+    execute_service_factory = execution_service_factory or build_execution_service
+    issues_factory = issue_gateway_factory or GitHubIssueGateway
+
+    def schedule_background_task(
+        background_tasks: BackgroundTasks,
+        task: Callable[..., object],
+        *args: object,
+    ) -> None:
+        if background_task_scheduler is not None:
+            background_task_scheduler(task, *args)
+            return
+        background_tasks.add_task(task, *args)
+
+    def run_issue_execution_in_background(repo_name: str, issue_number: int) -> None:
+        repo = config.repo(repo_name)
+        execution_result = execute_service_factory(repo).execute_run(
+            repo_name=repo_name,
+            issue_number=issue_number,
+            config=config,
+        )
+        if execution_result.status == "succeeded":
+            service_factory(repo).reconcile()
+
+    def validate_claimed_issue_start(
+        repo: RepoConfig, issue_number: int
+    ) -> tuple[str, str, str]:
+        issue_record = issues_factory().view_issue(issue_number)
+        parsed_issue = parse_issue(
+            GitHubIssue(
+                number=issue_record.number,
+                title=issue_record.title,
+                body=issue_record.body,
+                labels=issue_record.labels,
+            )
+        )
+        if not isinstance(parsed_issue, ImplementationIssue):
+            raise HTTPException(status_code=400, detail="Issue is not an Implementation Issue.")
+
+        orchestration = parsed_issue.orchestration
+        if not orchestration.agent_run_id or not orchestration.implementation_branch:
+            raise HTTPException(status_code=400, detail="Implementation Issue is not claimed.")
+
+        worktree_path = Path(repo.worktree_root) / f"issue-{issue_number}"
+        if not worktree_path.exists():
+            raise HTTPException(
+                status_code=400,
+                detail=f"Implementation Issue worktree does not exist: {worktree_path}",
+            )
+
+        return (
+            orchestration.agent_run_id,
+            str(worktree_path / "run-state.json"),
+            str(worktree_path / "harness.log"),
+        )
 
     @app.post("/dashboard/repos/{repo_name}/reconcile")
     def reconcile_repo(repo_name: str) -> dict[str, object]:
@@ -143,6 +210,39 @@ def create_dashboard_app(
             "agent_run_id": result.agent_run_id,
             "implementation_branch": result.implementation_branch,
             "worktree_path": result.worktree_path,
+        }
+
+    @app.post("/dashboard/repos/{repo_name}/implementation-issues/{issue_number}/start", status_code=202)
+    def start_implementation_issue(
+        repo_name: str,
+        issue_number: int,
+        background_tasks: BackgroundTasks,
+    ) -> dict[str, object]:
+        try:
+            repo = config.repo(repo_name)
+        except ConfigError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+        agent_run_id, run_state_path, log_path = validate_claimed_issue_start(
+            repo, issue_number
+        )
+
+        schedule_background_task(
+            background_tasks,
+            run_issue_execution_in_background,
+            repo.name,
+            issue_number,
+        )
+
+        return {
+            "ok": True,
+            "repo": repo.name,
+            "action": "start-implementation-issue",
+            "issue_number": issue_number,
+            "agent_run_id": agent_run_id,
+            "status": "started",
+            "run_state_path": run_state_path,
+            "log_path": log_path,
         }
 
     return app
