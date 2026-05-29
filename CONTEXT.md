@@ -44,7 +44,10 @@ _Avoid_: Agent session, worker job, execution
 The executable adapter that performs an Agent Run for a Claimed Implementation Issue. The orchestrator selects an Agent Harness, but the harness owns the coding-agent behavior.
 _Avoid_: Agent, worker, runner
 
+**Orchestration Control Center**:
+The human-facing dashboard for inspecting PRD Issue and Implementation Issue state, triggering orchestration operations, and reviewing Agent Run logs.
+_Avoid_: Admin panel, scaffold dashboard, cockpit
+
 **Integrated Implementation Issue**:
 An Implementation Issue that has had its successful Agent Run commits merged back into its Parent PRD's PRD branch and has been closed.
 _Avoid_: Completed ticket, merged issue, done task
-

@@ -1,8 +1,13 @@
-# bersama
+# rangkai
+
+> **rangkai** *(pronounced: "rUNG-kye", /raŋ.kaɪ/)*
+>
+>to connect, link together, arrange into a sequence, or assemble separate parts into a unified whole.
+>
 
 Standalone Python orchestration system for running coding agents against GitHub Issues.
 
-Bersama uses GitHub Issues, labels, branches, worktrees, and local run-state files as orchestration state. PRD Issues define product-level work, Implementation Issues define executable agent work, and Agent Runs execute claimed Implementation Issues through a configured Agent Harness.
+Rangkai uses GitHub Issues, labels, branches, worktrees, and local run-state files as orchestration state. PRD Issues define product-level work, Implementation Issues define executable agent work, and Agent Runs execute claimed Implementation Issues through a configured Agent Harness.
 
 ## Install
 
