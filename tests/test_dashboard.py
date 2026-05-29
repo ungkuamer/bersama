@@ -1,5 +1,6 @@
 from pathlib import Path
 
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
 from bersama.claiming import ClaimResult
@@ -211,6 +212,7 @@ def test_prepare_prd_endpoint_returns_branch_metadata_on_success() -> None:
         "ok": True,
         "repo": "demo",
         "action": "prepare-prd",
+        "status": "prepared",
         "issue_number": 15,
         "prd_branch": "prd/15-add-interactive-dashboard-backend-control-apis",
         "reused_existing_branch": False,
@@ -238,6 +240,24 @@ def test_prepare_prd_endpoint_returns_bad_request_for_known_failure() -> None:
 
     assert response.status_code == 400
     assert response.json() == {"detail": "Issue is not a PRD Issue."}
+
+
+def test_prepare_prd_endpoint_preserves_deliberate_not_found_errors() -> None:
+    class MissingPrdPreparationService:
+        def prepare_issue(
+            self, *, repo_path: str, main_branch: str, issue_number: int
+        ) -> PrdPreparationResult:
+            raise HTTPException(status_code=404, detail="PRD Issue not found.")
+
+    app = create_dashboard_app(
+        config=build_config(),
+        prd_preparation_service_factory=lambda repo: MissingPrdPreparationService(),
+    )
+
+    response = TestClient(app).post("/dashboard/repos/demo/prd-issues/15/prepare")
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "PRD Issue not found."}
 
 
 def test_prepare_prd_endpoint_returns_server_error_for_unexpected_failure() -> None:
@@ -284,6 +304,7 @@ def test_claim_implementation_issue_endpoint_returns_claim_metadata_on_success()
         "ok": True,
         "repo": "demo",
         "action": "claim-implementation-issue",
+        "status": "claimed",
         "issue_number": 18,
         "agent_run_id": "run-123",
         "implementation_branch": "impl/15/18-add-implementation-issue-claim-dashboard-control",
@@ -331,6 +352,32 @@ def test_claim_implementation_issue_endpoint_returns_bad_request_for_known_claim
     assert response.json() == {
         "detail": "Implementation Issue is already claimed."
     }
+
+
+def test_claim_implementation_issue_endpoint_preserves_deliberate_bad_request_errors() -> None:
+    class InvalidClaimRequestService:
+        def claim_issue(
+            self,
+            *,
+            repo_path: str,
+            worktree_root: str,
+            issue_number: int,
+            agent_run_id: str,
+        ) -> ClaimResult:
+            raise HTTPException(status_code=400, detail="Implementation Issue is not ready.")
+
+    app = create_dashboard_app(
+        config=build_config(),
+        implementation_claim_service_factory=lambda repo: InvalidClaimRequestService(),
+    )
+
+    response = TestClient(app).post(
+        "/dashboard/repos/demo/implementation-issues/18/claim",
+        json={"agent_run_id": "run-123"},
+    )
+
+    assert response.status_code == 400
+    assert response.json() == {"detail": "Implementation Issue is not ready."}
 
 
 def test_claim_implementation_issue_endpoint_returns_not_found_for_unknown_repo() -> None:
@@ -522,6 +569,43 @@ def test_start_implementation_issue_endpoint_rejects_missing_worktree(tmp_path: 
     assert scheduled_jobs == []
 
 
+def test_start_implementation_issue_endpoint_returns_server_error_for_unexpected_issue_lookup_failure(
+    tmp_path: Path,
+) -> None:
+    worktree_root = tmp_path / "worktrees" / "demo"
+    worktree_root.mkdir(parents=True)
+    config = AppConfig(
+        repos={
+            "demo": RepoConfig(
+                name="demo",
+                repo_path=Path("/repos/demo"),
+                main_branch="main",
+                worktree_root=worktree_root,
+                global_concurrency=1,
+                per_prd_concurrency=1,
+                default_harness="local",
+            )
+        },
+        harnesses=build_config().harnesses,
+    )
+
+    class FailingIssueGateway:
+        def view_issue(self, number: int) -> GitHubIssueRecord:
+            raise RuntimeError("GitHub issue access failed")
+
+    app = create_dashboard_app(
+        config=config,
+        issue_gateway_factory=lambda: FailingIssueGateway(),
+    )
+
+    response = TestClient(app).post("/dashboard/repos/demo/implementation-issues/18/start")
+
+    assert response.status_code == 500
+    assert response.json() == {
+        "detail": "Implementation issue start failed for repo 'demo': GitHub issue access failed"
+    }
+
+
 def test_integrate_implementation_issue_endpoint_returns_branch_metadata_on_success() -> None:
     service = FakeIntegrationService(
         IntegrationResult(
@@ -545,6 +629,7 @@ def test_integrate_implementation_issue_endpoint_returns_branch_metadata_on_succ
         "ok": True,
         "repo": "demo",
         "action": "integrate-implementation-issue",
+        "status": "integrated",
         "issue_number": 18,
         "implementation_branch": "impl/15/18-add-implementation-issue-claim-dashboard-control",
         "prd_branch": "prd/15-add-interactive-dashboard-backend-control-apis",
@@ -577,6 +662,31 @@ def test_integrate_implementation_issue_endpoint_returns_bad_request_for_known_f
     assert response.status_code == 400
     assert response.json() == {
         "detail": "Merge conflict while updating implementation branch against PRD branch:\nconflict"
+    }
+
+
+def test_integrate_implementation_issue_endpoint_preserves_deliberate_not_found_errors() -> None:
+    class MissingIntegrationService:
+        def integrate_issue(
+            self, *, repo_path: str, worktree_root: str, issue_number: int
+        ) -> IntegrationResult:
+            raise HTTPException(
+                status_code=404,
+                detail="Implementation Issue worktree does not exist.",
+            )
+
+    app = create_dashboard_app(
+        config=build_config(),
+        integration_service_factory=lambda repo: MissingIntegrationService(),
+    )
+
+    response = TestClient(app).post(
+        "/dashboard/repos/demo/implementation-issues/18/integrate"
+    )
+
+    assert response.status_code == 404
+    assert response.json() == {
+        "detail": "Implementation Issue worktree does not exist."
     }
 
 

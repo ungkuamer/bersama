@@ -167,6 +167,8 @@ def create_dashboard_app(
                 main_branch=repo.main_branch,
                 issue_number=issue_number,
             )
+        except HTTPException:
+            raise
         except Exception as exc:
             raise HTTPException(
                 status_code=500,
@@ -180,6 +182,7 @@ def create_dashboard_app(
             "ok": True,
             "repo": repo.name,
             "action": "prepare-prd",
+            "status": "prepared",
             "issue_number": result.issue_number,
             "prd_branch": result.prd_branch,
             "reused_existing_branch": result.reused_existing_branch,
@@ -204,6 +207,8 @@ def create_dashboard_app(
                 issue_number=issue_number,
                 agent_run_id=request.agent_run_id,
             )
+        except HTTPException:
+            raise
         except Exception as exc:
             raise HTTPException(
                 status_code=500,
@@ -217,6 +222,7 @@ def create_dashboard_app(
             "ok": True,
             "repo": repo.name,
             "action": "claim-implementation-issue",
+            "status": "claimed",
             "issue_number": result.issue_number,
             "agent_run_id": result.agent_run_id,
             "implementation_branch": result.implementation_branch,
@@ -234,9 +240,19 @@ def create_dashboard_app(
         except ConfigError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
 
-        agent_run_id, run_state_path, log_path = validate_claimed_issue_start(
-            repo, issue_number
-        )
+        try:
+            agent_run_id, run_state_path, log_path = validate_claimed_issue_start(
+                repo, issue_number
+            )
+        except HTTPException:
+            raise
+        except Exception as exc:
+            raise HTTPException(
+                status_code=500,
+                detail=(
+                    f"Implementation issue start failed for repo '{repo.name}': {exc}"
+                ),
+            ) from exc
 
         schedule_background_task(
             background_tasks,
@@ -272,6 +288,8 @@ def create_dashboard_app(
                 worktree_root=str(repo.worktree_root),
                 issue_number=issue_number,
             )
+        except HTTPException:
+            raise
         except Exception as exc:
             raise HTTPException(
                 status_code=500,
@@ -287,6 +305,7 @@ def create_dashboard_app(
             "ok": True,
             "repo": repo.name,
             "action": "integrate-implementation-issue",
+            "status": "integrated",
             "issue_number": result.issue_number,
             "implementation_branch": result.implementation_branch,
             "prd_branch": result.prd_branch,
