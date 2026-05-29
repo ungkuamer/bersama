@@ -20,7 +20,9 @@ import {
   Server,
   GitMerge,
   ArrowDown,
-  Download
+  Download,
+  Hand,
+  Send
 } from 'lucide-react'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -88,12 +90,21 @@ type ImplementationIntegrationState = {
   message: string;
 }
 
+type ImplementationClaimState = {
+  status: 'loading' | 'succeeded' | 'failed';
+  message: string;
+}
+
 type PrdPreparationResponse = {
   prd_branch?: string;
 }
 
 type ImplementationIntegrationResponse = {
   prd_branch?: string;
+}
+
+type ImplementationClaimResponse = {
+  agent_run_id?: string;
 }
 
 const messageFromError = (error: unknown): string => {
@@ -115,6 +126,10 @@ const isNearBottom = (element: HTMLElement): boolean => {
   return element.scrollHeight - element.scrollTop - element.clientHeight <= LOG_BOTTOM_THRESHOLD_PX;
 }
 
+const buildAgentRunId = (issueNumber: number): string => {
+  return `run-${issueNumber}-${Date.now().toString(16)}`;
+}
+
 export default function App() {
   const [repos, setRepos] = useState<Repo[]>([]);
   const [selectedRepo, setSelectedRepo] = useState<string>('');
@@ -130,6 +145,9 @@ export default function App() {
   const [pollLogsActive, setPollLogsActive] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [preparePrdState, setPreparePrdState] = useState<Record<number, PrdPreparationState>>({});
+  const [claimIssueState, setClaimIssueState] = useState<Record<number, ImplementationClaimState>>({});
+  const [claimFormIssue, setClaimFormIssue] = useState<number | null>(null);
+  const [claimAgentRunIds, setClaimAgentRunIds] = useState<Record<number, string>>({});
   const [integrateIssueState, setIntegrateIssueState] = useState<Record<number, ImplementationIntegrationState>>({});
   const [hasNewPausedLogOutput, setHasNewPausedLogOutput] = useState<boolean>(false);
   const logAutoScrollActiveRef = useRef<boolean>(true);
@@ -450,6 +468,81 @@ export default function App() {
         }
       }));
     }
+  };
+
+  const claimImplementationIssue = async (issueNumber: number) => {
+    if (!selectedRepo) return;
+
+    const agentRunId = (claimAgentRunIds[issueNumber] || '').trim();
+    if (!agentRunId) {
+      setClaimIssueState(prev => ({
+        ...prev,
+        [issueNumber]: {
+          status: 'failed',
+          message: 'Agent Run identifier is required.'
+        }
+      }));
+      return;
+    }
+
+    setClaimIssueState(prev => ({
+      ...prev,
+      [issueNumber]: {
+        status: 'loading',
+        message: 'Claiming Implementation Issue...'
+      }
+    }));
+
+    try {
+      const res = await fetch(
+        `${API_BASE}/dashboard/repos/${encodeURIComponent(selectedRepo)}/implementation-issues/${issueNumber}/claim`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ agent_run_id: agentRunId })
+        }
+      );
+      if (!res.ok) {
+        throw new Error(await detailFromResponse(res) || `HTTP error ${res.status}`);
+      }
+      const data = await res.json() as ImplementationClaimResponse;
+      const claimedAgentRunId = data.agent_run_id || agentRunId;
+      setClaimIssueState(prev => ({
+        ...prev,
+        [issueNumber]: {
+          status: 'succeeded',
+          message: `Claimed Implementation Issue #${issueNumber} with ${claimedAgentRunId}.`
+        }
+      }));
+      setClaimFormIssue(null);
+      await fetchData(false);
+    } catch (err: unknown) {
+      if (err instanceof TypeError) {
+        setClaimIssueState(prev => {
+          const next = { ...prev };
+          delete next[issueNumber];
+          return next;
+        });
+        setError(`Failed to connect to backend: ${err.message}`);
+        return;
+      }
+      const message = messageFromError(err);
+      setClaimIssueState(prev => ({
+        ...prev,
+        [issueNumber]: {
+          status: 'failed',
+          message: message || 'Implementation Issue claim failed.'
+        }
+      }));
+    }
+  };
+
+  const openClaimForm = (issueNumber: number) => {
+    setClaimFormIssue(issueNumber);
+    setClaimAgentRunIds(prev => ({
+      ...prev,
+      [issueNumber]: prev[issueNumber] || buildAgentRunId(issueNumber)
+    }));
   };
 
   const getStatusBadge = (status?: string) => {
@@ -956,6 +1049,11 @@ export default function App() {
                               ) : (
                                 children.map((c) => {
                                   const isSelectedLog = selectedRunIssue === c.number;
+                                  const canClaimIssue = c.state !== 'closed' && c.status === 'ready';
+                                  const isClaimFormOpen = claimFormIssue === c.number;
+                                  const claimAgentRunId = claimAgentRunIds[c.number] || '';
+                                  const claimState = claimIssueState[c.number];
+                                  const isClaimingIssue = claimState?.status === 'loading';
                                   const canIntegrateIssue = c.state !== 'closed' && c.status === 'succeeded';
                                   const integrateState = integrateIssueState[c.number];
                                   const isIntegratingIssue = integrateState?.status === 'loading';
@@ -1060,6 +1158,64 @@ export default function App() {
                                               {integrateState.message}
                                             </div>
                                           )}
+
+                                          {isClaimFormOpen && (
+                                            <form
+                                              className="rounded border border-zinc-900 bg-zinc-950/70 px-2 py-2 flex flex-col gap-2"
+                                              aria-label={`Claim Implementation Issue #${c.number}`}
+                                              onSubmit={(event) => {
+                                                event.preventDefault();
+                                                claimImplementationIssue(c.number);
+                                              }}
+                                            >
+                                              <label
+                                                htmlFor={`claim-agent-run-${c.number}`}
+                                                className="text-[9px] text-zinc-500 font-bold uppercase tracking-wider"
+                                              >
+                                                Agent Run identifier for Implementation Issue #{c.number}
+                                              </label>
+                                              <div className="flex flex-col sm:flex-row gap-2">
+                                                <input
+                                                  id={`claim-agent-run-${c.number}`}
+                                                  value={claimAgentRunId}
+                                                  disabled={isClaimingIssue}
+                                                  onChange={(event) => setClaimAgentRunIds(prev => ({
+                                                    ...prev,
+                                                    [c.number]: event.target.value
+                                                  }))}
+                                                  className="min-w-0 w-full sm:w-[260px] rounded border border-zinc-800 bg-[#09090b] px-2 py-1 text-[10px] text-zinc-200 focus:outline-none focus:border-zinc-500"
+                                                />
+                                                <Button
+                                                  type="submit"
+                                                  size="xs"
+                                                  variant="outline"
+                                                  aria-label={
+                                                    isClaimingIssue
+                                                      ? `Claiming #${c.number}`
+                                                      : `Submit claim for Implementation Issue #${c.number}`
+                                                  }
+                                                  disabled={isClaimingIssue}
+                                                  className="font-mono text-[9px] uppercase tracking-wider border-zinc-700 bg-zinc-900 text-zinc-200 hover:bg-zinc-800"
+                                                >
+                                                  <Send data-icon="inline-start" className={isClaimingIssue ? 'animate-pulse' : ''} />
+                                                  {isClaimingIssue ? 'Claiming' : 'Submit'} #{c.number}
+                                                </Button>
+                                              </div>
+                                            </form>
+                                          )}
+
+                                          {claimState && claimState.status !== 'loading' && (
+                                            <div
+                                              className={`rounded border px-2 py-1 text-[9.5px] font-mono ${
+                                                claimState.status === 'succeeded'
+                                                  ? 'bg-emerald-950/20 border-emerald-950/60 text-emerald-300'
+                                                  : 'bg-red-950/25 border-red-950/70 text-red-300'
+                                              }`}
+                                              role={claimState.status === 'failed' ? 'alert' : 'status'}
+                                            >
+                                              {claimState.message}
+                                            </div>
+                                          )}
                                         </div>
                                       </div>
 
@@ -1098,6 +1254,19 @@ export default function App() {
                                           >
                                             <GitMerge data-icon="inline-start" className={isIntegratingIssue ? 'animate-pulse' : ''} />
                                             {isIntegratingIssue ? 'Integrating' : 'Integrate'} #{c.number}
+                                          </Button>
+                                        )}
+
+                                        {canClaimIssue && (
+                                          <Button
+                                            type="button"
+                                            size="xs"
+                                            variant="outline"
+                                            onClick={() => openClaimForm(c.number)}
+                                            className="font-mono text-[9px] uppercase tracking-wider border-zinc-700 bg-zinc-950 text-zinc-200 hover:bg-zinc-900"
+                                          >
+                                            <Hand data-icon="inline-start" />
+                                            Claim #{c.number}
                                           </Button>
                                         )}
                                       </div>

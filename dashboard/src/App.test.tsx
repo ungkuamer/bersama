@@ -97,6 +97,70 @@ const mockIntegrationIssues = [
   }
 ];
 
+const mockClaimIssues = [
+  {
+    number: 5,
+    title: "Claim PRD Title",
+    labels: ["prd"],
+    state: "open",
+    kind: "prd",
+    prd_branch: "prd/5-claim-prd",
+    children: [
+      {
+        number: 21,
+        title: "Ready claim candidate",
+        labels: ["implementation", "ready-for-agent"],
+        state: "open",
+        kind: "implementation",
+        parent_prd_number: 5,
+        implementation_branch: undefined,
+        blocked_by: [],
+        active_blockers: [],
+        status: "ready"
+      },
+      {
+        number: 22,
+        title: "Blocked claim candidate",
+        labels: ["implementation"],
+        state: "open",
+        kind: "implementation",
+        parent_prd_number: 5,
+        implementation_branch: undefined,
+        blocked_by: [21],
+        active_blockers: [21],
+        status: "blocked"
+      }
+    ]
+  }
+];
+
+const mockClaimedAfterActionIssues = [
+  {
+    number: 5,
+    title: "Claim PRD Title",
+    labels: ["prd"],
+    state: "open",
+    kind: "prd",
+    prd_branch: "prd/5-claim-prd",
+    children: [
+      {
+        number: 21,
+        title: "Ready claim candidate",
+        labels: ["implementation"],
+        state: "open",
+        kind: "implementation",
+        parent_prd_number: 5,
+        implementation_branch: "impl/5/21-ready-claim-candidate",
+        blocked_by: [],
+        active_blockers: [],
+        status: "claimed",
+        agent_run_id: "run-edited-21",
+        claimed_at: "2026-05-29T21:20:00Z"
+      }
+    ]
+  }
+];
+
 const mockIntegratedAfterActionIssues = [
   {
     number: 4,
@@ -862,5 +926,176 @@ describe('Bersama Dashboard Frontend', () => {
       expect(screen.getByText(/Failed to connect to backend: Failed to fetch/i)).toBeInTheDocument();
     });
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('shows Claim only for Ready Implementation Issues', async () => {
+    mockFetch.mockImplementation((url: string) => {
+      if (url.endsWith('/api/repos')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(mockRepos)
+        });
+      }
+      if (url.includes('/api/issues')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(mockClaimIssues)
+        });
+      }
+      if (url.includes('/api/runs')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve([])
+        });
+      }
+      return Promise.reject(new Error(`Unhandled mock fetch for ${url}`));
+    });
+
+    render(<App />);
+
+    await screen.findByText('Ready claim candidate');
+
+    expect(screen.getByRole('button', { name: /Claim #21/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Claim #22/i })).not.toBeInTheDocument();
+  });
+
+  it('opens an inline claim form with an editable generated Agent Run identifier', async () => {
+    vi.spyOn(Date, 'now').mockReturnValue(1780090000123);
+    mockFetch.mockImplementation((url: string) => {
+      if (url.endsWith('/api/repos')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(mockRepos)
+        });
+      }
+      if (url.includes('/api/issues')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(mockClaimIssues)
+        });
+      }
+      if (url.includes('/api/runs')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve([])
+        });
+      }
+      return Promise.reject(new Error(`Unhandled mock fetch for ${url}`));
+    });
+
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole('button', { name: /Claim #21/i }));
+
+    const agentRunInput = screen.getByLabelText(/Agent Run identifier for Implementation Issue #21/i);
+    expect(agentRunInput).toHaveValue('run-21-19e75a1d2fb');
+
+    fireEvent.change(agentRunInput, { target: { value: 'run-human-readable-21' } });
+
+    expect(agentRunInput).toHaveValue('run-human-readable-21');
+  });
+
+  it('claims a Ready Implementation Issue with the edited Agent Run identifier and refreshes data after success', async () => {
+    let issuesRequests = 0;
+    let finishClaim: (() => void) | undefined;
+    const claimResponse = new Promise((resolve) => {
+      finishClaim = () => resolve({
+        ok: true,
+        json: () => Promise.resolve({
+          ok: true,
+          status: "claimed",
+          issue_number: 21,
+          agent_run_id: "run-edited-21",
+          implementation_branch: "impl/5/21-ready-claim-candidate"
+        })
+      });
+    });
+
+    mockFetch.mockImplementation((url: string, options?: RequestInit) => {
+      if (url.endsWith('/api/repos')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(mockRepos)
+        });
+      }
+      if (url.includes('/api/issues')) {
+        issuesRequests += 1;
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(
+            issuesRequests >= 2 ? mockClaimedAfterActionIssues : mockClaimIssues
+          )
+        });
+      }
+      if (url.includes('/api/runs')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve([])
+        });
+      }
+      if (url.endsWith('/dashboard/repos/demo/implementation-issues/21/claim')) {
+        expect(options?.method).toBe('POST');
+        expect(options?.headers).toEqual({ 'Content-Type': 'application/json' });
+        expect(options?.body).toBe(JSON.stringify({ agent_run_id: 'run-edited-21' }));
+        return claimResponse;
+      }
+      return Promise.reject(new Error(`Unhandled mock fetch for ${url}`));
+    });
+
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole('button', { name: /Claim #21/i }));
+    fireEvent.change(screen.getByLabelText(/Agent Run identifier for Implementation Issue #21/i), {
+      target: { value: 'run-edited-21' }
+    });
+    fireEvent.click(screen.getByRole('button', { name: /Submit claim for Implementation Issue #21/i }));
+
+    expect(await screen.findByRole('button', { name: /Claiming #21/i })).toBeDisabled();
+    finishClaim?.();
+
+    await waitFor(() => {
+      expect(screen.getByText(/Claimed Implementation Issue #21 with run-edited-21/i)).toBeInTheDocument();
+      expect(screen.getByText(/impl\/5\/21-ready-claim-candidate/i)).toBeInTheDocument();
+      expect(issuesRequests).toBeGreaterThanOrEqual(2);
+    });
+  });
+
+  it('shows known claim failures locally on the affected Implementation Issue row', async () => {
+    mockFetch.mockImplementation((url: string) => {
+      if (url.endsWith('/api/repos')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(mockRepos)
+        });
+      }
+      if (url.includes('/api/issues')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(mockClaimIssues)
+        });
+      }
+      if (url.includes('/api/runs')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve([])
+        });
+      }
+      if (url.endsWith('/dashboard/repos/demo/implementation-issues/21/claim')) {
+        return Promise.resolve({
+          ok: false,
+          status: 400,
+          json: () => Promise.resolve({ detail: "Implementation Issue is already claimed." })
+        });
+      }
+      return Promise.reject(new Error(`Unhandled mock fetch for ${url}`));
+    });
+
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole('button', { name: /Claim #21/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Submit claim for Implementation Issue #21/i }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent("Implementation Issue is already claimed.");
+    expect(screen.queryByText(/SYSTEM FAULT/i)).not.toBeInTheDocument();
   });
 });
