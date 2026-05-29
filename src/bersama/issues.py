@@ -41,6 +41,7 @@ class GitHubIssue:
 class OrchestrationMetadata:
     agent_run_id: str | None = None
     claimed_at: str | None = None
+    prd_branch: str | None = None
     implementation_branch: str | None = None
 
 
@@ -84,7 +85,12 @@ def parse_issue(issue: GitHubIssue) -> ParsedIssue:
         return _parse_implementation_issue(issue)
 
     if "prd" in labels:
-        return PrdIssue(issue=issue, kind=IssueKind.PRD)
+        sections = _parse_sections(issue.body)
+        return PrdIssue(
+            issue=issue,
+            kind=IssueKind.PRD,
+            orchestration=_parse_orchestration(sections.get("Orchestration")),
+        )
 
     return ParsedIssue(issue=issue, kind=IssueKind.UNKNOWN)
 
@@ -194,8 +200,35 @@ def _parse_orchestration(body: str | None) -> OrchestrationMetadata:
     return OrchestrationMetadata(
         agent_run_id=values.get("agent run"),
         claimed_at=values.get("claimed at"),
+        prd_branch=values.get("prd branch"),
         implementation_branch=values.get("implementation branch"),
     )
+
+
+def upsert_section(body: str, section_name: str, section_body: str) -> str:
+    matches = list(SECTION_RE.finditer(body))
+    if not matches:
+        return f"{body.rstrip()}\n\n## {section_name}\n{section_body.strip()}".strip()
+
+    for index, match in enumerate(matches):
+        name = match.group("name").strip()
+        if name != section_name:
+            continue
+
+        section_start = match.start()
+        section_end = matches[index + 1].start() if index + 1 < len(matches) else len(body)
+        replacement = f"## {section_name}\n{section_body.strip()}"
+        prefix = body[:section_start].rstrip()
+        suffix = body[section_end:].lstrip()
+        if prefix and suffix:
+            return f"{prefix}\n\n{replacement}\n\n{suffix}".strip()
+        if prefix:
+            return f"{prefix}\n\n{replacement}".strip()
+        if suffix:
+            return f"{replacement}\n\n{suffix}".strip()
+        return replacement
+
+    return f"{body.rstrip()}\n\n## {section_name}\n{section_body.strip()}".strip()
 
 
 def _missing(code: str, message: str) -> Diagnostic:

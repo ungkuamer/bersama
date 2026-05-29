@@ -23,6 +23,30 @@ def test_parse_prd_issue_from_prd_label() -> None:
     assert parsed.diagnostics == ()
 
 
+def test_parse_prd_orchestration_metadata_when_present() -> None:
+    issue = GitHubIssue(
+        number=1,
+        title="Build LangGraph agent orchestration system",
+        body="""
+## Problem Statement
+
+Coordinate agent work through GitHub Issues.
+
+## Orchestration
+- PRD Branch: prd/1-build-langgraph-agent-orchestration-system
+""".strip(),
+        labels=("prd",),
+    )
+
+    parsed = parse_issue(issue)
+
+    assert isinstance(parsed, PrdIssue)
+    assert (
+        parsed.orchestration.prd_branch
+        == "prd/1-build-langgraph-agent-orchestration-system"
+    )
+
+
 def test_parse_valid_implementation_issue() -> None:
     issue = GitHubIssue(
         number=3,

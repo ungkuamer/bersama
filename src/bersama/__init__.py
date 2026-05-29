@@ -6,4 +6,5 @@ __all__ = [
     "github_issues",
     "issues",
     "orchestrator",
+    "prd_preparation",
 ]
