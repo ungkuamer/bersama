@@ -33,7 +33,8 @@ repos:
 """.strip(),
     )
 
-    exit_code = main(["run", "demo", "--config", str(config_path)])
+    with patch("bersama.orchestrator.Orchestrator.run") as mock_run:
+        exit_code = main(["run", "demo", "--config", str(config_path)])
 
     captured = capsys.readouterr()
     assert exit_code == 0
@@ -402,3 +403,36 @@ repos:
     assert captured.out == ""
     assert "Failed to integrate issue #9: Merge conflict in README.md" in captured.err
     assert "Failure type: merge_conflict" in captured.err
+
+
+def test_reconcile_command_success(capsys, tmp_path: Path) -> None:
+    config_path = write_config(
+        tmp_path,
+        """
+harnesses:
+  local:
+    command: codex
+repos:
+  demo:
+    repo_path: /repos/demo
+    main_branch: main
+    worktree_root: /worktrees/demo
+    default_harness: local
+""".strip(),
+    )
+
+    with patch("bersama.cli.ReconciliationService.reconcile") as reconcile:
+        reconcile.return_value = None
+
+        exit_code = main(
+            [
+                "reconcile",
+                "demo",
+                "--config",
+                str(config_path),
+            ]
+        )
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert "Successfully reconciled issue states for repo: demo" in captured.out

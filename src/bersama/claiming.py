@@ -180,6 +180,10 @@ class ImplementationClaimService:
             )
         except ClaimError as exc:
             self._issues.add_labels(issue_number, "needs-triage")
+            self._issues.add_comment(
+                issue_number,
+                f"Branch setup failed during claim.\n\n**Diagnostics:**\n{exc}"
+            )
             return self._fail(issue_number, str(exc), agent_run_id, implementation_branch)
 
         return ClaimResult(

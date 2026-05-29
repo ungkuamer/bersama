@@ -16,6 +16,15 @@ class FakeIssueGateway:
     def view_issue(self, number: int) -> GitHubIssueRecord:
         return self.issues[number]
 
+    def add_comment(self, number: int, body: str) -> None:
+        pass
+
+    def add_labels(self, number: int, *labels: str) -> None:
+        pass
+
+    def remove_labels(self, number: int, *labels: str) -> None:
+        pass
+
 
 def setup_test_git_repo(tmp_path: Path) -> tuple[Path, Path, Path]:
     """Helper to initialize repository and checkout worktree. Returns (repo_path, worktree_root, worktree_path)."""

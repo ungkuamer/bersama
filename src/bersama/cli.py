@@ -10,6 +10,7 @@ from bersama.execution import HarnessExecutionService
 from bersama.orchestrator import build_run_plan
 from bersama.prd_preparation import GitWorkspaceGateway, PrdPreparationService
 from bersama.integration import IntegrationService, IntegrationWorkspaceGateway
+from bersama.reconciliation import ReconciliationService
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -85,6 +86,18 @@ def build_parser() -> argparse.ArgumentParser:
     )
     integrate_parser.set_defaults(handler=_integrate_run_command)
 
+    reconcile_parser = subparsers.add_parser(
+        "reconcile",
+        help="Reconcile issue lifecycle states and mark parent PRD Issues ready-for-human.",
+    )
+    reconcile_parser.add_argument("repo_name", help="Named repo from the YAML config.")
+    reconcile_parser.add_argument(
+        "--config",
+        default="bersama.yaml",
+        help="Path to the YAML config file. Defaults to ./bersama.yaml",
+    )
+    reconcile_parser.set_defaults(handler=_reconcile_command)
+
     return parser
 
 
@@ -109,7 +122,19 @@ def _run_command(args: argparse.Namespace) -> int:
     print(f"Worktree root: {plan.worktree_root}")
     print(f"Harness: {plan.harness_name}")
     print("Command: " + " ".join(plan.command))
+
+    from bersama.orchestrator import Orchestrator
+    orchestrator = Orchestrator()
+    orchestrator.run(args.repo_name, config)
     return 0
+
+
+def _reconcile_safe(repo_name: str) -> None:
+    try:
+        service = ReconciliationService(issues=GitHubIssueGateway())
+        service.reconcile()
+    except Exception as exc:
+        print(f"Warning: Issue state reconciliation failed: {exc}", file=sys.stderr)
 
 
 def _prepare_prd_command(args: argparse.Namespace) -> int:
@@ -137,6 +162,7 @@ def _prepare_prd_command(args: argparse.Namespace) -> int:
     print(f"Prepared PRD issue #{result.issue_number}")
     print(f"PRD branch: {result.prd_branch} ({branch_state})")
     print(f"Issue body updated: {'yes' if result.updated_issue_body else 'no'}")
+    _reconcile_safe(args.repo_name)
     return 0
 
 
@@ -160,12 +186,14 @@ def _claim_issue_command(args: argparse.Namespace) -> int:
             f"Failed to claim implementation issue #{result.issue_number}: {result.failure_message}",
             file=sys.stderr,
         )
+        _reconcile_safe(args.repo_name)
         return 1
 
     print(f"Claimed implementation issue #{result.issue_number}")
     print(f"Agent run: {result.agent_run_id}")
     print(f"Implementation branch: {result.implementation_branch}")
     print(f"Worktree: {result.worktree_path}")
+    _reconcile_safe(args.repo_name)
     return 0
 
 
@@ -183,8 +211,10 @@ def _execute_run_command(args: argparse.Namespace) -> int:
         )
     except Exception as exc:
         print(f"Execution setup failed: {exc}", file=sys.stderr)
+        _reconcile_safe(args.repo_name)
         return 1
 
+    _reconcile_safe(args.repo_name)
     if result.status == "succeeded":
         print(f"Harness execution succeeded for issue #{result.issue_number}")
         print(f"Exit code: {result.exit_code}")
@@ -213,6 +243,7 @@ def _integrate_run_command(args: argparse.Namespace) -> int:
         issue_number=args.issue_number,
     )
 
+    _reconcile_safe(args.repo_name)
     if result.succeeded:
         print(f"Successfully integrated issue #{result.issue_number}")
         print(f"Implementation branch: {result.implementation_branch}")
@@ -222,3 +253,10 @@ def _integrate_run_command(args: argparse.Namespace) -> int:
         print(f"Failed to integrate issue #{result.issue_number}: {result.failure_message}", file=sys.stderr)
         print(f"Failure type: {result.failure_type}", file=sys.stderr)
         return 1
+
+
+def _reconcile_command(args: argparse.Namespace) -> int:
+    service = ReconciliationService(issues=GitHubIssueGateway())
+    service.reconcile()
+    print(f"Successfully reconciled issue states for repo: {args.repo_name}")
+    return 0

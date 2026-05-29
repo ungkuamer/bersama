@@ -1,0 +1,5 @@
+PyYAML>=6.0
+langgraph>=0.1.0
+
+[dev]
+pytest>=8.0

@@ -30,6 +30,9 @@ class FakeIssueGateway:
     def remove_labels(self, number: int, *labels: str) -> None:
         self.removed_labels.append((number, labels))
 
+    def add_comment(self, number: int, body: str) -> None:
+        pass
+
 
 class FakeGitRunner:
     def __init__(self, outputs: dict[tuple[str, ...], str] | None = None) -> None:
