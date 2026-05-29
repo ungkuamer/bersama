@@ -7,6 +7,7 @@ from bersama.config import AppConfig, HarnessConfig, RepoConfig
 from bersama.dashboard import create_dashboard_app
 from bersama.execution import ExecutionResult
 from bersama.github_issues import GitHubIssueRecord
+from bersama.integration import IntegrationResult
 from bersama.prd_preparation import PrdPreparationResult
 
 
@@ -64,6 +65,18 @@ class FakeExecutionService:
     ) -> ExecutionResult:
         del config
         self.calls.append((repo_name, issue_number))
+        return self._result
+
+
+class FakeIntegrationService:
+    def __init__(self, result: IntegrationResult) -> None:
+        self.calls: list[tuple[str, str, int]] = []
+        self._result = result
+
+    def integrate_issue(
+        self, *, repo_path: str, worktree_root: str, issue_number: int
+    ) -> IntegrationResult:
+        self.calls.append((repo_path, worktree_root, issue_number))
         return self._result
 
 
@@ -507,3 +520,96 @@ def test_start_implementation_issue_endpoint_rejects_missing_worktree(tmp_path: 
         "detail": f"Implementation Issue worktree does not exist: {worktree_root / 'issue-18'}"
     }
     assert scheduled_jobs == []
+
+
+def test_integrate_implementation_issue_endpoint_returns_branch_metadata_on_success() -> None:
+    service = FakeIntegrationService(
+        IntegrationResult(
+            issue_number=18,
+            status="succeeded",
+            implementation_branch="impl/15/18-add-implementation-issue-claim-dashboard-control",
+            prd_branch="prd/15-add-interactive-dashboard-backend-control-apis",
+        )
+    )
+    app = create_dashboard_app(
+        config=build_config(),
+        integration_service_factory=lambda repo: service,
+    )
+
+    response = TestClient(app).post(
+        "/dashboard/repos/demo/implementation-issues/18/integrate"
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "ok": True,
+        "repo": "demo",
+        "action": "integrate-implementation-issue",
+        "issue_number": 18,
+        "implementation_branch": "impl/15/18-add-implementation-issue-claim-dashboard-control",
+        "prd_branch": "prd/15-add-interactive-dashboard-backend-control-apis",
+    }
+    assert service.calls == [
+        ("/repos/demo", "/worktrees/demo", 18)
+    ]
+
+
+def test_integrate_implementation_issue_endpoint_returns_bad_request_for_known_failure() -> None:
+    service = FakeIntegrationService(
+        IntegrationResult(
+            issue_number=18,
+            status="failed",
+            failure_type="merge_conflict",
+            failure_message="Merge conflict while updating implementation branch against PRD branch:\nconflict",
+            implementation_branch="impl/15/18-add-implementation-issue-claim-dashboard-control",
+            prd_branch="prd/15-add-interactive-dashboard-backend-control-apis",
+        )
+    )
+    app = create_dashboard_app(
+        config=build_config(),
+        integration_service_factory=lambda repo: service,
+    )
+
+    response = TestClient(app).post(
+        "/dashboard/repos/demo/implementation-issues/18/integrate"
+    )
+
+    assert response.status_code == 400
+    assert response.json() == {
+        "detail": "Merge conflict while updating implementation branch against PRD branch:\nconflict"
+    }
+
+
+def test_integrate_implementation_issue_endpoint_returns_not_found_for_unknown_repo() -> None:
+    app = create_dashboard_app(config=build_config())
+
+    response = TestClient(app).post(
+        "/dashboard/repos/missing/implementation-issues/18/integrate"
+    )
+
+    assert response.status_code == 404
+    assert response.json() == {
+        "detail": "Unknown repo 'missing'. Available repos: demo."
+    }
+
+
+def test_integrate_implementation_issue_endpoint_returns_server_error_for_unexpected_failure() -> None:
+    class FailingIntegrationService:
+        def integrate_issue(
+            self, *, repo_path: str, worktree_root: str, issue_number: int
+        ) -> IntegrationResult:
+            raise RuntimeError("GitHub issue access failed")
+
+    app = create_dashboard_app(
+        config=build_config(),
+        integration_service_factory=lambda repo: FailingIntegrationService(),
+    )
+
+    response = TestClient(app).post(
+        "/dashboard/repos/demo/implementation-issues/18/integrate"
+    )
+
+    assert response.status_code == 500
+    assert response.json() == {
+        "detail": "Implementation issue integration failed for repo 'demo': GitHub issue access failed"
+    }

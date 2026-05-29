@@ -10,6 +10,7 @@ from bersama.claiming import ClaimWorkspaceGateway, ImplementationClaimService
 from bersama.config import AppConfig, ConfigError, RepoConfig
 from bersama.execution import HarnessExecutionService
 from bersama.github_issues import GitHubIssueGateway
+from bersama.integration import IntegrationService, IntegrationWorkspaceGateway
 from bersama.issues import GitHubIssue, ImplementationIssue, parse_issue
 from bersama.prd_preparation import GitWorkspaceGateway, PrdPreparationService
 from bersama.reconciliation import ReconciliationService
@@ -18,6 +19,7 @@ ReconciliationServiceFactory = Callable[[RepoConfig], ReconciliationService]
 PrdPreparationServiceFactory = Callable[[RepoConfig], PrdPreparationService]
 ImplementationClaimServiceFactory = Callable[[RepoConfig], ImplementationClaimService]
 ExecutionServiceFactory = Callable[[RepoConfig], HarnessExecutionService]
+IntegrationServiceFactory = Callable[[RepoConfig], IntegrationService]
 IssueGatewayFactory = Callable[[], GitHubIssueGateway]
 BackgroundTaskScheduler = Callable[..., object]
 
@@ -33,6 +35,7 @@ def create_dashboard_app(
     prd_preparation_service_factory: PrdPreparationServiceFactory | None = None,
     implementation_claim_service_factory: ImplementationClaimServiceFactory | None = None,
     execution_service_factory: ExecutionServiceFactory | None = None,
+    integration_service_factory: IntegrationServiceFactory | None = None,
     issue_gateway_factory: IssueGatewayFactory | None = None,
     background_task_scheduler: BackgroundTaskScheduler | None = None,
 ) -> FastAPI:
@@ -60,6 +63,13 @@ def create_dashboard_app(
         del repo
         return HarnessExecutionService(issues=GitHubIssueGateway())
 
+    def build_integration_service(repo: RepoConfig) -> IntegrationService:
+        del repo
+        return IntegrationService(
+            issues=GitHubIssueGateway(),
+            workspace=IntegrationWorkspaceGateway(),
+        )
+
     service_factory = reconciliation_service_factory or build_service
     prd_service_factory = (
         prd_preparation_service_factory or build_prd_preparation_service
@@ -68,6 +78,7 @@ def create_dashboard_app(
         implementation_claim_service_factory or build_implementation_claim_service
     )
     execute_service_factory = execution_service_factory or build_execution_service
+    integrate_service_factory = integration_service_factory or build_integration_service
     issues_factory = issue_gateway_factory or GitHubIssueGateway
 
     def schedule_background_task(
@@ -243,6 +254,42 @@ def create_dashboard_app(
             "status": "started",
             "run_state_path": run_state_path,
             "log_path": log_path,
+        }
+
+    @app.post("/dashboard/repos/{repo_name}/implementation-issues/{issue_number}/integrate")
+    def integrate_implementation_issue(
+        repo_name: str,
+        issue_number: int,
+    ) -> dict[str, object]:
+        try:
+            repo = config.repo(repo_name)
+        except ConfigError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+        try:
+            result = integrate_service_factory(repo).integrate_issue(
+                repo_path=str(repo.repo_path),
+                worktree_root=str(repo.worktree_root),
+                issue_number=issue_number,
+            )
+        except Exception as exc:
+            raise HTTPException(
+                status_code=500,
+                detail=(
+                    f"Implementation issue integration failed for repo '{repo.name}': {exc}"
+                ),
+            ) from exc
+
+        if not result.succeeded:
+            raise HTTPException(status_code=400, detail=result.failure_message)
+
+        return {
+            "ok": True,
+            "repo": repo.name,
+            "action": "integrate-implementation-issue",
+            "issue_number": result.issue_number,
+            "implementation_branch": result.implementation_branch,
+            "prd_branch": result.prd_branch,
         }
 
     return app
