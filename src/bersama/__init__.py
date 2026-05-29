@@ -3,6 +3,7 @@
 __all__ = [
     "cli",
     "config",
+    "dashboard",
     "github_issues",
     "issues",
     "orchestrator",
