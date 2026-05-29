@@ -16,7 +16,8 @@ import {
   ChevronRight,
   Play,
   Pause,
-  Server
+  Server,
+  GitMerge
 } from 'lucide-react'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -79,6 +80,32 @@ type PrdPreparationState = {
   message: string;
 }
 
+type ImplementationIntegrationState = {
+  status: 'loading' | 'succeeded' | 'failed';
+  message: string;
+}
+
+type PrdPreparationResponse = {
+  prd_branch?: string;
+}
+
+type ImplementationIntegrationResponse = {
+  prd_branch?: string;
+}
+
+const messageFromError = (error: unknown): string => {
+  return error instanceof Error ? error.message : String(error);
+}
+
+const detailFromResponse = async (response: Response): Promise<string | undefined> => {
+  const data: unknown = await response.json().catch(() => null);
+  if (data && typeof data === 'object' && 'detail' in data) {
+    const detail = data.detail;
+    return typeof detail === 'string' ? detail : undefined;
+  }
+  return undefined;
+}
+
 export default function App() {
   const [repos, setRepos] = useState<Repo[]>([]);
   const [selectedRepo, setSelectedRepo] = useState<string>('');
@@ -94,6 +121,7 @@ export default function App() {
   const [pollLogsActive, setPollLogsActive] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [preparePrdState, setPreparePrdState] = useState<Record<number, PrdPreparationState>>({});
+  const [integrateIssueState, setIntegrateIssueState] = useState<Record<number, ImplementationIntegrationState>>({});
   
   // UI States
   const [expandedPrds, setExpandedPrds] = useState<Record<number, boolean>>({});
@@ -111,14 +139,14 @@ export default function App() {
     try {
       const res = await fetch(`${API_BASE}/api/repos`);
       if (!res.ok) throw new Error(`HTTP error ${res.status}`);
-      const data = await res.json();
+      const data = await res.json() as Repo[];
       setRepos(data);
       if (data.length > 0 && !selectedRepo) {
         setSelectedRepo(data[0].name);
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Error fetching repos:", err);
-      setError(`Failed to connect to backend: ${err.message}`);
+      setError(`Failed to connect to backend: ${messageFromError(err)}`);
     }
   };
 
@@ -136,8 +164,8 @@ export default function App() {
       if (!issuesRes.ok) throw new Error(`Issues HTTP error ${issuesRes.status}`);
       if (!runsRes.ok) throw new Error(`Runs HTTP error ${runsRes.status}`);
 
-      const issuesData = await issuesRes.json();
-      const runsData = await runsRes.json();
+      const issuesData = await issuesRes.json() as Issue[];
+      const runsData = await runsRes.json() as RunState[];
 
       setIssues(issuesData);
       setRuns(runsData);
@@ -154,9 +182,9 @@ export default function App() {
       }
       
       setError(null);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Error fetching data:", err);
-      setError(`Data fetch failed: ${err.message}`);
+      setError(`Data fetch failed: ${messageFromError(err)}`);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -196,15 +224,15 @@ export default function App() {
         }
         throw new Error(`HTTP error ${res.status}`);
       }
-      const data = await res.json();
+      const data = await res.json() as LogTail;
       setLogTail(data);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Error fetching logs:", err);
       setLogTail({
         issue_number: issueNumber,
         log_path: 'Error',
         lines_returned: 0,
-        content: `Error loading log: ${err.message}`
+        content: `Error loading log: ${messageFromError(err)}`
       });
     }
   };
@@ -266,10 +294,9 @@ export default function App() {
         { method: 'POST' }
       );
       if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.detail || `HTTP error ${res.status}`);
+        throw new Error(await detailFromResponse(res) || `HTTP error ${res.status}`);
       }
-      const data = await res.json();
+      const data = await res.json() as PrdPreparationResponse;
       setPreparePrdState(prev => ({
         ...prev,
         [issueNumber]: {
@@ -278,7 +305,7 @@ export default function App() {
         }
       }));
       await fetchData(false);
-    } catch (err: any) {
+    } catch (err: unknown) {
       if (err instanceof TypeError) {
         setPreparePrdState(prev => {
           const next = { ...prev };
@@ -288,11 +315,61 @@ export default function App() {
         setError(`Failed to connect to backend: ${err.message}`);
         return;
       }
+      const message = messageFromError(err);
       setPreparePrdState(prev => ({
         ...prev,
         [issueNumber]: {
           status: 'failed',
-          message: err.message || 'PRD preparation failed.'
+          message: message || 'PRD preparation failed.'
+        }
+      }));
+    }
+  };
+
+  const integrateImplementationIssue = async (issueNumber: number) => {
+    if (!selectedRepo) return;
+
+    setIntegrateIssueState(prev => ({
+      ...prev,
+      [issueNumber]: {
+        status: 'loading',
+        message: 'Integrating Implementation Issue...'
+      }
+    }));
+
+    try {
+      const res = await fetch(
+        `${API_BASE}/dashboard/repos/${encodeURIComponent(selectedRepo)}/implementation-issues/${issueNumber}/integrate`,
+        { method: 'POST' }
+      );
+      if (!res.ok) {
+        throw new Error(await detailFromResponse(res) || `HTTP error ${res.status}`);
+      }
+      const data = await res.json() as ImplementationIntegrationResponse;
+      setIntegrateIssueState(prev => ({
+        ...prev,
+        [issueNumber]: {
+          status: 'succeeded',
+          message: `Integrated Implementation Issue #${issueNumber}${data.prd_branch ? ` into ${data.prd_branch}` : ''}.`
+        }
+      }));
+      await fetchData(false);
+    } catch (err: unknown) {
+      if (err instanceof TypeError) {
+        setIntegrateIssueState(prev => {
+          const next = { ...prev };
+          delete next[issueNumber];
+          return next;
+        });
+        setError(`Failed to connect to backend: ${err.message}`);
+        return;
+      }
+      const message = messageFromError(err);
+      setIntegrateIssueState(prev => ({
+        ...prev,
+        [issueNumber]: {
+          status: 'failed',
+          message: message || 'Implementation Issue integration failed.'
         }
       }));
     }
@@ -767,6 +844,9 @@ export default function App() {
                               ) : (
                                 children.map((c) => {
                                   const isSelectedLog = selectedRunIssue === c.number;
+                                  const canIntegrateIssue = c.state !== 'closed' && c.status === 'succeeded';
+                                  const integrateState = integrateIssueState[c.number];
+                                  const isIntegratingIssue = integrateState?.status === 'loading';
 
                                   return (
                                     <div 
@@ -838,6 +918,19 @@ export default function App() {
                                               ))}
                                             </div>
                                           )}
+
+                                          {integrateState && integrateState.status !== 'loading' && (
+                                            <div
+                                              className={`rounded border px-2 py-1 text-[9.5px] font-mono ${
+                                                integrateState.status === 'succeeded'
+                                                  ? 'bg-emerald-950/20 border-emerald-950/60 text-emerald-300'
+                                                  : 'bg-red-950/25 border-red-950/70 text-red-300'
+                                              }`}
+                                              role={integrateState.status === 'failed' ? 'alert' : 'status'}
+                                            >
+                                              {integrateState.message}
+                                            </div>
+                                          )}
                                         </div>
                                       </div>
 
@@ -863,6 +956,20 @@ export default function App() {
                                               </>
                                             )}
                                           </button>
+                                        )}
+
+                                        {canIntegrateIssue && (
+                                          <Button
+                                            type="button"
+                                            size="xs"
+                                            variant="outline"
+                                            onClick={() => integrateImplementationIssue(c.number)}
+                                            disabled={isIntegratingIssue}
+                                            className="font-mono text-[9px] uppercase tracking-wider border-zinc-700 bg-zinc-950 text-zinc-200 hover:bg-zinc-900"
+                                          >
+                                            <GitMerge data-icon="inline-start" className={isIntegratingIssue ? 'animate-pulse' : ''} />
+                                            {isIntegratingIssue ? 'Integrating' : 'Integrate'} #{c.number}
+                                          </Button>
                                         )}
                                       </div>
                                     </div>

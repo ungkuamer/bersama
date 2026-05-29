@@ -5,7 +5,7 @@ import App from './App'
 
 // Mock global fetch
 const mockFetch = vi.fn();
-globalThis.fetch = mockFetch as any;
+globalThis.fetch = mockFetch as unknown as typeof fetch;
 
 const mockRepos = [
   {
@@ -53,6 +53,71 @@ const mockIssues = [
         claimed_at: "2026-05-29T17:00:00Z",
         blocked_by: [],
         status: "claimed"
+      }
+    ]
+  }
+];
+
+const mockIntegrationIssues = [
+  {
+    number: 4,
+    title: "Integration PRD Title",
+    labels: ["prd"],
+    state: "open",
+    kind: "prd",
+    prd_branch: "prd/4-integration-prd",
+    children: [
+      {
+        number: 11,
+        title: "Succeeded implementation issue",
+        labels: ["implementation"],
+        state: "open",
+        kind: "implementation",
+        parent_prd_number: 4,
+        implementation_branch: "impl/4/11-succeeded",
+        blocked_by: [],
+        active_blockers: [],
+        status: "succeeded",
+        finished_at: "2026-05-29T18:00:00Z"
+      },
+      {
+        number: 12,
+        title: "Running implementation issue",
+        labels: ["implementation"],
+        state: "open",
+        kind: "implementation",
+        parent_prd_number: 4,
+        implementation_branch: "impl/4/12-running",
+        blocked_by: [],
+        active_blockers: [],
+        status: "running",
+        started_at: "2026-05-29T18:05:00Z"
+      }
+    ]
+  }
+];
+
+const mockIntegratedAfterActionIssues = [
+  {
+    number: 4,
+    title: "Integration PRD Title",
+    labels: ["prd"],
+    state: "open",
+    kind: "prd",
+    prd_branch: "prd/4-integration-prd",
+    children: [
+      {
+        number: 11,
+        title: "Succeeded implementation issue",
+        labels: ["implementation"],
+        state: "closed",
+        kind: "implementation",
+        parent_prd_number: 4,
+        implementation_branch: "impl/4/11-succeeded",
+        blocked_by: [],
+        active_blockers: [],
+        status: "succeeded",
+        finished_at: "2026-05-29T18:00:00Z"
       }
     ]
   }
@@ -363,6 +428,202 @@ describe('Bersama Dashboard Frontend', () => {
     render(<App />);
 
     fireEvent.click(await screen.findByRole('button', { name: /Prepare PRD #2/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/SYSTEM FAULT:/i)).toBeInTheDocument();
+      expect(screen.getByText(/Failed to connect to backend: Failed to fetch/i)).toBeInTheDocument();
+    });
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('shows Integrate only for succeeded Implementation Issues', async () => {
+    mockFetch.mockImplementation((url: string) => {
+      if (url.endsWith('/api/repos')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(mockRepos)
+        });
+      }
+      if (url.includes('/api/issues')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(mockIntegrationIssues)
+        });
+      }
+      if (url.includes('/api/runs')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve([])
+        });
+      }
+      return Promise.reject(new Error(`Unhandled mock fetch for ${url}`));
+    });
+
+    render(<App />);
+
+    await screen.findByText('Succeeded implementation issue');
+    expect(screen.getByRole('button', { name: /Integrate #11/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Integrate #12/i })).not.toBeInTheDocument();
+  });
+
+  it('does not show Integrate for already integrated closed Implementation Issues', async () => {
+    mockFetch.mockImplementation((url: string) => {
+      if (url.endsWith('/api/repos')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(mockRepos)
+        });
+      }
+      if (url.includes('/api/issues')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(mockIntegratedAfterActionIssues)
+        });
+      }
+      if (url.includes('/api/runs')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve([])
+        });
+      }
+      return Promise.reject(new Error(`Unhandled mock fetch for ${url}`));
+    });
+
+    render(<App />);
+
+    await screen.findByText('Succeeded implementation issue');
+    expect(screen.queryByRole('button', { name: /Integrate #11/i })).not.toBeInTheDocument();
+  });
+
+  it('integrates a succeeded Implementation Issue through the repo-scoped backend route and refreshes data after success', async () => {
+    let issuesRequests = 0;
+    let finishIntegration: (() => void) | undefined;
+    const integrationResponse = new Promise((resolve) => {
+      finishIntegration = () => resolve({
+        ok: true,
+        json: () => Promise.resolve({
+          ok: true,
+          status: "integrated",
+          issue_number: 11,
+          implementation_branch: "impl/4/11-succeeded",
+          prd_branch: "prd/4-integration-prd"
+        })
+      });
+    });
+
+    mockFetch.mockImplementation((url: string, options?: RequestInit) => {
+      if (url.endsWith('/api/repos')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(mockRepos)
+        });
+      }
+      if (url.includes('/api/issues')) {
+        issuesRequests += 1;
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(
+            issuesRequests >= 2 ? mockIntegratedAfterActionIssues : mockIntegrationIssues
+          )
+        });
+      }
+      if (url.includes('/api/runs')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve([])
+        });
+      }
+      if (url.endsWith('/dashboard/repos/demo/implementation-issues/11/integrate')) {
+        expect(options?.method).toBe('POST');
+        return integrationResponse;
+      }
+      return Promise.reject(new Error(`Unhandled mock fetch for ${url}`));
+    });
+
+    render(<App />);
+
+    const integrateButton = await screen.findByRole('button', { name: /Integrate #11/i });
+    fireEvent.click(integrateButton);
+
+    expect(await screen.findByRole('button', { name: /Integrating #11/i })).toBeDisabled();
+    finishIntegration?.();
+
+    await waitFor(() => {
+      expect(screen.getByText(/Integrated Implementation Issue #11 into prd\/4-integration-prd/i)).toBeInTheDocument();
+      expect(mockFetch).toHaveBeenCalledWith('http://localhost:8000/dashboard/repos/demo/implementation-issues/11/integrate', {
+        method: 'POST'
+      });
+      expect(issuesRequests).toBeGreaterThanOrEqual(2);
+    });
+  });
+
+  it('shows known integration failures locally on the affected Implementation Issue row', async () => {
+    mockFetch.mockImplementation((url: string) => {
+      if (url.endsWith('/api/repos')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(mockRepos)
+        });
+      }
+      if (url.includes('/api/issues')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(mockIntegrationIssues)
+        });
+      }
+      if (url.includes('/api/runs')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve([])
+        });
+      }
+      if (url.endsWith('/dashboard/repos/demo/implementation-issues/11/integrate')) {
+        return Promise.resolve({
+          ok: false,
+          status: 400,
+          json: () => Promise.resolve({ detail: "Merge conflict while updating implementation branch against PRD branch." })
+        });
+      }
+      return Promise.reject(new Error(`Unhandled mock fetch for ${url}`));
+    });
+
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole('button', { name: /Integrate #11/i }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent("Merge conflict while updating implementation branch against PRD branch.");
+    expect(screen.queryByText(/SYSTEM FAULT/i)).not.toBeInTheDocument();
+  });
+
+  it('keeps integration connectivity failures in the global system fault banner', async () => {
+    mockFetch.mockImplementation((url: string) => {
+      if (url.endsWith('/api/repos')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(mockRepos)
+        });
+      }
+      if (url.includes('/api/issues')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(mockIntegrationIssues)
+        });
+      }
+      if (url.includes('/api/runs')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve([])
+        });
+      }
+      if (url.endsWith('/dashboard/repos/demo/implementation-issues/11/integrate')) {
+        return Promise.reject(new TypeError("Failed to fetch"));
+      }
+      return Promise.reject(new Error(`Unhandled mock fetch for ${url}`));
+    });
+
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole('button', { name: /Integrate #11/i }));
 
     await waitFor(() => {
       expect(screen.getByText(/SYSTEM FAULT:/i)).toBeInTheDocument();
