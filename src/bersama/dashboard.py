@@ -390,6 +390,8 @@ def create_dashboard_app(
             elif parsed.kind.value == "implementation":
                 res["parent_prd_number"] = parsed.parent_prd_number
                 res["implementation_branch"] = parsed.orchestration.implementation_branch
+                res["agent_run_id"] = parsed.orchestration.agent_run_id
+                res["claimed_at"] = parsed.orchestration.claimed_at
                 res["blocked_by"] = list(parsed.blocked_by)
 
                 active_blockers = []
@@ -419,7 +421,9 @@ def create_dashboard_app(
                         except Exception:
                             pass
                     else:
-                        if "ready-for-agent" in record.labels:
+                        if parsed.orchestration.agent_run_id or parsed.orchestration.claimed_at:
+                            status = "claimed"
+                        elif "ready-for-agent" in record.labels:
                             if active_blockers:
                                 status = "blocked"
                             else:
