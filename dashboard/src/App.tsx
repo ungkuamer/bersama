@@ -21,6 +21,7 @@ import {
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import { Button } from '@/components/ui/button'
 
 const API_BASE = import.meta.env.DEV ? `http://${window.location.hostname}:8000` : '';
 
@@ -73,6 +74,11 @@ interface LogTail {
   content: string;
 }
 
+type PrdPreparationState = {
+  status: 'loading' | 'succeeded' | 'failed';
+  message: string;
+}
+
 export default function App() {
   const [repos, setRepos] = useState<Repo[]>([]);
   const [selectedRepo, setSelectedRepo] = useState<string>('');
@@ -87,6 +93,7 @@ export default function App() {
   const [pollingActive, setPollingActive] = useState<boolean>(true);
   const [pollLogsActive, setPollLogsActive] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  const [preparePrdState, setPreparePrdState] = useState<Record<number, PrdPreparationState>>({});
   
   // UI States
   const [expandedPrds, setExpandedPrds] = useState<Record<number, boolean>>({});
@@ -240,6 +247,55 @@ export default function App() {
       ...prev,
       [prdNumber]: !prev[prdNumber]
     }));
+  };
+
+  const preparePrdIssue = async (issueNumber: number) => {
+    if (!selectedRepo) return;
+
+    setPreparePrdState(prev => ({
+      ...prev,
+      [issueNumber]: {
+        status: 'loading',
+        message: 'Preparing PRD Issue...'
+      }
+    }));
+
+    try {
+      const res = await fetch(
+        `${API_BASE}/dashboard/repos/${encodeURIComponent(selectedRepo)}/prd-issues/${issueNumber}/prepare`,
+        { method: 'POST' }
+      );
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.detail || `HTTP error ${res.status}`);
+      }
+      const data = await res.json();
+      setPreparePrdState(prev => ({
+        ...prev,
+        [issueNumber]: {
+          status: 'succeeded',
+          message: `Prepared PRD #${issueNumber}${data.prd_branch ? ` on ${data.prd_branch}` : ''}.`
+        }
+      }));
+      await fetchData(false);
+    } catch (err: any) {
+      if (err instanceof TypeError) {
+        setPreparePrdState(prev => {
+          const next = { ...prev };
+          delete next[issueNumber];
+          return next;
+        });
+        setError(`Failed to connect to backend: ${err.message}`);
+        return;
+      }
+      setPreparePrdState(prev => ({
+        ...prev,
+        [issueNumber]: {
+          status: 'failed',
+          message: err.message || 'PRD preparation failed.'
+        }
+      }));
+    }
   };
 
   const getStatusBadge = (status?: string) => {
@@ -629,6 +685,9 @@ export default function App() {
                     {filteredPrds.map((prd) => {
                       const isExpanded = expandedPrds[prd.number];
                       const children = prd.children || [];
+                      const canPreparePrd = prd.state === 'open' && !prd.prd_branch;
+                      const prepareState = preparePrdState[prd.number];
+                      const isPreparingPrd = prepareState?.status === 'loading';
                       
                       return (
                         <div 
@@ -658,6 +717,22 @@ export default function App() {
                             </div>
                             
                             <div className="flex items-center gap-4">
+                              {canPreparePrd && (
+                                <Button
+                                  type="button"
+                                  size="xs"
+                                  variant="outline"
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    preparePrdIssue(prd.number);
+                                  }}
+                                  disabled={isPreparingPrd}
+                                  className="font-mono text-[9px] uppercase tracking-wider border-zinc-700 bg-zinc-950 text-zinc-200 hover:bg-zinc-900"
+                                >
+                                  <GitBranch data-icon="inline-start" className={isPreparingPrd ? 'animate-pulse' : ''} />
+                                  {isPreparingPrd ? 'Preparing' : 'Prepare'} PRD #{prd.number}
+                                </Button>
+                              )}
                               <Badge variant="outline" className="font-mono text-[9px] border-zinc-800 text-zinc-500 bg-zinc-900 px-2 py-0.5">
                                 {children.length} Slices
                               </Badge>
@@ -668,6 +743,19 @@ export default function App() {
                               )}
                             </div>
                           </div>
+
+                          {prepareState && prepareState.status !== 'loading' && (
+                            <div
+                              className={`px-4 py-2 border-b text-[10px] font-mono ${
+                                prepareState.status === 'succeeded'
+                                  ? 'bg-emerald-950/20 border-emerald-950/60 text-emerald-300'
+                                  : 'bg-red-950/25 border-red-950/70 text-red-300'
+                              }`}
+                              role={prepareState.status === 'failed' ? 'alert' : 'status'}
+                            >
+                              {prepareState.message}
+                            </div>
+                          )}
 
                           {/* PRD Children (Implementation Issues) */}
                           {isExpanded && (

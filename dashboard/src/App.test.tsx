@@ -58,6 +58,39 @@ const mockIssues = [
   }
 ];
 
+const mockUnpreparedIssues = [
+  {
+    number: 2,
+    title: "Unprepared PRD Title",
+    labels: ["prd"],
+    state: "open",
+    kind: "prd",
+    prd_branch: null,
+    children: []
+  },
+  {
+    number: 3,
+    title: "Prepared PRD Title",
+    labels: ["prd"],
+    state: "open",
+    kind: "prd",
+    prd_branch: "prd/3-prepared-prd",
+    children: []
+  }
+];
+
+const mockPreparedAfterActionIssues = [
+  {
+    number: 2,
+    title: "Unprepared PRD Title",
+    labels: ["prd"],
+    state: "open",
+    kind: "prd",
+    prd_branch: "prd/2-unprepared-prd-title",
+    children: []
+  }
+];
+
 const mockRuns = [
   {
     issue_number: 8,
@@ -164,5 +197,177 @@ describe('Bersama Dashboard Frontend', () => {
       expect(screen.getByText(/harness execution started/i)).toBeInTheDocument();
       expect(screen.getByText(/building assets/i)).toBeInTheDocument();
     });
+  });
+
+  it('shows Prepare PRD only for open unprepared PRD Issues', async () => {
+    mockFetch.mockImplementation((url: string) => {
+      if (url.endsWith('/api/repos')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(mockRepos)
+        });
+      }
+      if (url.includes('/api/issues')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(mockUnpreparedIssues)
+        });
+      }
+      if (url.includes('/api/runs')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve([])
+        });
+      }
+      return Promise.reject(new Error(`Unhandled mock fetch for ${url}`));
+    });
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Unprepared PRD Title')).toBeInTheDocument();
+      expect(screen.getByText('Prepared PRD Title')).toBeInTheDocument();
+    });
+
+    expect(screen.getByRole('button', { name: /Prepare PRD #2/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Prepare PRD #3/i })).not.toBeInTheDocument();
+  });
+
+  it('prepares a PRD Issue through the repo-scoped backend route and refreshes data after success', async () => {
+    let issuesRequests = 0;
+    let finishPrepare: (() => void) | undefined;
+    const prepareResponse = new Promise((resolve) => {
+      finishPrepare = () => resolve({
+        ok: true,
+        json: () => Promise.resolve({
+          ok: true,
+          status: "prepared",
+          issue_number: 2,
+          prd_branch: "prd/2-unprepared-prd-title"
+        })
+      });
+    });
+
+    mockFetch.mockImplementation((url: string, options?: RequestInit) => {
+      if (url.endsWith('/api/repos')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(mockRepos)
+        });
+      }
+      if (url.includes('/api/issues')) {
+        issuesRequests += 1;
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(
+            issuesRequests >= 2 ? mockPreparedAfterActionIssues : mockUnpreparedIssues
+          )
+        });
+      }
+      if (url.includes('/api/runs')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve([])
+        });
+      }
+      if (url.endsWith('/dashboard/repos/demo/prd-issues/2/prepare')) {
+        expect(options?.method).toBe('POST');
+        return prepareResponse;
+      }
+      return Promise.reject(new Error(`Unhandled mock fetch for ${url}`));
+    });
+
+    render(<App />);
+
+    const prepareButton = await screen.findByRole('button', { name: /Prepare PRD #2/i });
+    fireEvent.click(prepareButton);
+
+    expect(await screen.findByRole('button', { name: /Preparing PRD #2/i })).toBeDisabled();
+    finishPrepare?.();
+
+    await waitFor(() => {
+      expect(screen.getByText(/Prepared PRD #2/i)).toBeInTheDocument();
+      expect(screen.getByText(/BRANCH: prd\/2-unprepared-prd-title/i)).toBeInTheDocument();
+    });
+
+    expect(mockFetch).toHaveBeenCalledWith('http://localhost:8000/dashboard/repos/demo/prd-issues/2/prepare', {
+      method: 'POST'
+    });
+    expect(issuesRequests).toBeGreaterThanOrEqual(2);
+  });
+
+  it('shows known PRD preparation failures locally on the affected PRD Issue', async () => {
+    mockFetch.mockImplementation((url: string) => {
+      if (url.endsWith('/api/repos')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(mockRepos)
+        });
+      }
+      if (url.includes('/api/issues')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(mockUnpreparedIssues)
+        });
+      }
+      if (url.includes('/api/runs')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve([])
+        });
+      }
+      if (url.endsWith('/dashboard/repos/demo/prd-issues/2/prepare')) {
+        return Promise.resolve({
+          ok: false,
+          status: 400,
+          json: () => Promise.resolve({ detail: "Issue is not a PRD Issue." })
+        });
+      }
+      return Promise.reject(new Error(`Unhandled mock fetch for ${url}`));
+    });
+
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole('button', { name: /Prepare PRD #2/i }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent("Issue is not a PRD Issue.");
+    expect(screen.queryByText(/SYSTEM FAULT/i)).not.toBeInTheDocument();
+  });
+
+  it('keeps backend connectivity failures in the global system fault banner', async () => {
+    mockFetch.mockImplementation((url: string) => {
+      if (url.endsWith('/api/repos')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(mockRepos)
+        });
+      }
+      if (url.includes('/api/issues')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(mockUnpreparedIssues)
+        });
+      }
+      if (url.includes('/api/runs')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve([])
+        });
+      }
+      if (url.endsWith('/dashboard/repos/demo/prd-issues/2/prepare')) {
+        return Promise.reject(new TypeError("Failed to fetch"));
+      }
+      return Promise.reject(new Error(`Unhandled mock fetch for ${url}`));
+    });
+
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole('button', { name: /Prepare PRD #2/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/SYSTEM FAULT:/i)).toBeInTheDocument();
+      expect(screen.getByText(/Failed to connect to backend: Failed to fetch/i)).toBeInTheDocument();
+    });
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 });
