@@ -355,6 +355,7 @@ def create_dashboard_app(
                 status_code=500, detail=f"Failed to list GitHub issues: {exc}"
             ) from exc
 
+        records_by_number = {record.number: record for record in issue_records}
         parsed_by_number = {}
         for record in issue_records:
             try:
@@ -393,8 +394,8 @@ def create_dashboard_app(
 
                 active_blockers = []
                 for blocker_num in parsed.blocked_by:
-                    blocker_parsed = parsed_by_number.get(blocker_num)
-                    if blocker_parsed and blocker_parsed.issue.state == "open":
+                    blocker_record = records_by_number.get(blocker_num)
+                    if blocker_record and blocker_record.state == "open":
                         active_blockers.append(blocker_num)
                 res["active_blockers"] = active_blockers
 
