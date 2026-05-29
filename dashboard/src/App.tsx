@@ -4,6 +4,7 @@ import {
   RefreshCw, 
   GitBranch, 
   AlertCircle, 
+  CheckCircle2,
   Clock, 
   Database, 
   Layers, 
@@ -1010,23 +1011,40 @@ export default function App() {
                                             )}
                                           </div>
 
-                                          {/* Dependencies details */}
+                                          {/* Blocking Dependency rail */}
                                           {c.blocked_by && c.blocked_by.length > 0 && (
-                                            <div className="flex items-center gap-1.5 flex-wrap">
-                                              <span className="text-[9px] text-zinc-600 font-bold uppercase">Blocked By:</span>
-                                              {c.blocked_by.map(num => (
-                                                <Badge 
-                                                  key={num} 
-                                                  variant="outline" 
-                                                  className={`font-mono text-[9px] py-0 px-1 border-zinc-800 ${
-                                                    c.active_blockers?.includes(num)
-                                                      ? 'text-orange-500 bg-orange-950/20' 
-                                                      : 'text-zinc-600 line-through bg-zinc-950'
-                                                  }`}
-                                                >
-                                                  #{num}
-                                                </Badge>
-                                              ))}
+                                            <div
+                                              role="group"
+                                              aria-label={`Blocking Dependency rail for Implementation Issue #${c.number}`}
+                                              className="flex flex-wrap items-center gap-2 rounded border border-zinc-900 bg-zinc-950/60 px-2 py-1.5"
+                                            >
+                                              <span className="text-[9px] text-zinc-500 font-bold uppercase tracking-wider">
+                                                Blocking Dependency
+                                              </span>
+                                              <div className="relative flex flex-wrap items-center gap-1.5 pl-1 before:absolute before:left-1 before:right-1 before:top-1/2 before:h-px before:-translate-y-1/2 before:bg-zinc-800">
+                                                {c.blocked_by.map(num => {
+                                                  const isOpenBlockingDependency = c.active_blockers?.includes(num) ?? false;
+
+                                                  return (
+                                                    <span
+                                                      key={num}
+                                                      aria-label={`${isOpenBlockingDependency ? 'Open' : 'Resolved'} Blocking Dependency #${num}`}
+                                                      className={`relative z-10 inline-flex h-5 items-center gap-1 rounded-full border px-1.5 text-[9px] font-bold uppercase tracking-wider ${
+                                                        isOpenBlockingDependency
+                                                          ? 'border-orange-800 bg-orange-950/60 text-orange-300'
+                                                          : 'border-zinc-800 bg-[#050506] text-zinc-600'
+                                                      }`}
+                                                    >
+                                                      {isOpenBlockingDependency ? (
+                                                        <AlertCircle className="size-2.5" aria-hidden="true" />
+                                                      ) : (
+                                                        <CheckCircle2 className="size-2.5" aria-hidden="true" />
+                                                      )}
+                                                      <span>{isOpenBlockingDependency ? 'Open' : 'Resolved'} #{num}</span>
+                                                    </span>
+                                                  );
+                                                })}
+                                              </div>
                                             </div>
                                           )}
 

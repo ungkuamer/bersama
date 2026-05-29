@@ -36,7 +36,7 @@ const mockIssues = [
         kind: "implementation",
         parent_prd_number: 1,
         implementation_branch: "impl/1/8-child-impl",
-        blocked_by: [10],
+        blocked_by: [10, 12],
         active_blockers: [10],
         status: "running",
         started_at: "2026-05-29T16:00:00Z"
@@ -264,6 +264,20 @@ describe('Bersama Dashboard Frontend', () => {
     expect(screen.getAllByText(/RUNNING/i).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/CLAIMED/i).length).toBeGreaterThan(0);
     expect(screen.getByText(/run-456/i)).toBeInTheDocument();
+  });
+
+  it('shows open and resolved Blocking Dependencies in a compact dependency rail', async () => {
+    render(<App />);
+
+    await screen.findByText(/Child implementation issue/i);
+
+    const rail = screen.getByRole('group', {
+      name: /Blocking Dependency rail for Implementation Issue #8/i
+    });
+
+    expect(rail).toHaveTextContent(/Blocking Dependency/i);
+    expect(screen.getByLabelText(/Open Blocking Dependency #10/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Resolved Blocking Dependency #12/i)).toBeInTheDocument();
   });
 
   it('displays recent agent runs and handles log loading', async () => {
