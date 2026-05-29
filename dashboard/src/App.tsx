@@ -660,11 +660,11 @@ export default function App() {
   const getReadyIssuesCount = () => issues.filter(i => i.kind === 'implementation' && i.status === 'ready').length;
 
   return (
-    <div className="min-h-screen bg-[#09090b] text-[#d4d4d8] flex flex-col antialiased">
+    <div className="dashboard-shell relative min-h-screen text-[#d4d4d8] flex flex-col antialiased">
       {/* Top Banner Status Bar */}
-      <header className="border-b border-[#27272a] bg-[#09090b] px-6 py-4 flex flex-col md:flex-row md:items-center md:justify-between gap-4 sticky top-0 z-50">
+      <header className="dashboard-glass-panel border-b px-6 py-4 flex flex-col md:flex-row md:items-center md:justify-between gap-4 sticky top-0 z-50">
         <div className="flex items-center gap-3">
-          <div className="size-8 rounded border border-zinc-700 flex items-center justify-center bg-zinc-900 text-emerald-400 font-bold">
+          <div className="dashboard-glass-surface size-8 rounded border flex items-center justify-center text-emerald-400 font-bold">
             B
           </div>
           <div>
@@ -679,13 +679,13 @@ export default function App() {
         <div className="flex flex-wrap items-center gap-4 text-xs font-mono">
           {/* Active Repo Selector */}
           {repos.length > 0 && (
-            <div className="flex items-center gap-2 border border-zinc-800 rounded bg-zinc-950 px-2 py-1">
+            <div className="dashboard-glass-surface flex items-center gap-2 border rounded px-2 py-1">
               <Database className="size-3 text-zinc-500" />
               <span className="text-[11px] text-zinc-400">REPO:</span>
               <select 
                 value={selectedRepo} 
                 onChange={(e) => setSelectedRepo(e.target.value)}
-                className="bg-transparent text-white focus:outline-none text-[11px] font-bold cursor-pointer pr-1"
+                className="dashboard-focus bg-transparent text-white focus:outline-none text-[11px] font-bold cursor-pointer pr-1 rounded"
               >
                 {repos.map(r => (
                   <option key={r.name} value={r.name} className="bg-zinc-950 text-white">{r.name}</option>
@@ -695,7 +695,7 @@ export default function App() {
           )}
 
           {/* Quick Metrics */}
-          <div className="flex items-center gap-3 bg-zinc-950 border border-zinc-800 rounded px-3 py-1 text-[11px]">
+          <div className="dashboard-glass-surface flex items-center gap-3 border rounded px-3 py-1 text-[11px]">
             <div className="flex items-center gap-1.5 border-r border-zinc-800 pr-3">
               <span className="size-1.5 rounded-full bg-amber-500 animate-pulse"></span>
               <span className="text-zinc-400">ACTIVE RUNS:</span>
@@ -714,11 +714,11 @@ export default function App() {
           </div>
 
           {/* Refresh / Polling controls */}
-          <div className="flex items-center gap-2 border border-zinc-800 rounded bg-zinc-950 px-2 py-1">
+          <div className="dashboard-glass-surface flex items-center gap-2 border rounded px-2 py-1">
             <button 
               onClick={() => fetchData(true)} 
               disabled={refreshing}
-              className="text-zinc-400 hover:text-white transition disabled:opacity-50"
+              className="dashboard-focus rounded text-zinc-400 hover:text-white transition disabled:opacity-50"
               title="Manual Sync"
             >
               <RefreshCw className={`size-3.5 ${refreshing ? 'animate-spin' : ''}`} />
@@ -726,7 +726,7 @@ export default function App() {
             <span className="text-[10px] text-zinc-600">|</span>
             <button
               onClick={() => setPollingActive(!pollingActive)}
-              className="flex items-center gap-1 hover:text-white transition"
+              className="dashboard-focus rounded flex items-center gap-1 hover:text-white transition"
             >
               {pollingActive ? (
                 <>
@@ -753,7 +753,7 @@ export default function App() {
           </div>
           <button 
             onClick={() => { fetchRepos(); if(selectedRepo) fetchData(true); }}
-            className="px-2.5 py-1 bg-red-900/60 hover:bg-red-800 rounded border border-red-700 text-red-200 uppercase tracking-wider text-[10px]"
+            className="dashboard-focus px-2.5 py-1 bg-red-900/60 hover:bg-red-800 rounded border border-red-700 text-red-200 uppercase tracking-wider text-[10px]"
           >
             Retry Connection
           </button>
@@ -767,7 +767,7 @@ export default function App() {
         <section className="xl:col-span-1 flex flex-col gap-6 h-full min-h-[500px]">
           
           {/* Agent Runs List Panel */}
-          <Card className="bg-[#0c0c0e] border-[#27272a] shadow-none flex flex-col grow shrink overflow-hidden max-h-[380px]">
+          <Card className="dashboard-glass-panel flex flex-col grow shrink overflow-hidden max-h-[380px]">
             <CardHeader className="py-3.5 border-b border-zinc-800 px-4 flex flex-row items-center justify-between">
               <div>
                 <CardTitle className="text-xs tracking-wider font-bold uppercase text-white font-mono flex items-center gap-2">
@@ -800,10 +800,20 @@ export default function App() {
                         <div 
                           key={run.issue_number}
                           onClick={() => setSelectedRunIssue(isSelected ? null : run.issue_number)}
-                          className={`p-3 font-mono cursor-pointer transition flex flex-col gap-2 ${
+                          role="button"
+                          tabIndex={0}
+                          aria-pressed={isSelected}
+                          aria-label={`${isSelected ? 'Hide' : 'Show'} log for Agent Run issue #${run.issue_number}`}
+                          onKeyDown={(event) => {
+                            if (event.key === 'Enter' || event.key === ' ') {
+                              event.preventDefault();
+                              setSelectedRunIssue(isSelected ? null : run.issue_number);
+                            }
+                          }}
+                          className={`dashboard-row p-3 font-mono cursor-pointer flex flex-col gap-2 ${
                             isSelected 
-                              ? 'bg-zinc-900 border-l-2 border-white' 
-                              : 'hover:bg-zinc-950 bg-transparent border-l-2 border-transparent'
+                              ? 'bg-zinc-900/80 border-l-2 border-teal-300'
+                              : 'bg-transparent border-l-2 border-transparent'
                           }`}
                         >
                           <div className="flex items-start justify-between">
@@ -847,8 +857,8 @@ export default function App() {
           </Card>
 
           {/* Local Log Tails Console */}
-          <Card className="bg-[#09090b] border-[#27272a] shadow-none flex flex-col grow shrink overflow-hidden min-h-[220px]">
-            <CardHeader className="py-3.5 border-b border-zinc-800 px-4 flex flex-row items-center justify-between bg-zinc-950">
+          <Card className="dashboard-glass-panel flex flex-col grow shrink overflow-hidden min-h-[220px]">
+            <CardHeader className="py-3.5 border-b border-zinc-800 px-4 flex flex-row items-center justify-between bg-zinc-950/70">
               <div className="flex items-center gap-2">
                 <Terminal className="size-4 text-emerald-400" />
                 <div>
@@ -867,7 +877,7 @@ export default function App() {
                     aria-label="Log tail limit"
                     value={logsLimit} 
                     onChange={(e) => setLogsLimit(Number(e.target.value))}
-                    className="bg-zinc-900 text-zinc-400 border border-zinc-800 rounded px-1.5 py-0.5 focus:outline-none"
+                    className="dashboard-control text-zinc-400 rounded px-1.5 py-0.5 focus:outline-none"
                   >
                     <option value={20}>20 lines</option>
                     <option value={50}>50 lines</option>
@@ -880,7 +890,7 @@ export default function App() {
                   {/* Polling Switch */}
                   <button
                     onClick={() => setPollLogsActive(!pollLogsActive)}
-                    className={`px-1.5 py-0.5 rounded border border-zinc-800 font-semibold tracking-wider text-[9px] transition ${
+                    className={`dashboard-control px-1.5 py-0.5 rounded border font-semibold tracking-wider text-[9px] ${
                       pollLogsActive 
                         ? 'bg-emerald-950/40 text-emerald-400 border-emerald-900 animate-pulse' 
                         : 'bg-zinc-900 text-zinc-500'
@@ -897,7 +907,7 @@ export default function App() {
                       onClick={exportLoadedLogTail}
                       aria-label={`Export loaded tail for Implementation Issue #${logTail.issue_number}`}
                       title="Export loaded tail"
-                      className="border-zinc-800 bg-zinc-900 text-zinc-400 hover:bg-zinc-800 hover:text-white"
+                      className="dashboard-control text-zinc-400 hover:text-white"
                     >
                       <Download data-icon="inline-start" />
                     </Button>
@@ -929,7 +939,7 @@ export default function App() {
                     aria-label={`Issue #${logTail.issue_number} harness log tail`}
                     aria-live="polite"
                     onScroll={handleLogScroll}
-                    className="relative grow p-4 bg-[#030304] overflow-y-auto"
+                    className="terminal-scrollbar dashboard-focus relative grow p-4 bg-[#030304] overflow-y-auto"
                   >
                     <div className="space-y-1 font-mono text-zinc-300 whitespace-pre-wrap leading-relaxed select-text">
                       {logTail.content ? (
@@ -952,7 +962,7 @@ export default function App() {
                         variant="outline"
                         onClick={jumpToLatestLogOutput}
                         aria-label="Jump to latest log output"
-                        className="sticky bottom-2 ml-auto border-zinc-700 bg-zinc-900 text-zinc-100 hover:bg-zinc-800 font-mono text-[9px] uppercase tracking-wider"
+                        className="dashboard-control sticky bottom-2 ml-auto text-zinc-100 font-mono text-[9px] uppercase tracking-wider"
                       >
                         <ArrowDown data-icon="inline-start" />
                         Latest output
@@ -967,7 +977,7 @@ export default function App() {
 
         {/* RIGHT COLUMN: PRDS & CHILD IMPLEMENTATION ISSUES */}
         <section className="xl:col-span-2 flex flex-col gap-6 h-full overflow-hidden">
-          <Card className="bg-[#0c0c0e] border-[#27272a] shadow-none flex flex-col grow h-full overflow-hidden">
+          <Card className="dashboard-glass-panel flex flex-col grow h-full overflow-hidden">
             {/* Header Controls for filtering */}
             <CardHeader className="py-4 border-b border-zinc-800 px-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
               <div>
@@ -988,16 +998,16 @@ export default function App() {
                   placeholder="SEARCH ISSUE..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="bg-[#09090b] border border-zinc-800 text-zinc-300 rounded px-2.5 py-1.5 focus:outline-none placeholder-zinc-700 focus:border-zinc-500 w-[140px] text-xs"
+                  className="dashboard-control text-zinc-300 rounded px-2.5 py-1.5 focus:outline-none placeholder-zinc-700 w-[140px] text-xs"
                 />
 
                 {/* Filter */}
-                <div className="flex items-center gap-1.5 border border-zinc-800 rounded bg-[#09090b] px-2 py-1">
+                <div className="dashboard-control flex items-center gap-1.5 border rounded px-2 py-1">
                   <ListFilter className="size-3 text-zinc-500" />
                   <select
                     value={filterStatus}
                     onChange={(e) => setFilterStatus(e.target.value)}
-                    className="bg-transparent text-zinc-300 focus:outline-none cursor-pointer text-xs font-semibold pr-1"
+                    className="dashboard-focus bg-transparent text-zinc-300 focus:outline-none cursor-pointer text-xs font-semibold pr-1 rounded"
                   >
                     <option value="all" className="bg-[#09090b]">ALL STATUS</option>
                     <option value="ready" className="bg-[#09090b]">READY</option>
@@ -1037,12 +1047,12 @@ export default function App() {
                       return (
                         <div 
                           key={prd.number}
-                          className="border border-zinc-800 rounded bg-[#09090b] overflow-hidden transition-all duration-200 hover:border-zinc-700"
+                          className="dashboard-glass-surface border rounded overflow-hidden transition-all duration-200 hover:border-zinc-600"
                         >
                           {/* PRD Main Bar */}
                           <div 
                             onClick={() => togglePrdExpand(prd.number)}
-                            className="bg-[#0d0d0f] px-4 py-3.5 cursor-pointer flex items-center justify-between border-b border-zinc-800 hover:bg-zinc-900/60 transition"
+                            className="dashboard-row bg-[#0d0d0f]/80 px-4 py-3.5 cursor-pointer flex items-center justify-between border-b border-zinc-800 transition"
                           >
                             <div className="flex items-center gap-3">
                               <span className="font-mono text-xs font-extrabold text-zinc-400 bg-zinc-900 border border-zinc-800 px-1.5 py-0.5 rounded">
@@ -1072,7 +1082,7 @@ export default function App() {
                                     preparePrdIssue(prd.number);
                                   }}
                                   disabled={isPreparingPrd}
-                                  className="font-mono text-[9px] uppercase tracking-wider border-zinc-700 bg-zinc-950 text-zinc-200 hover:bg-zinc-900"
+                                  className="dashboard-control font-mono text-[9px] uppercase tracking-wider text-zinc-200"
                                 >
                                   <GitBranch data-icon="inline-start" className={isPreparingPrd ? 'animate-pulse' : ''} />
                                   {isPreparingPrd ? 'Preparing' : 'Prepare'} PRD #{prd.number}
@@ -1127,8 +1137,8 @@ export default function App() {
                                   return (
                                     <div 
                                       key={c.number}
-                                      className={`py-3.5 flex flex-col md:flex-row md:items-start justify-between gap-4 font-mono ${
-                                        isSelectedLog ? 'bg-zinc-900/20 px-2 -mx-2 rounded border border-zinc-900' : ''
+                                      className={`dashboard-row py-3.5 flex flex-col md:flex-row md:items-start justify-between gap-4 font-mono ${
+                                        isSelectedLog ? 'bg-zinc-900/40 px-2 -mx-2 rounded border border-zinc-800' : ''
                                       }`}
                                     >
                                       {/* Issue Title / Kind */}
@@ -1180,7 +1190,7 @@ export default function App() {
                                             <div
                                               role="group"
                                               aria-label={`Blocking Dependency rail for Implementation Issue #${c.number}`}
-                                              className="flex flex-wrap items-center gap-2 rounded border border-zinc-900 bg-zinc-950/60 px-2 py-1.5"
+                                              className="dashboard-glass-surface flex flex-wrap items-center gap-2 rounded border px-2 py-1.5"
                                             >
                                               <span className="text-[9px] text-zinc-500 font-bold uppercase tracking-wider">
                                                 Blocking Dependency
@@ -1262,7 +1272,7 @@ export default function App() {
                                                     ...prev,
                                                     [c.number]: event.target.value
                                                   }))}
-                                                  className="min-w-0 w-full sm:w-[260px] rounded border border-zinc-800 bg-[#09090b] px-2 py-1 text-[10px] text-zinc-200 focus:outline-none focus:border-zinc-500"
+                                                  className="dashboard-control min-w-0 w-full sm:w-[260px] rounded px-2 py-1 text-[10px] text-zinc-200 focus:outline-none"
                                                 />
                                                 <Button
                                                   type="submit"
@@ -1274,7 +1284,7 @@ export default function App() {
                                                       : `Submit claim for Implementation Issue #${c.number}`
                                                   }
                                                   disabled={isClaimingIssue}
-                                                  className="font-mono text-[9px] uppercase tracking-wider border-zinc-700 bg-zinc-900 text-zinc-200 hover:bg-zinc-800"
+                                                  className="dashboard-control font-mono text-[9px] uppercase tracking-wider text-zinc-200"
                                                 >
                                                   <Send data-icon="inline-start" className={isClaimingIssue ? 'animate-pulse' : ''} />
                                                   {isClaimingIssue ? 'Claiming' : 'Submit'} #{c.number}
@@ -1306,7 +1316,7 @@ export default function App() {
                                         {(c.status === 'running' || c.status === 'succeeded' || c.status === 'failed') && (
                                           <button
                                             onClick={() => setSelectedRunIssue(isSelectedLog ? null : c.number)}
-                                            className="text-[9.5px] uppercase font-bold tracking-wider px-2 py-0.5 bg-zinc-900 border border-zinc-800 hover:border-zinc-700 hover:text-white rounded transition flex items-center gap-1"
+                                            className="dashboard-control text-[9.5px] uppercase font-bold tracking-wider px-2 py-0.5 rounded flex items-center gap-1"
                                           >
                                             {isSelectedLog ? (
                                               <>
@@ -1329,7 +1339,7 @@ export default function App() {
                                             variant="outline"
                                             onClick={() => integrateImplementationIssue(c.number)}
                                             disabled={isIntegratingIssue}
-                                            className="font-mono text-[9px] uppercase tracking-wider border-zinc-700 bg-zinc-950 text-zinc-200 hover:bg-zinc-900"
+                                            className="dashboard-control font-mono text-[9px] uppercase tracking-wider text-zinc-200"
                                           >
                                             <GitMerge data-icon="inline-start" className={isIntegratingIssue ? 'animate-pulse' : ''} />
                                             {isIntegratingIssue ? 'Integrating' : 'Integrate'} #{c.number}
@@ -1348,7 +1358,7 @@ export default function App() {
                                             }
                                             onClick={() => startImplementationIssue(c.number)}
                                             disabled={isStartingIssue}
-                                            className="font-mono text-[9px] uppercase tracking-wider border-zinc-700 bg-zinc-950 text-zinc-200 hover:bg-zinc-900"
+                                            className="dashboard-control font-mono text-[9px] uppercase tracking-wider text-zinc-200"
                                           >
                                             <Play data-icon="inline-start" className={isStartingIssue ? 'animate-pulse' : ''} />
                                             {isStartingIssue ? 'Starting' : 'Start'} #{c.number}
@@ -1361,7 +1371,7 @@ export default function App() {
                                             size="xs"
                                             variant="outline"
                                             onClick={() => openClaimForm(c.number)}
-                                            className="font-mono text-[9px] uppercase tracking-wider border-zinc-700 bg-zinc-950 text-zinc-200 hover:bg-zinc-900"
+                                            className="dashboard-control font-mono text-[9px] uppercase tracking-wider text-zinc-200"
                                           >
                                             <Hand data-icon="inline-start" />
                                             Claim #{c.number}
@@ -1387,7 +1397,7 @@ export default function App() {
       </main>
 
       {/* Footer Info Box */}
-      <footer className="border-t border-[#27272a] bg-[#09090b] px-6 py-3 flex items-center justify-between text-[10px] text-zinc-500 font-mono mt-auto shrink-0">
+      <footer className="dashboard-glass-panel border-t px-6 py-3 flex items-center justify-between text-[10px] text-zinc-500 font-mono mt-auto shrink-0">
         <div className="flex items-center gap-2">
           <span className="size-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
           <span>Engine Connected</span>
