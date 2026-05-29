@@ -49,8 +49,10 @@ const mockIssues = [
         kind: "implementation",
         parent_prd_number: 1,
         implementation_branch: "impl/1/10-blocker-impl",
+        agent_run_id: "run-456",
+        claimed_at: "2026-05-29T17:00:00Z",
         blocked_by: [],
-        status: "unready"
+        status: "claimed"
       }
     ]
   }
@@ -136,7 +138,8 @@ describe('Bersama Dashboard Frontend', () => {
     expect(screen.getByText(/Child implementation issue/i)).toBeInTheDocument();
     expect(screen.getByText(/Blocker implementation issue/i)).toBeInTheDocument();
     expect(screen.getAllByText(/RUNNING/i).length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/UNREADY/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/CLAIMED/i).length).toBeGreaterThan(0);
+    expect(screen.getByText(/run-456/i)).toBeInTheDocument();
   });
 
   it('displays recent agent runs and handles log loading', async () => {

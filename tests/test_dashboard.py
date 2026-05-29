@@ -144,6 +144,27 @@ def build_claimed_issue(*, body_suffix: str = "") -> GitHubIssueRecord:
     )
 
 
+def build_unclaimed_issue() -> GitHubIssueRecord:
+    return GitHubIssueRecord(
+        number=19,
+        title="Unclaimed implementation child",
+        body=(
+            "## Parent PRD\n"
+            "#15\n\n"
+            "## What to Build\n"
+            "Build it later.\n\n"
+            "## Acceptance Criteria\n"
+            "- [ ] Done.\n\n"
+            "## Blocked By\n"
+            "None\n\n"
+            "## Orchestration\n"
+            "- Implementation Branch: impl/15/19-unclaimed-implementation-child\n"
+        ),
+        labels=("implementation",),
+        state="open",
+    )
+
+
 def test_reconcile_endpoint_returns_success_response() -> None:
     service = FakeReconciliationService()
     app = create_dashboard_app(
@@ -765,7 +786,43 @@ def test_get_issues_endpoint_returns_hierarchical_issues() -> None:
     assert issues[0]["number"] == 15
     assert len(issues[0]["children"]) == 1
     assert issues[0]["children"][0]["number"] == 18
-    assert issues[0]["children"][0]["status"] == "unready"
+    assert issues[0]["children"][0]["status"] == "claimed"
+    assert issues[0]["children"][0]["agent_run_id"] == "run-123"
+    assert issues[0]["children"][0]["claimed_at"] == "2026-05-29T20:07:02Z"
+
+
+def test_get_issues_endpoint_does_not_falsely_mark_unclaimed_issue_as_claimed() -> None:
+    class CustomFakeIssueGateway:
+        def __init__(self, *issues: GitHubIssueRecord) -> None:
+            self.issues = {issue.number: issue for issue in issues}
+
+        def list_issues(self, *, state: str = "open", label: str | None = None) -> list[GitHubIssueRecord]:
+            return list(self.issues.values())
+
+        def view_issue(self, number: int) -> GitHubIssueRecord:
+            return self.issues[number]
+
+    prd_issue = GitHubIssueRecord(
+        number=15,
+        title="PRD Title",
+        body="Some PRD.",
+        labels=("prd",),
+        state="open",
+    )
+    impl_issue = build_unclaimed_issue()
+    app = create_dashboard_app(
+        config=build_config(),
+        issue_gateway_factory=lambda: CustomFakeIssueGateway(prd_issue, impl_issue),
+    )
+
+    response = TestClient(app).get("/api/issues?repo=demo")
+
+    assert response.status_code == 200
+    child = response.json()[0]["children"][0]
+    assert child["number"] == 19
+    assert child["status"] == "unready"
+    assert child["agent_run_id"] is None
+    assert child["claimed_at"] is None
 
 
 def test_get_runs_endpoint_scans_worktree(tmp_path: Path) -> None:
@@ -800,4 +857,3 @@ def test_get_runs_endpoint_scans_worktree(tmp_path: Path) -> None:
     log_data = log_response.json()
     assert log_data["issue_number"] == 18
     assert log_data["content"] == "Harness execution logtail output"
-

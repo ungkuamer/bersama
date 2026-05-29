@@ -46,7 +46,9 @@ interface Issue {
   implementation_branch?: string;
   blocked_by?: number[];
   active_blockers?: number[];
-  status?: 'closed' | 'failed' | 'ready' | 'unready' | 'running' | 'blocked' | 'succeeded' | 'unknown';
+  status?: 'closed' | 'failed' | 'ready' | 'claimed' | 'unready' | 'running' | 'blocked' | 'succeeded' | 'unknown';
+  agent_run_id?: string | null;
+  claimed_at?: string | null;
   failure_reason?: string | null;
   started_at?: string | null;
   finished_at?: string | null;
@@ -254,6 +256,8 @@ export default function App() {
         return <Badge className={`${defaultClasses} bg-orange-950/40 text-orange-400 border-orange-800`}>BLOCKED</Badge>;
       case 'ready':
         return <Badge className={`${defaultClasses} bg-blue-950/40 text-blue-400 border-blue-800`}>READY</Badge>;
+      case 'claimed':
+        return <Badge className={`${defaultClasses} bg-cyan-950/40 text-cyan-400 border-cyan-800`}>CLAIMED</Badge>;
       case 'unready':
         return <Badge className={`${defaultClasses} bg-zinc-900 text-zinc-400 border-zinc-700`}>UNREADY</Badge>;
       default:
@@ -596,6 +600,7 @@ export default function App() {
                   >
                     <option value="all" className="bg-[#09090b]">ALL STATUS</option>
                     <option value="ready" className="bg-[#09090b]">READY</option>
+                    <option value="claimed" className="bg-[#09090b]">CLAIMED</option>
                     <option value="running" className="bg-[#09090b]">RUNNING</option>
                     <option value="succeeded" className="bg-[#09090b]">SUCCEEDED</option>
                     <option value="failed" className="bg-[#09090b]">FAILED</option>
@@ -712,6 +717,15 @@ export default function App() {
                                                 <span>
                                                   Started: {formatDate(c.started_at)}
                                                   {c.finished_at && ` | Done: ${formatDate(c.finished_at)}`}
+                                                </span>
+                                              </span>
+                                            )}
+                                            {c.claimed_at && (
+                                              <span className="flex items-center gap-1.5">
+                                                <Clock className="size-3 text-zinc-700 shrink-0" />
+                                                <span>
+                                                  Claimed: {formatDate(c.claimed_at)}
+                                                  {c.agent_run_id && ` | ${c.agent_run_id}`}
                                                 </span>
                                               </span>
                                             )}
