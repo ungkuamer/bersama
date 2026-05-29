@@ -4,6 +4,7 @@ from fastapi.testclient import TestClient
 
 from bersama.config import AppConfig, HarnessConfig, RepoConfig
 from bersama.dashboard import create_dashboard_app
+from bersama.prd_preparation import PrdPreparationResult
 
 
 class FakeReconciliationService:
@@ -12,6 +13,18 @@ class FakeReconciliationService:
 
     def reconcile(self) -> None:
         self.calls += 1
+
+
+class FakePrdPreparationService:
+    def __init__(self, result: PrdPreparationResult) -> None:
+        self.calls: list[tuple[str, str, int]] = []
+        self._result = result
+
+    def prepare_issue(
+        self, *, repo_path: str, main_branch: str, issue_number: int
+    ) -> PrdPreparationResult:
+        self.calls.append((repo_path, main_branch, issue_number))
+        return self._result
 
 
 def build_config() -> AppConfig:
@@ -81,4 +94,74 @@ def test_reconcile_endpoint_returns_server_error_for_reconciliation_failure() ->
     assert response.status_code == 500
     assert response.json() == {
         "detail": "Reconciliation failed for repo 'demo': GitHub issue access failed"
+    }
+
+
+def test_prepare_prd_endpoint_returns_branch_metadata_on_success() -> None:
+    service = FakePrdPreparationService(
+        PrdPreparationResult(
+            issue_number=15,
+            prd_branch="prd/15-add-interactive-dashboard-backend-control-apis",
+            reused_existing_branch=False,
+            updated_issue_body=True,
+        )
+    )
+    app = create_dashboard_app(
+        config=build_config(),
+        prd_preparation_service_factory=lambda repo: service,
+    )
+
+    response = TestClient(app).post("/dashboard/repos/demo/prd-issues/15/prepare")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "ok": True,
+        "repo": "demo",
+        "action": "prepare-prd",
+        "issue_number": 15,
+        "prd_branch": "prd/15-add-interactive-dashboard-backend-control-apis",
+        "reused_existing_branch": False,
+        "updated_issue_body": True,
+    }
+    assert service.calls == [("/repos/demo", "main", 15)]
+
+
+def test_prepare_prd_endpoint_returns_bad_request_for_known_failure() -> None:
+    service = FakePrdPreparationService(
+        PrdPreparationResult(
+            issue_number=15,
+            prd_branch=None,
+            reused_existing_branch=False,
+            updated_issue_body=False,
+            failure_message="Issue is not a PRD Issue.",
+        )
+    )
+    app = create_dashboard_app(
+        config=build_config(),
+        prd_preparation_service_factory=lambda repo: service,
+    )
+
+    response = TestClient(app).post("/dashboard/repos/demo/prd-issues/15/prepare")
+
+    assert response.status_code == 400
+    assert response.json() == {"detail": "Issue is not a PRD Issue."}
+
+
+def test_prepare_prd_endpoint_returns_server_error_for_unexpected_failure() -> None:
+    class FailingPrdPreparationService:
+        def prepare_issue(
+            self, *, repo_path: str, main_branch: str, issue_number: int
+        ) -> PrdPreparationResult:
+            raise RuntimeError("GitHub issue access failed")
+
+    app = create_dashboard_app(
+        config=build_config(),
+        prd_preparation_service_factory=lambda repo: FailingPrdPreparationService(),
+    )
+
+    response = TestClient(app).post("/dashboard/repos/demo/prd-issues/15/prepare")
+
+    assert response.status_code == 500
+    assert response.json() == {
+        "detail": "PRD preparation failed for repo 'demo': GitHub issue access failed"
     }
