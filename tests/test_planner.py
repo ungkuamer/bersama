@@ -415,3 +415,158 @@ def test_combined_github_claims_and_in_memory_runs_per_prd() -> None:
     # Only 1 slot remains for PRD #1 (3 - 1 GitHub - 1 in-memory = 1)
     assert result.claimable_issue_numbers == (6,)
 
+
+# --- Claim Status planner tests ---
+
+
+def test_active_claim_status_consumes_capacity() -> None:
+    """An issue with claim_status=active consumes Agent Run Capacity."""
+    active_claim = implementation_issue(
+        number=4,
+        parent_prd=1,
+        labels=("implementation",),
+        orchestration_lines=(
+            "Agent Run: run-123",
+            "Claimed At: 2026-05-29T13:30:00Z",
+            "Implementation Branch: impl/1/4-active",
+            "Claim Status: active",
+        ),
+    )
+    ready_same_prd = implementation_issue(number=6, parent_prd=1)
+
+    result = plan(
+        active_claim,
+        ready_same_prd,
+        global_concurrency=2,
+        per_prd_concurrency=1,
+    )
+    decision_by_issue = {d.issue_number: d for d in result.decisions}
+
+    assert decision_by_issue[4].kind is PlannerDecisionKind.ACTIVE_CLAIM
+    assert decision_by_issue[6].kind is PlannerDecisionKind.PENDING_CONCURRENCY
+
+
+def test_setting_up_claim_status_consumes_capacity() -> None:
+    """An issue with claim_status=setting up consumes Agent Run Capacity."""
+    setting_up_claim = implementation_issue(
+        number=4,
+        parent_prd=1,
+        labels=("implementation",),
+        orchestration_lines=(
+            "Agent Run: run-123",
+            "Claimed At: 2026-05-29T13:30:00Z",
+            "Implementation Branch: impl/1/4-setting-up",
+            "Claim Status: setting up",
+        ),
+    )
+    ready_same_prd = implementation_issue(number=6, parent_prd=1)
+
+    result = plan(
+        setting_up_claim,
+        ready_same_prd,
+        global_concurrency=2,
+        per_prd_concurrency=1,
+    )
+    decision_by_issue = {d.issue_number: d for d in result.decisions}
+
+    assert decision_by_issue[4].kind is PlannerDecisionKind.ACTIVE_CLAIM
+    assert decision_by_issue[6].kind is PlannerDecisionKind.PENDING_CONCURRENCY
+
+
+def test_failed_claim_status_does_not_consume_capacity() -> None:
+    """An issue with claim_status=failed claim does NOT consume Agent Run Capacity."""
+    failed_claim = implementation_issue(
+        number=4,
+        parent_prd=1,
+        labels=("implementation",),
+        orchestration_lines=(
+            "Agent Run: run-123",
+            "Claimed At: 2026-05-29T13:30:00Z",
+            "Implementation Branch: impl/1/4-failed",
+            "Claim Status: failed claim",
+        ),
+    )
+    ready_same_prd = implementation_issue(number=6, parent_prd=1)
+
+    result = plan(
+        failed_claim,
+        ready_same_prd,
+        global_concurrency=2,
+        per_prd_concurrency=1,
+    )
+    decision_by_issue = {d.issue_number: d for d in result.decisions}
+
+    # Failed claim should NOT be ACTIVE_CLAIM. It should be NEEDS_TRIAGE.
+    assert decision_by_issue[4].kind is PlannerDecisionKind.NEEDS_TRIAGE
+    # The slot should be available for #6.
+    assert decision_by_issue[6].kind is PlannerDecisionKind.CLAIMABLE
+
+
+def test_missing_claim_status_with_claim_metadata_is_backward_compatible() -> None:
+    """Existing issues without Claim Status but with claim metadata behave as before."""
+    claimed = implementation_issue(
+        number=4,
+        parent_prd=1,
+        labels=("implementation",),
+        orchestration_lines=(
+            "Agent Run: run-123",
+            "Claimed At: 2026-05-29T13:30:00Z",
+            "Implementation Branch: impl/1/4-no-status",
+        ),
+    )
+    ready_same_prd = implementation_issue(number=6, parent_prd=1)
+
+    result = plan(
+        claimed,
+        ready_same_prd,
+        global_concurrency=2,
+        per_prd_concurrency=1,
+    )
+    decision_by_issue = {d.issue_number: d for d in result.decisions}
+
+    # Backward compat: no claim_status behaves as ACTIVE_CLAIM
+    assert decision_by_issue[4].kind is PlannerDecisionKind.ACTIVE_CLAIM
+    assert decision_by_issue[6].kind is PlannerDecisionKind.PENDING_CONCURRENCY
+
+
+def test_failed_claim_with_ready_label_is_needs_triage() -> None:
+    """An issue with claim_status=failed claim and ready-for-agent is contradictory."""
+    failed_claim = implementation_issue(
+        number=4,
+        parent_prd=1,
+        labels=("implementation", "ready-for-agent"),
+        orchestration_lines=(
+            "Agent Run: run-123",
+            "Claimed At: 2026-05-29T13:30:00Z",
+            "Implementation Branch: impl/1/4-failed",
+            "Claim Status: failed claim",
+        ),
+    )
+
+    result = plan(failed_claim)
+    decision = result.decisions[0]
+
+    # Should be NEEDS_TRIAGE due to contradictory state
+    assert decision.kind is PlannerDecisionKind.NEEDS_TRIAGE
+
+
+def test_failed_claim_still_detected_as_stale_when_timed_out() -> None:
+    """A failed claim that is also stale should still be detected appropriately."""
+    failed_claim = implementation_issue(
+        number=4,
+        parent_prd=1,
+        labels=("implementation",),
+        orchestration_lines=(
+            "Agent Run: run-123",
+            "Claimed At: 2026-05-29T09:30:00Z",
+            "Implementation Branch: impl/1/4-failed",
+            "Claim Status: failed claim",
+        ),
+    )
+
+    result = plan(failed_claim, stale_claim_timeout=timedelta(hours=1))
+    decision = result.decisions[0]
+
+    # Failed claim takes precedence; it's NEEDS_TRIAGE, not STALE_CLAIM
+    assert decision.kind is PlannerDecisionKind.NEEDS_TRIAGE
+

@@ -623,3 +623,283 @@ None
         assert isinstance(parsed, ImplementationIssue)
         assert parsed.orchestration.integration_pr == "99"
         assert parsed.orchestration.integration_status == status, f"Failed for status: {status}"
+
+
+# --- Claim Status parsing tests ---
+
+
+def test_parse_claim_status_setting_up() -> None:
+    """Claim Status 'setting up' is parsed from orchestration metadata."""
+    issue = GitHubIssue(
+        number=20,
+        title="Claim status setting up",
+        body="""
+## Parent PRD
+#1
+
+## What to Build
+Build it.
+
+## Acceptance Criteria
+- [ ] Done.
+
+## Blocked By
+None
+
+## Orchestration
+- Agent Run: run-abc
+- Claimed At: 2026-05-30T10:00:00Z
+- Implementation Branch: impl/1/20-build-it
+- Claim Status: setting up
+""".strip(),
+        labels=("implementation",),
+    )
+
+    parsed = parse_issue(issue)
+
+    assert isinstance(parsed, ImplementationIssue)
+    assert parsed.orchestration.claim_status == "setting up"
+    assert parsed.diagnostics == ()
+
+
+def test_parse_claim_status_active() -> None:
+    """Claim Status 'active' is parsed from orchestration metadata."""
+    issue = GitHubIssue(
+        number=21,
+        title="Claim status active",
+        body="""
+## Parent PRD
+#1
+
+## What to Build
+Build it.
+
+## Acceptance Criteria
+- [ ] Done.
+
+## Blocked By
+None
+
+## Orchestration
+- Agent Run: run-def
+- Claimed At: 2026-05-30T10:00:00Z
+- Implementation Branch: impl/1/21-build-it
+- Claim Status: active
+""".strip(),
+        labels=("implementation",),
+    )
+
+    parsed = parse_issue(issue)
+
+    assert isinstance(parsed, ImplementationIssue)
+    assert parsed.orchestration.claim_status == "active"
+    assert parsed.diagnostics == ()
+
+
+def test_parse_claim_status_failed_claim() -> None:
+    """Claim Status 'failed claim' is parsed from orchestration metadata."""
+    issue = GitHubIssue(
+        number=22,
+        title="Claim status failed",
+        body="""
+## Parent PRD
+#1
+
+## What to Build
+Build it.
+
+## Acceptance Criteria
+- [ ] Done.
+
+## Blocked By
+None
+
+## Orchestration
+- Agent Run: run-ghi
+- Claimed At: 2026-05-30T10:00:00Z
+- Implementation Branch: impl/1/22-build-it
+- Claim Status: failed claim
+""".strip(),
+        labels=("implementation",),
+    )
+
+    parsed = parse_issue(issue)
+
+    assert isinstance(parsed, ImplementationIssue)
+    assert parsed.orchestration.claim_status == "failed claim"
+    assert parsed.diagnostics == ()
+
+
+def test_parse_claim_status_missing_is_none() -> None:
+    """When Claim Status is absent from orchestration metadata, it defaults to None."""
+    issue = GitHubIssue(
+        number=23,
+        title="No claim status",
+        body="""
+## Parent PRD
+#1
+
+## What to Build
+Build it.
+
+## Acceptance Criteria
+- [ ] Done.
+
+## Blocked By
+None
+
+## Orchestration
+- Agent Run: run-jkl
+- Claimed At: 2026-05-30T10:00:00Z
+- Implementation Branch: impl/1/23-build-it
+""".strip(),
+        labels=("implementation",),
+    )
+
+    parsed = parse_issue(issue)
+
+    assert isinstance(parsed, ImplementationIssue)
+    assert parsed.orchestration.claim_status is None
+    assert parsed.diagnostics == ()
+
+
+def test_parse_claim_status_unrecognised_produces_diagnostic() -> None:
+    """An unrecognised Claim Status value produces an INVALID_STATE diagnostic."""
+    issue = GitHubIssue(
+        number=24,
+        title="Unrecognised claim status",
+        body="""
+## Parent PRD
+#1
+
+## What to Build
+Build it.
+
+## Acceptance Criteria
+- [ ] Done.
+
+## Blocked By
+None
+
+## Orchestration
+- Agent Run: run-mno
+- Claimed At: 2026-05-30T10:00:00Z
+- Implementation Branch: impl/1/24-build-it
+- Claim Status: bogus-value
+""".strip(),
+        labels=("implementation",),
+    )
+
+    parsed = parse_issue(issue)
+
+    assert isinstance(parsed, ImplementationIssue)
+    assert parsed.orchestration.claim_status == "bogus-value"
+    assert len(parsed.diagnostics) == 1
+    assert parsed.diagnostics[0].code == "unrecognised-claim-status"
+    assert parsed.diagnostics[0].kind is DiagnosticKind.INVALID_STATE
+
+
+def test_parse_claim_status_case_insensitive_and_whitespace_tolerant() -> None:
+    """Claim Status parsing is case-insensitive and whitespace-tolerant."""
+    for raw, expected in (
+        ("  setting up  ", "setting up"),
+        ("ACTIVE", "active"),
+        ("Failed Claim", "failed claim"),
+        ("  active  ", "active"),
+    ):
+        issue = GitHubIssue(
+            number=25,
+            title="Case insensitive",
+            body=f"""
+## Parent PRD
+#1
+
+## What to Build
+Build it.
+
+## Acceptance Criteria
+- [ ] Done.
+
+## Blocked By
+None
+
+## Orchestration
+- Agent Run: run-pqr
+- Claimed At: 2026-05-30T10:00:00Z
+- Implementation Branch: impl/1/25-build-it
+- Claim Status: {raw}
+""".strip(),
+            labels=("implementation",),
+        )
+
+        parsed = parse_issue(issue)
+
+        assert isinstance(parsed, ImplementationIssue)
+        assert parsed.diagnostics == (), f"Unexpected diagnostic for raw value: {raw!r}"
+
+
+def test_parse_claim_status_empty_value_is_none() -> None:
+    """An empty Claim Status value is treated as absent (None)."""
+    issue = GitHubIssue(
+        number=26,
+        title="Empty claim status",
+        body="""
+## Parent PRD
+#1
+
+## What to Build
+Build it.
+
+## Acceptance Criteria
+- [ ] Done.
+
+## Blocked By
+None
+
+## Orchestration
+- Agent Run: run-stu
+- Claimed At: 2026-05-30T10:00:00Z
+- Implementation Branch: impl/1/26-build-it
+- Claim Status:
+""".strip(),
+        labels=("implementation",),
+    )
+
+    parsed = parse_issue(issue)
+
+    assert isinstance(parsed, ImplementationIssue)
+    assert parsed.diagnostics == ()
+
+
+def test_parse_claim_status_failed_variant() -> None:
+    """'failed' (without 'claim') is also recognised as a valid claim status."""
+    issue = GitHubIssue(
+        number=27,
+        title="Failed variant",
+        body="""
+## Parent PRD
+#1
+
+## What to Build
+Build it.
+
+## Acceptance Criteria
+- [ ] Done.
+
+## Blocked By
+None
+
+## Orchestration
+- Agent Run: run-vwx
+- Claimed At: 2026-05-30T10:00:00Z
+- Implementation Branch: impl/1/27-build-it
+- Claim Status: failed
+""".strip(),
+        labels=("implementation",),
+    )
+
+    parsed = parse_issue(issue)
+
+    assert isinstance(parsed, ImplementationIssue)
+    assert parsed.orchestration.claim_status == "failed"
+    assert parsed.diagnostics == ()
