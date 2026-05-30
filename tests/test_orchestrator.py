@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch, ANY
 
 from bersama.config import AppConfig, RepoConfig
 from bersama.github_issues import GitHubIssueRecord
-from bersama.orchestrator import Orchestrator
+from bersama.orchestrator import Orchestrator, SchedulerEvent
 from bersama.claiming import ClaimResult
 from bersama.execution import ExecutionResult
 from bersama.integration import IntegrationResult
@@ -30,6 +30,400 @@ class FakeExecutor:
 
     def shutdown(self, wait: bool = True) -> None:
         self._shutdown_called = True
+
+
+def test_scheduler_emits_claim_attempt_events() -> None:
+    """The scheduler emits claim.succeeded and claim.failed events with issue/run context."""
+    issues_gateway = MagicMock()
+
+    prd_record = GitHubIssueRecord(
+        number=1,
+        title="Prepared PRD",
+        body="## Problem Statement\n\nParent.\n\n## Orchestration\n- PRD Branch: prd/1-prepared-prd",
+        labels=("prd",),
+        state="open",
+    )
+    impl_2 = GitHubIssueRecord(
+        number=2,
+        title="Implementation (claimable)",
+        body="## Parent PRD\n#1\n\n## What to Build\nBuild it.\n\n## Acceptance Criteria\n- [ ] Done.\n\n## Blocked By\nNone",
+        labels=("implementation", "ready-for-agent"),
+        state="open",
+    )
+    impl_3 = GitHubIssueRecord(
+        number=3,
+        title="Implementation (unclaimable)",
+        body="## Parent PRD\n#1\n\n## What to Build\nBuild it too.\n\n## Acceptance Criteria\n- [ ] Done.\n\n## Blocked By\nNone",
+        labels=("implementation", "ready-for-agent"),
+        state="open",
+    )
+    issues_gateway.list_issues.return_value = (prd_record, impl_2, impl_3)
+
+    events: list[SchedulerEvent] = []
+
+    orchestrator = Orchestrator(
+        issues_gateway=issues_gateway,
+        now_provider=lambda: "2026-05-29T17:00:00Z",
+        event_emitter=events.append,
+    )
+    orchestrator.reconciliation_service = MagicMock()
+    orchestrator.prd_preparation_service = MagicMock()
+
+    # Issue 2 claim succeeds, issue 3 claim fails
+    orchestrator.claim_service = MagicMock()
+    orchestrator.claim_service.claim_issue.side_effect = [
+        ClaimResult(
+            issue_number=2,
+            agent_run_id="run-aaa",
+            implementation_branch="impl/1/2-claimable",
+            worktree_path="/worktrees/demo/issue-2",
+        ),
+        ClaimResult(
+            issue_number=3,
+            agent_run_id="run-bbb",
+            implementation_branch=None,
+            worktree_path=None,
+            failure_message="PRD is not prepared",
+        ),
+    ]
+
+    orchestrator.execution_service = MagicMock()
+    orchestrator.execution_service.execute_run.side_effect = [
+        ExecutionResult(issue_number=2, status="succeeded", exit_code=0, new_commits=True),
+    ]
+
+    orchestrator.integration_service = MagicMock()
+    orchestrator.integration_service.integrate_issue.return_value = IntegrationResult(
+        issue_number=2, status="succeeded",
+        implementation_branch="impl/1/2-claimable", prd_branch="prd/1-prepared-prd",
+    )
+
+    repos = {
+        "demo": RepoConfig(
+            name="demo",
+            repo_path=Path("/repos/demo"),
+            main_branch="main",
+            worktree_root=Path("/worktrees/demo"),
+            global_concurrency=2,
+            per_prd_concurrency=2,
+            default_harness="local",
+        )
+    }
+    config = AppConfig(repos=repos, harnesses={})
+
+    orchestrator.run("demo", config)
+
+    # Collect claim events
+    claim_events = [e for e in events if e.event.startswith("claim.")]
+    assert len(claim_events) == 4, f"Expected 4 claim events, got {len(claim_events)}"
+
+    # Claim attempt events (before we know outcome) — one per issue
+    attempt_events = [e for e in claim_events if e.event == "claim.attempt"]
+    assert len(attempt_events) == 2
+    # Each attempt carries issue and run context
+    for ae in attempt_events:
+        assert ae.issue_number in (2, 3)
+        assert ae.agent_run_id is not None
+
+    # Claim succeeded event
+    succeeded = [e for e in claim_events if e.event == "claim.succeeded"]
+    assert len(succeeded) == 1
+    assert succeeded[0].issue_number == 2
+    assert succeeded[0].status == "succeeded"
+
+    # Claim failed event
+    failed = [e for e in claim_events if e.event == "claim.failed"]
+    assert len(failed) == 1
+    assert failed[0].issue_number == 3
+    assert failed[0].status == "failed"
+    assert "PRD is not prepared" in (failed[0].detail or "")
+
+
+def test_scheduler_emits_agent_run_start_and_finish_events() -> None:
+    """The scheduler emits agent_run.start and agent_run.finished events."""
+    issues_gateway = MagicMock()
+
+    prd_record = GitHubIssueRecord(
+        number=1,
+        title="Prepared PRD",
+        body="## Problem Statement\n\nParent.\n\n## Orchestration\n- PRD Branch: prd/1-prepared-prd",
+        labels=("prd",),
+        state="open",
+    )
+    impl_2 = GitHubIssueRecord(
+        number=2,
+        title="Implementation (succeeds)",
+        body="## Parent PRD\n#1\n\n## What to Build\nBuild it.\n\n## Acceptance Criteria\n- [ ] Done.\n\n## Blocked By\nNone",
+        labels=("implementation", "ready-for-agent"),
+        state="open",
+    )
+    impl_3 = GitHubIssueRecord(
+        number=3,
+        title="Implementation (fails)",
+        body="## Parent PRD\n#1\n\n## What to Build\nBuild it too.\n\n## Acceptance Criteria\n- [ ] Done.\n\n## Blocked By\nNone",
+        labels=("implementation", "ready-for-agent"),
+        state="open",
+    )
+    issues_gateway.list_issues.return_value = (prd_record, impl_2, impl_3)
+
+    events: list[SchedulerEvent] = []
+
+    orchestrator = Orchestrator(
+        issues_gateway=issues_gateway,
+        now_provider=lambda: "2026-05-29T17:00:00Z",
+        event_emitter=events.append,
+    )
+    orchestrator.reconciliation_service = MagicMock()
+    orchestrator.prd_preparation_service = MagicMock()
+
+    orchestrator.claim_service = MagicMock()
+    orchestrator.claim_service.claim_issue.side_effect = [
+        ClaimResult(issue_number=2, agent_run_id="run-aaa", implementation_branch="impl/1/2-succeeds", worktree_path="/worktrees/demo/issue-2"),
+        ClaimResult(issue_number=3, agent_run_id="run-bbb", implementation_branch="impl/1/3-fails", worktree_path="/worktrees/demo/issue-3"),
+    ]
+
+    orchestrator.execution_service = MagicMock()
+    orchestrator.execution_service.execute_run.side_effect = [
+        ExecutionResult(issue_number=2, status="succeeded", exit_code=0, new_commits=True),
+        ExecutionResult(issue_number=3, status="failed", exit_code=1, new_commits=False, failure_reason="build error"),
+    ]
+
+    orchestrator.integration_service = MagicMock()
+    orchestrator.integration_service.integrate_issue.return_value = IntegrationResult(
+        issue_number=2, status="succeeded", implementation_branch="impl/1/2-succeeds", prd_branch="prd/1-prepared-prd",
+    )
+
+    repos = {
+        "demo": RepoConfig(
+            name="demo", repo_path=Path("/repos/demo"), main_branch="main",
+            worktree_root=Path("/worktrees/demo"), global_concurrency=2, per_prd_concurrency=2,
+            default_harness="local",
+        )
+    }
+    config = AppConfig(repos=repos, harnesses={})
+
+    orchestrator.run("demo", config)
+
+    # Agent run start events — one per dispatched issue
+    start_events = [e for e in events if e.event == "agent_run.start"]
+    assert len(start_events) == 2, f"Expected 2 start events, got {len(start_events)}"
+    for se in start_events:
+        assert se.issue_number in (2, 3)
+        assert se.agent_run_id is not None
+
+    # Agent run finished events — one per dispatched issue
+    finish_events = [e for e in events if e.event == "agent_run.finished"]
+    assert len(finish_events) == 2, f"Expected 2 finish events, got {len(finish_events)}"
+
+    # Successful finish
+    success_finish = [e for e in finish_events if e.status == "succeeded"]
+    assert len(success_finish) == 1
+    assert success_finish[0].issue_number == 2
+    assert success_finish[0].agent_run_id is not None
+
+    # Failed finish
+    failed_finish = [e for e in finish_events if e.status == "failed"]
+    assert len(failed_finish) == 1
+    assert failed_finish[0].issue_number == 3
+    assert failed_finish[0].detail == "build error"
+
+
+def test_scheduler_emits_integration_events() -> None:
+    """The scheduler emits integration.start and integration.finished events."""
+    issues_gateway = MagicMock()
+
+    prd_record = GitHubIssueRecord(
+        number=1,
+        title="Prepared PRD",
+        body="## Problem Statement\n\nParent.\n\n## Orchestration\n- PRD Branch: prd/1-prepared-prd",
+        labels=("prd",),
+        state="open",
+    )
+    impl_2 = GitHubIssueRecord(
+        number=2,
+        title="Implementation",
+        body="## Parent PRD\n#1\n\n## What to Build\nBuild it.\n\n## Acceptance Criteria\n- [ ] Done.\n\n## Blocked By\nNone",
+        labels=("implementation", "ready-for-agent"),
+        state="open",
+    )
+    issues_gateway.list_issues.return_value = (prd_record, impl_2)
+
+    events: list[SchedulerEvent] = []
+
+    orchestrator = Orchestrator(
+        issues_gateway=issues_gateway,
+        now_provider=lambda: "2026-05-29T17:00:00Z",
+        event_emitter=events.append,
+    )
+    orchestrator.reconciliation_service = MagicMock()
+    orchestrator.prd_preparation_service = MagicMock()
+
+    orchestrator.claim_service = MagicMock()
+    orchestrator.claim_service.claim_issue.return_value = ClaimResult(
+        issue_number=2, agent_run_id="run-aaa",
+        implementation_branch="impl/1/2-impl", worktree_path="/worktrees/demo/issue-2",
+    )
+
+    orchestrator.execution_service = MagicMock()
+    orchestrator.execution_service.execute_run.return_value = ExecutionResult(
+        issue_number=2, status="succeeded", exit_code=0, new_commits=True,
+    )
+
+    orchestrator.integration_service = MagicMock()
+    orchestrator.integration_service.integrate_issue.return_value = IntegrationResult(
+        issue_number=2, status="succeeded",
+        implementation_branch="impl/1/2-impl", prd_branch="prd/1-prepared-prd",
+    )
+
+    repos = {
+        "demo": RepoConfig(
+            name="demo", repo_path=Path("/repos/demo"), main_branch="main",
+            worktree_root=Path("/worktrees/demo"), global_concurrency=2, per_prd_concurrency=1,
+            default_harness="local",
+        )
+    }
+    config = AppConfig(repos=repos, harnesses={})
+
+    orchestrator.run("demo", config)
+
+    # Integration start event
+    integ_start = [e for e in events if e.event == "integration.start"]
+    assert len(integ_start) == 1, f"Expected 1 integration.start, got {len(integ_start)}"
+    assert integ_start[0].issue_number == 2
+    assert integ_start[0].agent_run_id is not None
+
+    # Integration finish event
+    integ_finish = [e for e in events if e.event == "integration.finished"]
+    assert len(integ_finish) == 1, f"Expected 1 integration.finished, got {len(integ_finish)}"
+    assert integ_finish[0].issue_number == 2
+    assert integ_finish[0].status == "succeeded"
+
+
+def test_per_issue_failure_events_include_rich_context() -> None:
+    """Failure events at any stage (claim, execution, integration) emit
+    per-issue events with enough context to distinguish concurrent Agent Runs."""
+    issues_gateway = MagicMock()
+
+    prd_1 = GitHubIssueRecord(
+        number=1,
+        title="PRD 1",
+        body="## Problem Statement\n\nPlan work.\n\n## Orchestration\n- PRD Branch: prd/1-prd-1",
+        labels=("prd",),
+        state="open",
+    )
+    prd_2 = GitHubIssueRecord(
+        number=2,
+        title="PRD 2",
+        body="## Problem Statement\n\nMore work.\n\n## Orchestration\n- PRD Branch: prd/2-prd-2",
+        labels=("prd",),
+        state="open",
+    )
+    # Three implementation issues with different failure modes
+    impl_3 = GitHubIssueRecord(  # claim fails
+        number=3,
+        title="Claim fails",
+        body="## Parent PRD\n#1\n\n## What to Build\nBuild it.\n\n## Acceptance Criteria\n- [ ] Done.\n\n## Blocked By\nNone",
+        labels=("implementation", "ready-for-agent"),
+        state="open",
+    )
+    impl_4 = GitHubIssueRecord(  # execution fails
+        number=4,
+        title="Execution fails",
+        body="## Parent PRD\n#1\n\n## What to Build\nBuild it too.\n\n## Acceptance Criteria\n- [ ] Done.\n\n## Blocked By\nNone",
+        labels=("implementation", "ready-for-agent"),
+        state="open",
+    )
+    impl_5 = GitHubIssueRecord(  # integration fails
+        number=5,
+        title="Integration fails",
+        body="## Parent PRD\n#2\n\n## What to Build\nBuild it three.\n\n## Acceptance Criteria\n- [ ] Done.\n\n## Blocked By\nNone",
+        labels=("implementation", "ready-for-agent"),
+        state="open",
+    )
+    issues_gateway.list_issues.return_value = (prd_1, prd_2, impl_3, impl_4, impl_5)
+
+    events: list[SchedulerEvent] = []
+
+    orchestrator = Orchestrator(
+        issues_gateway=issues_gateway,
+        now_provider=lambda: "2026-05-29T17:00:00Z",
+        event_emitter=events.append,
+    )
+    orchestrator.reconciliation_service = MagicMock()
+    orchestrator.prd_preparation_service = MagicMock()
+
+    # Different per-issue outcomes
+    orchestrator.claim_service = MagicMock()
+    orchestrator.claim_service.claim_issue.side_effect = [
+        ClaimResult(issue_number=3, agent_run_id="run-ccc", implementation_branch=None, worktree_path=None, failure_message="Not prepared"),
+        ClaimResult(issue_number=4, agent_run_id="run-ddd", implementation_branch="impl/1/4-exec-fails", worktree_path="/worktrees/demo/issue-4"),
+        ClaimResult(issue_number=5, agent_run_id="run-eee", implementation_branch="impl/2/5-integ-fails", worktree_path="/worktrees/demo/issue-5"),
+    ]
+
+    orchestrator.execution_service = MagicMock()
+    orchestrator.execution_service.execute_run.side_effect = [
+        ExecutionResult(issue_number=4, status="failed", exit_code=1, new_commits=False, failure_reason="build error"),
+        ExecutionResult(issue_number=5, status="succeeded", exit_code=0, new_commits=True),
+    ]
+
+    orchestrator.integration_service = MagicMock()
+    orchestrator.integration_service.integrate_issue.return_value = IntegrationResult(
+        issue_number=5, status="failed", failure_type="merge_conflict", failure_message="CONFLICT in file.txt",
+    )
+
+    repos = {
+        "demo": RepoConfig(
+            name="demo", repo_path=Path("/repos/demo"), main_branch="main",
+            worktree_root=Path("/worktrees/demo"), global_concurrency=3, per_prd_concurrency=3,
+            default_harness="local",
+        )
+    }
+    config = AppConfig(repos=repos, harnesses={})
+
+    orchestrator.run("demo", config)
+
+    # ── Per-issue events ────────────────────────────────────────────
+    # Each issue number appears across multiple events
+    for issue_num in (3, 4, 5):
+        issue_events = [e for e in events if e.issue_number == issue_num]
+        assert len(issue_events) > 0, f"Issue #{issue_num} should have events"
+
+    # Claim failure for issue #3
+    issue_3_events = [e for e in events if e.issue_number == 3]
+    assert any(e.event == "claim.attempt" for e in issue_3_events)
+    assert any(e.event == "claim.failed" for e in issue_3_events)
+    # No agent_run or integration events for issue #3 (claim failed early)
+    assert not any(e.event.startswith("agent_run.") for e in issue_3_events)
+    assert not any(e.event.startswith("integration.") for e in issue_3_events)
+
+    # Execution failure for issue #4
+    issue_4_events = [e for e in events if e.issue_number == 4]
+    assert any(e.event == "agent_run.start" for e in issue_4_events)
+    assert any(e.event == "agent_run.finished" and e.status == "failed" for e in issue_4_events)
+    # No integration events for issue #4 (execution failed)
+    assert not any(e.event.startswith("integration.") for e in issue_4_events)
+
+    # Integration failure for issue #5
+    issue_5_events = [e for e in events if e.issue_number == 5]
+    assert any(e.event == "agent_run.start" for e in issue_5_events)
+    assert any(e.event == "agent_run.finished" and e.status == "succeeded" for e in issue_5_events)
+    assert any(e.event == "integration.start" for e in issue_5_events)
+    assert any(e.event == "integration.finished" and e.status == "failed" for e in issue_5_events)
+
+    # ── Concurrent run context ───────────────────────────────────────
+    # Each Agent Run has a unique agent_run_id
+    run_ids: set[str] = set()
+    for e in events:
+        if e.agent_run_id:
+            run_ids.add(e.agent_run_id)
+    # At least 3 unique run IDs (one per dispatched issue)
+    assert len(run_ids) >= 3, f"Expected >=3 unique run IDs, got {len(run_ids)}: {run_ids}"
+
+    # Events for different issues don't share the same agent_run_id
+    # (Each run is a distinct execution)
+    for run_id in run_ids:
+        run_issues = {e.issue_number for e in events if e.agent_run_id == run_id}
+        assert len(run_issues) == 1, f"Run {run_id} spans multiple issues: {run_issues}"
 
 
 def test_prepare_unprepared_prd() -> None:
@@ -1293,10 +1687,22 @@ def test_later_issue_integrates_before_earlier_still_running_issue_when_no_block
     # queue before #2.
     from concurrent.futures import ThreadPoolExecutor
 
+    # Ensure #3's _run_agent_run completes (enqueues for integration)
+    # before #2's _run_agent_run finishes.  We detect #3's enqueue by
+    # intercepting the agent_run.finished event.
+    fast_done = threading.Event()
+    slow_started = threading.Event()
+    issue_3_enqueued = threading.Event()
+
+    def event_catcher(event: SchedulerEvent) -> None:
+        if event.event == "agent_run.finished" and event.issue_number == 3:
+            issue_3_enqueued.set()
+
     orchestrator = Orchestrator(
         issues_gateway=issues_gateway,
         now_provider=lambda: "2026-05-29T17:00:00Z",
         executor=ThreadPoolExecutor(max_workers=2),
+        event_emitter=event_catcher,
     )
     orchestrator.reconciliation_service = MagicMock()
     orchestrator.prd_preparation_service = MagicMock()
@@ -1307,18 +1713,15 @@ def test_later_issue_integrates_before_earlier_still_running_issue_when_no_block
         ClaimResult(issue_number=3, agent_run_id="run-bbb", implementation_branch="impl/1/3-faster", worktree_path="/worktrees/demo/issue-3"),
     ]
 
-    # Execution returns immediately for #3, sleeps for #2.
-    fast_done = threading.Event()
-    slow_started = threading.Event()
-
     def execute_run_side_effect(*, repo_name, issue_number, config):
         if issue_number == 2:
             slow_started.set()
-            fast_done.wait()  # Wait until #3 finishes before #2 finishes
+            fast_done.wait()       # Wait until #3 finishes execution
+            issue_3_enqueued.wait()  # Wait until #3's queue item is enqueued
             return ExecutionResult(issue_number=2, status="succeeded", exit_code=0, new_commits=True)
         else:
-            time.sleep(0.05)  # Small delay so #2's thread has time to start
-            fast_done.set()  # Signal that #3 is done
+            time.sleep(0.05)       # Small delay so #2's thread has time to start
+            fast_done.set()        # Signal that #3's execution is done
             return ExecutionResult(issue_number=3, status="succeeded", exit_code=0, new_commits=True)
 
     orchestrator.execution_service = MagicMock()

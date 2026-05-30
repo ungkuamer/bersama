@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import json
 import queue
+import sys
 import threading
+import uuid
 from concurrent.futures import ThreadPoolExecutor, Executor
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -15,6 +18,15 @@ from bersama.claiming import ClaimWorkspaceGateway, ImplementationClaimService
 from bersama.execution import HarnessExecutionService
 from bersama.integration import IntegrationWorkspaceGateway, IntegrationService
 from bersama.reconciliation import ReconciliationService
+
+
+@dataclass(frozen=True)
+class SchedulerEvent:
+    event: str  # e.g. "claim.attempt", "claim.succeeded", "agent_run.start"
+    issue_number: int
+    agent_run_id: str | None = None
+    status: str | None = None  # "succeeded", "failed", etc.
+    detail: str | None = None
 
 
 @dataclass(frozen=True)
@@ -65,6 +77,16 @@ def _utc_now() -> str:
     return datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
+def _default_event_emitter(event: SchedulerEvent) -> None:
+    print(json.dumps({
+        "event": event.event,
+        "issue_number": event.issue_number,
+        "agent_run_id": event.agent_run_id,
+        "status": event.status,
+        "detail": event.detail,
+    }), file=sys.stdout, flush=True)
+
+
 class OrchestrationState(TypedDict, total=False):
     repo_name: str
     config: AppConfig
@@ -81,6 +103,7 @@ class Orchestrator:
         integration_workspace_gateway: Optional[Any] = None,
         now_provider: Optional[callable] = None,
         executor: Optional[Executor] = None,
+        event_emitter: Optional[callable] = None,
     ) -> None:
         self.issues = issues_gateway or GitHubIssueGateway()
         self.git_workspace = git_workspace_gateway or GitWorkspaceGateway()
@@ -89,6 +112,7 @@ class Orchestrator:
         self.now_provider = now_provider or _utc_now
         self._repo_lock = threading.Lock()
         self._executor = executor if executor is not None else ThreadPoolExecutor()
+        self._event_emitter = event_emitter or _default_event_emitter
         self._active_agent_run_issue_numbers: set[int] = set()
 
         # If no external gateway was provided, inject the shared
@@ -127,7 +151,7 @@ class Orchestrator:
         # A dedicated daemon thread drains the queue one item at a time,
         # serializing all PRD-branch mutations without consuming Agent Run
         # Capacity.
-        self._integration_queue: queue.Queue[tuple[int, str, str]] = queue.Queue()
+        self._integration_queue: queue.Queue[tuple[int, str, str, str]] = queue.Queue()
         self._integration_lock = threading.Lock()
         self._integration_worker_started = False
 
@@ -197,15 +221,34 @@ class Orchestrator:
             item = self._integration_queue.get()
             if item is None:  # sentinel
                 break
-            issue_number, repo_path, worktree_root = item
+            issue_number, agent_run_id, repo_path, worktree_root = item
+            self._event_emitter(SchedulerEvent(
+                event="integration.start",
+                issue_number=issue_number,
+                agent_run_id=agent_run_id,
+            ))
             try:
                 with self._integration_lock:
-                    self.integration_service.integrate_issue(
+                    result = self.integration_service.integrate_issue(
                         repo_path=repo_path,
                         worktree_root=worktree_root,
                         issue_number=issue_number,
                     )
-            except Exception:
+                self._event_emitter(SchedulerEvent(
+                    event="integration.finished",
+                    issue_number=issue_number,
+                    agent_run_id=agent_run_id,
+                    status=result.status,
+                    detail=result.failure_message,
+                ))
+            except Exception as exc:
+                self._event_emitter(SchedulerEvent(
+                    event="integration.finished",
+                    issue_number=issue_number,
+                    agent_run_id=agent_run_id,
+                    status="failed",
+                    detail=str(exc),
+                ))
                 # Integrate_issue handles its own error reporting (labels, comments).
                 pass
             finally:
@@ -225,11 +268,14 @@ class Orchestrator:
         config: AppConfig,
     ) -> None:
         """Claim + Execute only. Successful results enter the serialized integration lane."""
-        import sys
-        import uuid
         agent_run_id = f"run-{uuid.uuid4().hex[:8]}"
 
         # ── Phase 1: Claim ──────────────────────────────────────────
+        self._event_emitter(SchedulerEvent(
+            event="claim.attempt",
+            issue_number=issue_number,
+            agent_run_id=agent_run_id,
+        ))
         try:
             claim_result = self.claim_service.claim_issue(
                 repo_path=repo_path,
@@ -238,6 +284,13 @@ class Orchestrator:
                 agent_run_id=agent_run_id,
             )
         except Exception as exc:
+            self._event_emitter(SchedulerEvent(
+                event="claim.failed",
+                issue_number=issue_number,
+                agent_run_id=agent_run_id,
+                status="failed",
+                detail=str(exc),
+            ))
             print(
                 f"[scheduler] claim error for #{issue_number}: {exc}",
                 file=sys.stderr,
@@ -245,13 +298,32 @@ class Orchestrator:
             return
 
         if not claim_result.succeeded:
+            self._event_emitter(SchedulerEvent(
+                event="claim.failed",
+                issue_number=issue_number,
+                agent_run_id=agent_run_id,
+                status="failed",
+                detail=claim_result.failure_message,
+            ))
             print(
                 f"[scheduler] claim failed for #{issue_number}: {claim_result.failure_message}",
                 file=sys.stderr,
             )
             return
 
+        self._event_emitter(SchedulerEvent(
+            event="claim.succeeded",
+            issue_number=issue_number,
+            agent_run_id=agent_run_id,
+            status="succeeded",
+        ))
+
         # ── Phase 2: Execute ────────────────────────────────────────
+        self._event_emitter(SchedulerEvent(
+            event="agent_run.start",
+            issue_number=issue_number,
+            agent_run_id=agent_run_id,
+        ))
         try:
             exec_result = self.execution_service.execute_run(
                 repo_name=repo_name,
@@ -259,11 +331,28 @@ class Orchestrator:
                 config=config,
             )
         except Exception as exc:
+            self._event_emitter(SchedulerEvent(
+                event="agent_run.finished",
+                issue_number=issue_number,
+                agent_run_id=agent_run_id,
+                status="failed",
+                detail=str(exc),
+            ))
             print(
                 f"[scheduler] execution error for #{issue_number}: {exc}",
                 file=sys.stderr,
             )
             return
+
+        finish_status = exec_result.status
+        finish_detail = exec_result.failure_reason if finish_status != "succeeded" else None
+        self._event_emitter(SchedulerEvent(
+            event="agent_run.finished",
+            issue_number=issue_number,
+            agent_run_id=agent_run_id,
+            status=finish_status,
+            detail=finish_detail,
+        ))
 
         if exec_result.status != "succeeded":
             reason = exec_result.failure_reason or exec_result.status
@@ -276,7 +365,7 @@ class Orchestrator:
         # ── Phase 3: Enter Integration Lane ─────────────────────────
         # Do NOT block Agent Run Capacity here — integration is
         # serialized by a dedicated worker thread.
-        self._integration_queue.put((issue_number, repo_path, worktree_root))
+        self._integration_queue.put((issue_number, agent_run_id, repo_path, worktree_root))
 
     def execute_claims(self, state: OrchestrationState) -> OrchestrationState:
         repo_config = state["config"].repo(state["repo_name"])
