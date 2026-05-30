@@ -9,7 +9,7 @@ from pydantic import BaseModel
 from bersama.claiming import ClaimWorkspaceGateway, ImplementationClaimService
 from bersama.config import AppConfig, ConfigError, RepoConfig
 from bersama.execution import HarnessExecutionService
-from bersama.github_issues import GitHubIssueGateway
+from bersama.github_issues import GitHubIssueGateway, create_bounded_issue_gateway
 from bersama.integration import IntegrationService, IntegrationWorkspaceGateway
 from bersama.issues import GitHubIssue, ImplementationIssue, parse_issue
 from bersama.prd_preparation import GitWorkspaceGateway, PrdPreparationService
@@ -51,31 +51,26 @@ def create_dashboard_app(
     )
 
     def build_service(repo: RepoConfig) -> ReconciliationService:
-        del repo
-        return ReconciliationService(issues=GitHubIssueGateway())
+        return ReconciliationService(issues=create_bounded_issue_gateway(cwd=repo.repo_path))
 
     def build_prd_preparation_service(repo: RepoConfig) -> PrdPreparationService:
-        del repo
         return PrdPreparationService(
-            issues=GitHubIssueGateway(),
+            issues=create_bounded_issue_gateway(cwd=repo.repo_path),
             workspace=GitWorkspaceGateway(),
         )
 
     def build_implementation_claim_service(repo: RepoConfig) -> ImplementationClaimService:
-        del repo
         return ImplementationClaimService(
-            issues=GitHubIssueGateway(),
+            issues=create_bounded_issue_gateway(cwd=repo.repo_path),
             workspace=ClaimWorkspaceGateway(),
         )
 
     def build_execution_service(repo: RepoConfig) -> HarnessExecutionService:
-        del repo
-        return HarnessExecutionService(issues=GitHubIssueGateway())
+        return HarnessExecutionService(issues=create_bounded_issue_gateway(cwd=repo.repo_path))
 
     def build_integration_service(repo: RepoConfig) -> IntegrationService:
-        del repo
         return IntegrationService(
-            issues=GitHubIssueGateway(),
+            issues=create_bounded_issue_gateway(cwd=repo.repo_path),
             workspace=IntegrationWorkspaceGateway(),
         )
 
@@ -88,7 +83,7 @@ def create_dashboard_app(
     )
     execute_service_factory = execution_service_factory or build_execution_service
     integrate_service_factory = integration_service_factory or build_integration_service
-    issues_factory = issue_gateway_factory or GitHubIssueGateway
+    issues_factory = issue_gateway_factory or (lambda: create_bounded_issue_gateway())
 
     def schedule_background_task(
         background_tasks: BackgroundTasks,
