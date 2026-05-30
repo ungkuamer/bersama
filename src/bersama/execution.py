@@ -246,4 +246,10 @@ class HarnessExecutionService:
                 issue_number,
                 f"Harness execution failed during setup or execution.\n\n**Diagnostics:**\n{exc}"
             )
-            raise exc
+            return ExecutionResult(
+                issue_number=issue_number,
+                status="failed",
+                exit_code=-1,
+                new_commits=False,
+                failure_reason=f"Harness execution failed during setup or execution: {exc}",
+            )

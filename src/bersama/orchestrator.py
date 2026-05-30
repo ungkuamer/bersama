@@ -168,30 +168,66 @@ class Orchestrator:
         issue_number: int,
         config: AppConfig,
     ) -> None:
+        import sys
         import uuid
         agent_run_id = f"run-{uuid.uuid4().hex[:8]}"
-        claim_result = self.claim_service.claim_issue(
-            repo_path=repo_path,
-            worktree_root=worktree_root,
-            issue_number=issue_number,
-            agent_run_id=agent_run_id,
-        )
+
+        # ── Phase 1: Claim ──────────────────────────────────────────
+        try:
+            claim_result = self.claim_service.claim_issue(
+                repo_path=repo_path,
+                worktree_root=worktree_root,
+                issue_number=issue_number,
+                agent_run_id=agent_run_id,
+            )
+        except Exception as exc:
+            print(
+                f"[scheduler] claim error for #{issue_number}: {exc}",
+                file=sys.stderr,
+            )
+            return
+
         if not claim_result.succeeded:
+            print(
+                f"[scheduler] claim failed for #{issue_number}: {claim_result.failure_message}",
+                file=sys.stderr,
+            )
             return
 
-        exec_result = self.execution_service.execute_run(
-            repo_name=repo_name,
-            issue_number=issue_number,
-            config=config,
-        )
+        # ── Phase 2: Execute ────────────────────────────────────────
+        try:
+            exec_result = self.execution_service.execute_run(
+                repo_name=repo_name,
+                issue_number=issue_number,
+                config=config,
+            )
+        except Exception as exc:
+            print(
+                f"[scheduler] execution error for #{issue_number}: {exc}",
+                file=sys.stderr,
+            )
+            return
+
         if exec_result.status != "succeeded":
+            reason = exec_result.failure_reason or exec_result.status
+            print(
+                f"[scheduler] execution non-success for #{issue_number}: status={exec_result.status}, reason={reason}",
+                file=sys.stderr,
+            )
             return
 
-        self.integration_service.integrate_issue(
-            repo_path=repo_path,
-            worktree_root=worktree_root,
-            issue_number=issue_number,
-        )
+        # ── Phase 3: Integrate ──────────────────────────────────────
+        try:
+            self.integration_service.integrate_issue(
+                repo_path=repo_path,
+                worktree_root=worktree_root,
+                issue_number=issue_number,
+            )
+        except Exception as exc:
+            print(
+                f"[scheduler] integration error for #{issue_number}: {exc}",
+                file=sys.stderr,
+            )
 
     def execute_claims(self, state: OrchestrationState) -> OrchestrationState:
         repo_config = state["config"].repo(state["repo_name"])
