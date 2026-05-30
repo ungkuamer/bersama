@@ -23,6 +23,7 @@ class FakeIssueGateway:
         self.added_labels: list[tuple[int, tuple[str, ...]]] = []
         self.removed_labels: list[tuple[int, tuple[str, ...]]] = []
         self.closed_issues: list[int] = []
+        self.updated_bodies: list[tuple[int, str]] = []
 
     def view_issue(self, number: int) -> GitHubIssueRecord:
         return self.issues[number]
@@ -38,6 +39,19 @@ class FakeIssueGateway:
 
     def close_issue(self, number: int) -> None:
         self.closed_issues.append(number)
+
+    def update_body(self, number: int, body: str) -> None:
+        self.updated_bodies.append((number, body))
+        # Also update the in-memory record so subsequent view_issue returns updated body
+        if number in self.issues:
+            old = self.issues[number]
+            self.issues[number] = GitHubIssueRecord(
+                number=old.number,
+                title=old.title,
+                body=body,
+                labels=old.labels,
+                state=old.state,
+            )
 
 
 class FakeGitRunner:
@@ -575,3 +589,602 @@ def test_real_git_integration_success(tmp_path: Path) -> None:
     assert any(
         cmd[:2] == ("gh", "pr") for cmd, _ in runner.commands
     ), "Expected gh pr commands to be invoked"
+
+
+# ── Async Integration Tests (create_integration_pr + poll_integration_pr) ──
+
+def get_mock_issues_for_async() -> FakeIssueGateway:
+    """Mock issues where #8 is ready for async integration (has claim metadata)."""
+    impl_body = """
+## Parent PRD
+#1
+
+## What to Build
+Run the harness.
+
+## Acceptance Criteria
+- [ ] Done.
+
+## Blocked By
+None
+
+## Orchestration
+- Agent Run: run-123
+- Claimed At: 2026-05-29T16:00:00Z
+- Implementation Branch: impl/1/8-child-impl
+""".strip()
+
+    impl_issue_record = GitHubIssueRecord(
+        number=8,
+        title="Execute agent harness",
+        body=impl_body,
+        labels=("implementation",),
+        state="open",
+    )
+
+    parent_prd_record = GitHubIssueRecord(
+        number=1,
+        title="Parent PRD Title",
+        body="""
+## Problem Statement
+Parent PRD.
+
+## Orchestration
+- PRD Branch: prd/1-parent-prd
+""".strip(),
+        labels=("prd",),
+        state="open",
+    )
+
+    return FakeIssueGateway(impl_issue_record, parent_prd_record)
+
+
+def test_create_integration_pr_success(tmp_path: Path) -> None:
+    """create_integration_pr updates branch, pushes, creates PR, writes orchestration."""
+    worktree_root = tmp_path / "worktrees"
+    worktree_root.mkdir()
+    worktree_path = worktree_root / "issue-8"
+    worktree_path.mkdir()
+
+    issues = get_mock_issues_for_async()
+    runner = FakeGitRunner()
+
+    pr_create_cmd = (
+        "gh", "pr", "create",
+        "--head", "impl/1/8-child-impl",
+        "--base", "prd/1-parent-prd",
+        "--title", "Integration: #8 into prd/1-parent-prd",
+        "--body", "Automated integration of implementation branch `impl/1/8-child-impl` into PRD branch `prd/1-parent-prd`.",
+        "--json", "number",
+        "--jq", ".number",
+    )
+    runner.outputs[pr_create_cmd] = "42\n"
+
+    workspace = IntegrationWorkspaceGateway(runner=runner)
+    service = IntegrationService(issues=issues, workspace=workspace)
+
+    result = service.create_integration_pr(
+        repo_path="/repos/demo",
+        worktree_root=str(worktree_root),
+        issue_number=8,
+    )
+
+    assert result.status == "pending_validation"
+    assert result.pr_number == "42"
+    assert result.implementation_branch == "impl/1/8-child-impl"
+    assert result.prd_branch == "prd/1-parent-prd"
+
+    # Orchestration should be written with PR number and pending_validation status
+    assert len(issues.updated_bodies) == 1
+    updated_num, updated_body = issues.updated_bodies[0]
+    assert updated_num == 8
+    assert "Integration PR: #42" in updated_body
+    assert "Integration Status: pending_validation" in updated_body
+
+    # No issue was closed yet (that happens in poll phase)
+    assert issues.closed_issues == []
+    assert len(issues.added_labels) == 0
+    assert len(issues.comments) == 0
+
+
+def test_create_integration_pr_merge_conflict(tmp_path: Path) -> None:
+    """create_integration_pr handles merge conflict by writing failed status."""
+    worktree_root = tmp_path / "worktrees"
+    worktree_root.mkdir()
+    worktree_path = worktree_root / "issue-8"
+    worktree_path.mkdir()
+
+    issues = get_mock_issues_for_async()
+    runner = FakeGitRunner()
+    merge_cmd = (
+        "git", "merge",
+        "origin/prd/1-parent-prd",
+        "-m",
+        "Update implementation branch against latest prd/1-parent-prd",
+    )
+    runner.fail(merge_cmd, "CONFLICT (content): Merge conflict in dummy.txt")
+
+    workspace = IntegrationWorkspaceGateway(runner=runner)
+    service = IntegrationService(issues=issues, workspace=workspace)
+
+    result = service.create_integration_pr(
+        repo_path="/repos/demo",
+        worktree_root=str(worktree_root),
+        issue_number=8,
+    )
+
+    assert result.status == "failed"
+    assert result.failure_type == "merge_conflict"
+    assert issues.closed_issues == []
+    assert issues.added_labels == [(8, ("needs-triage",))]
+    assert len(issues.comments) == 1
+
+
+def test_poll_integration_pr_checks_pass_and_merge(tmp_path: Path) -> None:
+    """poll_integration_pr merges and closes when all PR status checks pass."""
+    worktree_root = tmp_path / "worktrees"
+    worktree_root.mkdir()
+    worktree_path = worktree_root / "issue-8"
+    worktree_path.mkdir()
+
+    impl_body_with_pr = """
+## Parent PRD
+#1
+
+## What to Build
+Run the harness.
+
+## Acceptance Criteria
+- [ ] Done.
+
+## Blocked By
+None
+
+## Orchestration
+- Agent Run: run-123
+- Claimed At: 2026-05-29T16:00:00Z
+- Implementation Branch: impl/1/8-child-impl
+- Integration PR: #42
+- Integration Status: pending_validation
+""".strip()
+
+    impl_issue = GitHubIssueRecord(
+        number=8,
+        title="Execute agent harness",
+        body=impl_body_with_pr,
+        labels=("implementation",),
+        state="open",
+    )
+    parent_prd = GitHubIssueRecord(
+        number=1,
+        title="Parent PRD Title",
+        body="## Problem Statement\nParent PRD.\n\n## Orchestration\n- PRD Branch: prd/1-parent-prd",
+        labels=("prd",),
+        state="open",
+    )
+    issues = FakeIssueGateway(impl_issue, parent_prd)
+    runner = FakeGitRunner()
+
+    # gh pr view returns all checks green
+    pr_view_cmd = (
+        "gh", "pr", "view", "42",
+        "--json", "state,mergeable,closed,statusCheckRollup",
+    )
+    runner.outputs[pr_view_cmd] = '{"state":"OPEN","mergeable":"MERGEABLE","closed":false,"statusCheckRollup":[{"name":"build","status":"COMPLETED","conclusion":"SUCCESS"}]}'
+
+    # gh pr merge succeeds
+    pr_merge_cmd = ("gh", "pr", "merge", "42", "--squash")
+    runner.outputs[pr_merge_cmd] = "Pull request #42 merged\n"
+
+    workspace = IntegrationWorkspaceGateway(runner=runner)
+    service = IntegrationService(issues=issues, workspace=workspace)
+
+    result = service.poll_integration_pr(
+        repo_path="/repos/demo",
+        worktree_root=str(worktree_root),
+        issue_number=8,
+    )
+
+    assert result.status == "succeeded"
+    assert result.pr_number == "42"
+    assert issues.closed_issues == [8]
+    assert len(issues.added_labels) == 0
+    assert len(issues.comments) == 0
+
+
+def test_poll_integration_pr_checks_failed(tmp_path: Path) -> None:
+    """poll_integration_pr marks needs-triage when PR status checks fail."""
+    worktree_root = tmp_path / "worktrees"
+    worktree_root.mkdir()
+    worktree_path = worktree_root / "issue-8"
+    worktree_path.mkdir()
+
+    impl_body_with_pr = """
+## Parent PRD
+#1
+
+## What to Build
+Run the harness.
+
+## Acceptance Criteria
+- [ ] Done.
+
+## Blocked By
+None
+
+## Orchestration
+- Agent Run: run-123
+- Claimed At: 2026-05-29T16:00:00Z
+- Implementation Branch: impl/1/8-child-impl
+- Integration PR: #42
+- Integration Status: pending_validation
+""".strip()
+
+    impl_issue = GitHubIssueRecord(
+        number=8,
+        title="Execute agent harness",
+        body=impl_body_with_pr,
+        labels=("implementation",),
+        state="open",
+    )
+    parent_prd = GitHubIssueRecord(
+        number=1,
+        title="Parent PRD Title",
+        body="## Problem Statement\nParent PRD.\n\n## Orchestration\n- PRD Branch: prd/1-parent-prd",
+        labels=("prd",),
+        state="open",
+    )
+    issues = FakeIssueGateway(impl_issue, parent_prd)
+    runner = FakeGitRunner()
+
+    # gh pr view returns failed checks
+    pr_view_cmd = (
+        "gh", "pr", "view", "42",
+        "--json", "state,mergeable,closed,statusCheckRollup",
+    )
+    runner.outputs[pr_view_cmd] = '{"state":"OPEN","mergeable":"MERGEABLE","closed":false,"statusCheckRollup":[{"name":"build","status":"COMPLETED","conclusion":"FAILURE"}]}'
+
+    workspace = IntegrationWorkspaceGateway(runner=runner)
+    service = IntegrationService(issues=issues, workspace=workspace)
+
+    result = service.poll_integration_pr(
+        repo_path="/repos/demo",
+        worktree_root=str(worktree_root),
+        issue_number=8,
+    )
+
+    assert result.status == "failed"
+    assert result.failure_type == "checks_failed"
+    assert issues.closed_issues == []
+    assert issues.added_labels == [(8, ("needs-triage",))]
+    assert len(issues.comments) == 1
+    assert "CI/CD checks failed" in issues.comments[0][1]
+
+    # Orchestration status updated to failed
+    assert len(issues.updated_bodies) == 1
+    _, updated_body = issues.updated_bodies[0]
+    assert "Integration Status: failed" in updated_body
+
+
+def test_poll_integration_pr_skips_when_not_pending_validation(tmp_path: Path) -> None:
+    """poll_integration_pr skips issues whose status is not pending_validation."""
+    worktree_root = tmp_path / "worktrees"
+    worktree_root.mkdir()
+    worktree_path = worktree_root / "issue-8"
+    worktree_path.mkdir()
+
+    impl_body_merged = """
+## Parent PRD
+#1
+
+## What to Build
+Run the harness.
+
+## Acceptance Criteria
+- [ ] Done.
+
+## Blocked By
+None
+
+## Orchestration
+- Agent Run: run-123
+- Claimed At: 2026-05-29T16:00:00Z
+- Implementation Branch: impl/1/8-child-impl
+- Integration PR: #42
+- Integration Status: merged
+""".strip()
+
+    impl_issue = GitHubIssueRecord(
+        number=8,
+        title="Execute agent harness",
+        body=impl_body_merged,
+        labels=("implementation",),
+        state="closed",
+    )
+    parent_prd = GitHubIssueRecord(
+        number=1,
+        title="Parent PRD Title",
+        body="## Problem Statement\nParent PRD.\n\n## Orchestration\n- PRD Branch: prd/1-parent-prd",
+        labels=("prd",),
+        state="open",
+    )
+    issues = FakeIssueGateway(impl_issue, parent_prd)
+    runner = FakeGitRunner()
+
+    workspace = IntegrationWorkspaceGateway(runner=runner)
+    service = IntegrationService(issues=issues, workspace=workspace)
+
+    result = service.poll_integration_pr(
+        repo_path="/repos/demo",
+        worktree_root=str(worktree_root),
+        issue_number=8,
+    )
+
+    assert result.status == "skipped"
+    # No side effects
+    assert issues.closed_issues == []
+    assert len(issues.added_labels) == 0
+    assert len(issues.comments) == 0
+    assert len(runner.commands) == 0
+
+
+def test_poll_integration_pr_skips_when_no_integration_pr(tmp_path: Path) -> None:
+    """poll_integration_pr skips issues without an integration PR."""
+    worktree_root = tmp_path / "worktrees"
+    worktree_root.mkdir()
+    worktree_path = worktree_root / "issue-8"
+    worktree_path.mkdir()
+
+    # No integration fields at all
+    impl_body_no_pr = """
+## Parent PRD
+#1
+
+## What to Build
+Run the harness.
+
+## Acceptance Criteria
+- [ ] Done.
+
+## Blocked By
+None
+
+## Orchestration
+- Agent Run: run-123
+- Claimed At: 2026-05-29T16:00:00Z
+- Implementation Branch: impl/1/8-child-impl
+""".strip()
+
+    impl_issue = GitHubIssueRecord(
+        number=8,
+        title="Execute agent harness",
+        body=impl_body_no_pr,
+        labels=("implementation",),
+        state="open",
+    )
+    parent_prd = GitHubIssueRecord(
+        number=1,
+        title="Parent PRD Title",
+        body="## Problem Statement\nParent PRD.\n\n## Orchestration\n- PRD Branch: prd/1-parent-prd",
+        labels=("prd",),
+        state="open",
+    )
+    issues = FakeIssueGateway(impl_issue, parent_prd)
+    runner = FakeGitRunner()
+
+    workspace = IntegrationWorkspaceGateway(runner=runner)
+    service = IntegrationService(issues=issues, workspace=workspace)
+
+    result = service.poll_integration_pr(
+        repo_path="/repos/demo",
+        worktree_root=str(worktree_root),
+        issue_number=8,
+    )
+
+    assert result.status == "skipped"
+    assert issues.closed_issues == []
+    assert len(runner.commands) == 0
+
+
+def test_poll_integration_pr_merge_conflict_detected(tmp_path: Path) -> None:
+    """poll_integration_pr detects PR conflicts and marks needs-triage."""
+    worktree_root = tmp_path / "worktrees"
+    worktree_root.mkdir()
+    worktree_path = worktree_root / "issue-8"
+    worktree_path.mkdir()
+
+    impl_body_with_pr = """
+## Parent PRD
+#1
+
+## What to Build
+Run the harness.
+
+## Acceptance Criteria
+- [ ] Done.
+
+## Blocked By
+None
+
+## Orchestration
+- Agent Run: run-123
+- Claimed At: 2026-05-29T16:00:00Z
+- Implementation Branch: impl/1/8-child-impl
+- Integration PR: #42
+- Integration Status: pending_validation
+""".strip()
+
+    impl_issue = GitHubIssueRecord(
+        number=8,
+        title="Execute agent harness",
+        body=impl_body_with_pr,
+        labels=("implementation",),
+        state="open",
+    )
+    parent_prd = GitHubIssueRecord(
+        number=1,
+        title="Parent PRD Title",
+        body="## Problem Statement\nParent PRD.\n\n## Orchestration\n- PRD Branch: prd/1-parent-prd",
+        labels=("prd",),
+        state="open",
+    )
+    issues = FakeIssueGateway(impl_issue, parent_prd)
+    runner = FakeGitRunner()
+
+    # PR is conflicting
+    pr_view_cmd = (
+        "gh", "pr", "view", "42",
+        "--json", "state,mergeable,closed,statusCheckRollup",
+    )
+    runner.outputs[pr_view_cmd] = '{"state":"OPEN","mergeable":"CONFLICTING","closed":false,"statusCheckRollup":[]}'
+
+    workspace = IntegrationWorkspaceGateway(runner=runner)
+    service = IntegrationService(issues=issues, workspace=workspace)
+
+    result = service.poll_integration_pr(
+        repo_path="/repos/demo",
+        worktree_root=str(worktree_root),
+        issue_number=8,
+    )
+
+    assert result.status == "failed"
+    assert result.failure_type == "merge_conflict"
+    assert issues.closed_issues == []
+    assert issues.added_labels == [(8, ("needs-triage",))]
+    assert len(issues.comments) == 1
+    assert "merge conflict" in issues.comments[0][1].lower()
+
+
+def test_poll_integration_pr_checks_in_progress_skips(tmp_path: Path) -> None:
+    """poll_integration_pr skips when checks are still in progress (not yet completed)."""
+    worktree_root = tmp_path / "worktrees"
+    worktree_root.mkdir()
+    worktree_path = worktree_root / "issue-8"
+    worktree_path.mkdir()
+
+    impl_body_with_pr = """
+## Parent PRD
+#1
+
+## What to Build
+Run the harness.
+
+## Acceptance Criteria
+- [ ] Done.
+
+## Blocked By
+None
+
+## Orchestration
+- Agent Run: run-123
+- Claimed At: 2026-05-29T16:00:00Z
+- Implementation Branch: impl/1/8-child-impl
+- Integration PR: #42
+- Integration Status: pending_validation
+""".strip()
+
+    impl_issue = GitHubIssueRecord(
+        number=8,
+        title="Execute agent harness",
+        body=impl_body_with_pr,
+        labels=("implementation",),
+        state="open",
+    )
+    parent_prd = GitHubIssueRecord(
+        number=1,
+        title="Parent PRD Title",
+        body="## Problem Statement\nParent PRD.\n\n## Orchestration\n- PRD Branch: prd/1-parent-prd",
+        labels=("prd",),
+        state="open",
+    )
+    issues = FakeIssueGateway(impl_issue, parent_prd)
+    runner = FakeGitRunner()
+
+    # Checks are in progress (QUEUED, not COMPLETED)
+    pr_view_cmd = (
+        "gh", "pr", "view", "42",
+        "--json", "state,mergeable,closed,statusCheckRollup",
+    )
+    runner.outputs[pr_view_cmd] = '{"state":"OPEN","mergeable":"MERGEABLE","closed":false,"statusCheckRollup":[{"name":"build","status":"IN_PROGRESS","conclusion":""}]}'
+
+    workspace = IntegrationWorkspaceGateway(runner=runner)
+    service = IntegrationService(issues=issues, workspace=workspace)
+
+    result = service.poll_integration_pr(
+        repo_path="/repos/demo",
+        worktree_root=str(worktree_root),
+        issue_number=8,
+    )
+
+    assert result.status == "skipped"
+    # No side effects — checks still running, don't merge or fail
+    assert issues.closed_issues == []
+    assert len(issues.added_labels) == 0
+    assert len(issues.comments) == 0
+
+
+def test_poll_integration_pr_already_merged_externally(tmp_path: Path) -> None:
+    """poll_integration_pr closes issue when PR was already merged externally."""
+    worktree_root = tmp_path / "worktrees"
+    worktree_root.mkdir()
+    worktree_path = worktree_root / "issue-8"
+    worktree_path.mkdir()
+
+    impl_body_with_pr = """
+## Parent PRD
+#1
+
+## What to Build
+Run the harness.
+
+## Acceptance Criteria
+- [ ] Done.
+
+## Blocked By
+None
+
+## Orchestration
+- Agent Run: run-123
+- Claimed At: 2026-05-29T16:00:00Z
+- Implementation Branch: impl/1/8-child-impl
+- Integration PR: #42
+- Integration Status: pending_validation
+""".strip()
+
+    impl_issue = GitHubIssueRecord(
+        number=8,
+        title="Execute agent harness",
+        body=impl_body_with_pr,
+        labels=("implementation",),
+        state="open",
+    )
+    parent_prd = GitHubIssueRecord(
+        number=1,
+        title="Parent PRD Title",
+        body="## Problem Statement\nParent PRD.\n\n## Orchestration\n- PRD Branch: prd/1-parent-prd",
+        labels=("prd",),
+        state="open",
+    )
+    issues = FakeIssueGateway(impl_issue, parent_prd)
+    runner = FakeGitRunner()
+
+    # PR was merged (closed + merged)
+    pr_view_cmd = (
+        "gh", "pr", "view", "42",
+        "--json", "state,mergeable,closed,statusCheckRollup",
+    )
+    runner.outputs[pr_view_cmd] = '{"state":"MERGED","mergeable":"UNKNOWN","closed":true,"statusCheckRollup":[]}'
+
+    workspace = IntegrationWorkspaceGateway(runner=runner)
+    service = IntegrationService(issues=issues, workspace=workspace)
+
+    result = service.poll_integration_pr(
+        repo_path="/repos/demo",
+        worktree_root=str(worktree_root),
+        issue_number=8,
+    )
+
+    assert result.status == "succeeded"
+    assert issues.closed_issues == [8]
+    assert len(issues.added_labels) == 0
+    assert len(issues.comments) == 0

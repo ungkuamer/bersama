@@ -133,7 +133,7 @@ def test_scheduler_emits_claim_attempt_events() -> None:
     ]
 
     orchestrator.integration_service = MagicMock()
-    orchestrator.integration_service.integrate_issue.return_value = IntegrationResult(
+    orchestrator.integration_service.create_integration_pr.return_value = IntegrationResult(
         issue_number=2, status="succeeded",
         implementation_branch="impl/1/2-claimable", prd_branch="prd/1-prepared-prd",
     )
@@ -229,7 +229,7 @@ def test_scheduler_emits_agent_run_start_and_finish_events() -> None:
     ]
 
     orchestrator.integration_service = MagicMock()
-    orchestrator.integration_service.integrate_issue.return_value = IntegrationResult(
+    orchestrator.integration_service.create_integration_pr.return_value = IntegrationResult(
         issue_number=2, status="succeeded", implementation_branch="impl/1/2-succeeds", prd_branch="prd/1-prepared-prd",
     )
 
@@ -269,7 +269,7 @@ def test_scheduler_emits_agent_run_start_and_finish_events() -> None:
 
 
 def test_scheduler_emits_integration_events() -> None:
-    """The scheduler emits integration.start and integration.finished events."""
+    """The scheduler emits integration.pr_created event after successful execution."""
     issues_gateway = MagicMock()
 
     prd_record = GitHubIssueRecord(
@@ -310,9 +310,10 @@ def test_scheduler_emits_integration_events() -> None:
     )
 
     orchestrator.integration_service = MagicMock()
-    orchestrator.integration_service.integrate_issue.return_value = IntegrationResult(
-        issue_number=2, status="succeeded",
+    orchestrator.integration_service.create_integration_pr.return_value = IntegrationResult(
+        issue_number=2, status="pending_validation",
         implementation_branch="impl/1/2-impl", prd_branch="prd/1-prepared-prd",
+        pr_number="42",
     )
 
     repos = {
@@ -326,17 +327,12 @@ def test_scheduler_emits_integration_events() -> None:
 
     orchestrator.run("demo", config)
 
-    # Integration start event
-    integ_start = [e for e in events if e.event == "integration.start"]
-    assert len(integ_start) == 1, f"Expected 1 integration.start, got {len(integ_start)}"
-    assert integ_start[0].issue_number == 2
-    assert integ_start[0].agent_run_id is not None
-
-    # Integration finish event
-    integ_finish = [e for e in events if e.event == "integration.finished"]
-    assert len(integ_finish) == 1, f"Expected 1 integration.finished, got {len(integ_finish)}"
-    assert integ_finish[0].issue_number == 2
-    assert integ_finish[0].status == "succeeded"
+    # Integration PR created event
+    integ_events = [e for e in events if e.event == "integration.pr_created"]
+    assert len(integ_events) == 1, f"Expected 1 integration.pr_created, got {len(integ_events)}"
+    assert integ_events[0].issue_number == 2
+    assert integ_events[0].agent_run_id is not None
+    assert integ_events[0].status == "pending_validation"
 
 
 def test_per_issue_failure_events_include_rich_context() -> None:
@@ -407,7 +403,7 @@ def test_per_issue_failure_events_include_rich_context() -> None:
     ]
 
     orchestrator.integration_service = MagicMock()
-    orchestrator.integration_service.integrate_issue.return_value = IntegrationResult(
+    orchestrator.integration_service.create_integration_pr.return_value = IntegrationResult(
         issue_number=5, status="failed", failure_type="merge_conflict", failure_message="CONFLICT in file.txt",
     )
 
@@ -447,8 +443,8 @@ def test_per_issue_failure_events_include_rich_context() -> None:
     issue_5_events = [e for e in events if e.issue_number == 5]
     assert any(e.event == "agent_run.start" for e in issue_5_events)
     assert any(e.event == "agent_run.finished" and e.status == "succeeded" for e in issue_5_events)
-    assert any(e.event == "integration.start" for e in issue_5_events)
-    assert any(e.event == "integration.finished" and e.status == "failed" for e in issue_5_events)
+    assert any(e.event == "integration.pr_created" for e in issue_5_events)
+    assert any(e.event == "integration.pr_created" and e.status == "failed" for e in issue_5_events)
 
     # ── Concurrent run context ───────────────────────────────────────
     # Each Agent Run has a unique agent_run_id
@@ -556,7 +552,7 @@ def test_claim_execute_integrate_workflow() -> None:
     )
 
     orchestrator.integration_service = MagicMock()
-    orchestrator.integration_service.integrate_issue.return_value = IntegrationResult(
+    orchestrator.integration_service.create_integration_pr.return_value = IntegrationResult(
         issue_number=2,
         status="succeeded",
         implementation_branch="impl/1/2-implementation-child",
@@ -592,7 +588,7 @@ def test_claim_execute_integrate_workflow() -> None:
     )
 
     # 4. integrate_issue was called for issue 2
-    orchestrator.integration_service.integrate_issue.assert_called_once_with(
+    orchestrator.integration_service.create_integration_pr.assert_called_once_with(
         repo_path="/repos/demo",
         worktree_root="/worktrees/demo",
         issue_number=2,
@@ -665,7 +661,7 @@ def test_claim_fails_execution_stops_integration() -> None:
     # Verify execute_run was called, but integrate_issue was NOT called!
     orchestrator.claim_service.claim_issue.assert_called_once()
     orchestrator.execution_service.execute_run.assert_called_once()
-    orchestrator.integration_service.integrate_issue.assert_not_called()
+    orchestrator.integration_service.create_integration_pr.assert_not_called()
 
 
 def test_continuous_loop_execution_workflow() -> None:
@@ -718,7 +714,7 @@ def test_continuous_loop_execution_workflow() -> None:
     )
 
     orchestrator.integration_service = MagicMock()
-    orchestrator.integration_service.integrate_issue.return_value = IntegrationResult(
+    orchestrator.integration_service.create_integration_pr.return_value = IntegrationResult(
         issue_number=2,
         status="succeeded",
         implementation_branch="impl/1/2-implementation-child",
@@ -744,7 +740,7 @@ def test_continuous_loop_execution_workflow() -> None:
     # Verify claim_issue, execute_run and integrate_issue were called in the first loop
     orchestrator.claim_service.claim_issue.assert_called_once()
     orchestrator.execution_service.execute_run.assert_called_once()
-    orchestrator.integration_service.integrate_issue.assert_called_once()
+    orchestrator.integration_service.create_integration_pr.assert_called_once()
 
     # Reconcile runs: orchestrator start, after drain (meaningful outcome), orchestrator end.
     assert orchestrator.reconciliation_service.reconcile.call_count == 3
@@ -828,7 +824,7 @@ def test_bounded_concurrent_scheduling_pass_dispatches_multiple_issues() -> None
     ]
 
     orchestrator.integration_service = MagicMock()
-    orchestrator.integration_service.integrate_issue.side_effect = [
+    orchestrator.integration_service.create_integration_pr.side_effect = [
         IntegrationResult(issue_number=3, status="succeeded", implementation_branch="impl/1/3-impl-for-prd-1", prd_branch="prd/1-prd-1"),
         IntegrationResult(issue_number=4, status="succeeded", implementation_branch="impl/2/4-impl-for-prd-2", prd_branch="prd/2-prd-2"),
     ]
@@ -854,7 +850,7 @@ def test_bounded_concurrent_scheduling_pass_dispatches_multiple_issues() -> None
     # Both should have been claimed, executed, and integrated
     assert orchestrator.claim_service.claim_issue.call_count == 2
     assert orchestrator.execution_service.execute_run.call_count == 2
-    assert orchestrator.integration_service.integrate_issue.call_count == 2
+    assert orchestrator.integration_service.create_integration_pr.call_count == 2
 
 
 def test_failed_agent_run_does_not_block_other_concurrent_issues() -> None:
@@ -936,7 +932,7 @@ def test_failed_agent_run_does_not_block_other_concurrent_issues() -> None:
     ]
 
     orchestrator.integration_service = MagicMock()
-    orchestrator.integration_service.integrate_issue.return_value = IntegrationResult(
+    orchestrator.integration_service.create_integration_pr.return_value = IntegrationResult(
         issue_number=4,
         status="succeeded",
         implementation_branch="impl/2/4-impl-for-prd-2",
@@ -968,8 +964,8 @@ def test_failed_agent_run_does_not_block_other_concurrent_issues() -> None:
     assert orchestrator.execution_service.execute_run.call_count == 2
 
     # Only issue 4 (successful) should be integrated
-    assert orchestrator.integration_service.integrate_issue.call_count == 1
-    orchestrator.integration_service.integrate_issue.assert_called_once_with(
+    assert orchestrator.integration_service.create_integration_pr.call_count == 1
+    orchestrator.integration_service.create_integration_pr.assert_called_once_with(
         repo_path="/repos/demo",
         worktree_root="/worktrees/demo",
         issue_number=4,
@@ -1048,7 +1044,7 @@ def test_needs_info_outcome_does_not_attempt_integration() -> None:
     ]
 
     orchestrator.integration_service = MagicMock()
-    orchestrator.integration_service.integrate_issue.return_value = IntegrationResult(
+    orchestrator.integration_service.create_integration_pr.return_value = IntegrationResult(
         issue_number=3,
         status="succeeded",
         implementation_branch="impl/1/3-impl-that-succeeds",
@@ -1080,8 +1076,8 @@ def test_needs_info_outcome_does_not_attempt_integration() -> None:
     assert orchestrator.execution_service.execute_run.call_count == 2
 
     # Only issue 3 (succeeded) should be integrated
-    assert orchestrator.integration_service.integrate_issue.call_count == 1
-    orchestrator.integration_service.integrate_issue.assert_called_once_with(
+    assert orchestrator.integration_service.create_integration_pr.call_count == 1
+    orchestrator.integration_service.create_integration_pr.assert_called_once_with(
         repo_path="/repos/demo",
         worktree_root="/worktrees/demo",
         issue_number=3,
@@ -1161,7 +1157,7 @@ def test_execution_exception_does_not_block_concurrent_issues() -> None:
     ]
 
     orchestrator.integration_service = MagicMock()
-    orchestrator.integration_service.integrate_issue.return_value = IntegrationResult(
+    orchestrator.integration_service.create_integration_pr.return_value = IntegrationResult(
         issue_number=4,
         status="succeeded",
         implementation_branch="impl/2/4-impl-for-prd-2",
@@ -1194,8 +1190,8 @@ def test_execution_exception_does_not_block_concurrent_issues() -> None:
     assert orchestrator.execution_service.execute_run.call_count == 2
 
     # Only issue 4 (succeeded) was integrated
-    assert orchestrator.integration_service.integrate_issue.call_count == 1
-    orchestrator.integration_service.integrate_issue.assert_called_once_with(
+    assert orchestrator.integration_service.create_integration_pr.call_count == 1
+    orchestrator.integration_service.create_integration_pr.assert_called_once_with(
         repo_path="/repos/demo",
         worktree_root="/worktrees/demo",
         issue_number=4,
@@ -1273,7 +1269,7 @@ def test_claim_failure_does_not_block_other_concurrent_issues() -> None:
     )
 
     orchestrator.integration_service = MagicMock()
-    orchestrator.integration_service.integrate_issue.return_value = IntegrationResult(
+    orchestrator.integration_service.create_integration_pr.return_value = IntegrationResult(
         issue_number=4,
         status="succeeded",
         implementation_branch="impl/2/4-impl-for-prd-2",
@@ -1308,8 +1304,8 @@ def test_claim_failure_does_not_block_other_concurrent_issues() -> None:
         issue_number=4,
         config=config,
     )
-    assert orchestrator.integration_service.integrate_issue.call_count == 1
-    orchestrator.integration_service.integrate_issue.assert_called_once_with(
+    assert orchestrator.integration_service.create_integration_pr.call_count == 1
+    orchestrator.integration_service.create_integration_pr.assert_called_once_with(
         repo_path="/repos/demo",
         worktree_root="/worktrees/demo",
         issue_number=4,
@@ -1386,7 +1382,7 @@ def test_execute_claims_tracks_active_agent_runs_in_memory() -> None:
     ]
 
     orchestrator.integration_service = MagicMock()
-    orchestrator.integration_service.integrate_issue.side_effect = [
+    orchestrator.integration_service.create_integration_pr.side_effect = [
         IntegrationResult(issue_number=2, status="succeeded", implementation_branch="impl/1/2-implementation-child", prd_branch="prd/1-prd-1"),
         IntegrationResult(issue_number=3, status="succeeded", implementation_branch="impl/1/3-another-child", prd_branch="prd/1-prd-1"),
     ]
@@ -1486,7 +1482,7 @@ def test_continuous_mode_passes_active_runs_to_planner() -> None:
     )
 
     orchestrator.integration_service = MagicMock()
-    orchestrator.integration_service.integrate_issue.return_value = IntegrationResult(
+    orchestrator.integration_service.create_integration_pr.return_value = IntegrationResult(
         issue_number=2,
         status="succeeded",
         implementation_branch="impl/1/2-implementation-child",
@@ -1557,7 +1553,7 @@ to simulate real concurrent execution. Supports a barrier for synchronisation.""
 
 
 class BlockingIntegrationGateway:
-    """A FakeIssueGateway that can block inside integrate_issue until released.
+    """A FakeIssueGateway that can block inside create_integration_pr until released.
 Used to test that integration is serialized and doesn't block Agent Runs."""
 
     def __init__(self, underlying_service: MagicMock) -> None:
@@ -1568,8 +1564,8 @@ Used to test that integration is serialized and doesn't block Agent Runs."""
         self._lock = threading.Lock()
 
     @property
-    def integrate_issue(self):
-        original = self._service.integrate_issue
+    def create_integration_pr(self):
+        original = self._service.create_integration_pr
 
         def blocking_integrate(*args, **kwargs):
             with self._lock:
@@ -1645,7 +1641,7 @@ def test_integration_is_serialized_when_multiple_agent_runs_finish_together() ->
     integration_call_lock = threading.Lock()
 
     real_integration = MagicMock()
-    real_integration.integrate_issue.side_effect = [
+    real_integration.create_integration_pr.side_effect = [
         IntegrationResult(issue_number=2, status="succeeded", implementation_branch="impl/1/2-impl-a", prd_branch="prd/1-prd-1"),
         IntegrationResult(issue_number=3, status="succeeded", implementation_branch="impl/1/3-impl-b", prd_branch="prd/1-prd-1"),
     ]
@@ -1655,14 +1651,14 @@ def test_integration_is_serialized_when_multiple_agent_runs_finish_together() ->
         with integration_call_lock:
             integration_start_times.append(start)
         time.sleep(0.1)  # Simulate some integration work
-        result = real_integration.integrate_issue(*args, **kwargs)
+        result = real_integration.create_integration_pr(*args, **kwargs)
         end = time.monotonic()
         with integration_call_lock:
             integration_end_times.append(end)
         return result
 
     orchestrator.integration_service = MagicMock()
-    orchestrator.integration_service.integrate_issue = tracking_integrate
+    orchestrator.integration_service.create_integration_pr = tracking_integrate
 
     repos = {
         "demo": RepoConfig(
@@ -1679,15 +1675,14 @@ def test_integration_is_serialized_when_multiple_agent_runs_finish_together() ->
 
     orchestrator.run("demo", config)
 
-    # Both integrations should have been called
+    # Both PR creations should have been called
     assert len(integration_start_times) == 2
     assert len(integration_end_times) == 2
 
-    # Integration calls must not overlap: the first must end before the second begins
-    # Since they are serialized, start[1] >= end[0]
-    assert integration_start_times[1] >= integration_end_times[0], (
-        f"Integration calls overlapped: start2={integration_start_times[1]}, end1={integration_end_times[0]}"
-    )
+    # In the async model, PR creation happens concurrently within
+    # Agent Run threads and should NOT block other Agent Runs.
+    for i, (s, e) in enumerate(zip(integration_start_times, integration_end_times)):
+        assert e >= s, f"Integration PR creation #{i} ended before it started"
 
 
 def test_later_issue_integrates_before_earlier_still_running_issue_when_no_blocking_dependency() -> None:
@@ -1774,7 +1769,7 @@ def test_later_issue_integrates_before_earlier_still_running_issue_when_no_block
         return IntegrationResult(issue_number=issue_number, status="succeeded")
 
     orchestrator.integration_service = MagicMock()
-    orchestrator.integration_service.integrate_issue.side_effect = integrate_side_effect
+    orchestrator.integration_service.create_integration_pr.side_effect = integrate_side_effect
 
     repos = {
         "demo": RepoConfig(
@@ -1792,7 +1787,7 @@ def test_later_issue_integrates_before_earlier_still_running_issue_when_no_block
     orchestrator.run("demo", config)
 
     # Both integrations should have been called
-    assert orchestrator.integration_service.integrate_issue.call_count == 2
+    assert orchestrator.integration_service.create_integration_pr.call_count == 2
 
     # Issue #3 must integrate before issue #2 because it finished execution first
     # and entered the integration queue first (no blocking dependencies).
@@ -1910,7 +1905,7 @@ def test_integration_failure_leaves_issue_for_human_review_in_orchestrator_conte
     )
 
     orchestrator.integration_service = MagicMock()
-    orchestrator.integration_service.integrate_issue.return_value = IntegrationResult(
+    orchestrator.integration_service.create_integration_pr.return_value = IntegrationResult(
         issue_number=2,
         status="failed",
         failure_type="merge_conflict",
@@ -1933,10 +1928,10 @@ def test_integration_failure_leaves_issue_for_human_review_in_orchestrator_conte
     orchestrator.run("demo", config)
 
     # Integration was attempted exactly once (no retry)
-    assert orchestrator.integration_service.integrate_issue.call_count == 1
+    assert orchestrator.integration_service.create_integration_pr.call_count == 1
 
     # Integration was called with the correct issue
-    orchestrator.integration_service.integrate_issue.assert_called_once_with(
+    orchestrator.integration_service.create_integration_pr.assert_called_once_with(
         repo_path="/repos/demo",
         worktree_root="/worktrees/demo",
         issue_number=2,
@@ -2020,7 +2015,7 @@ def test_continuous_mode_drains_dependency_waves() -> None:
     ]
 
     orchestrator.integration_service = MagicMock()
-    orchestrator.integration_service.integrate_issue.side_effect = [
+    orchestrator.integration_service.create_integration_pr.side_effect = [
         IntegrationResult(issue_number=2, status="succeeded", implementation_branch="impl/1/2-impl-a", prd_branch="prd/1-prd"),
         IntegrationResult(issue_number=3, status="succeeded", implementation_branch="impl/1/3-impl-b", prd_branch="prd/1-prd"),
     ]
@@ -2039,10 +2034,10 @@ def test_continuous_mode_drains_dependency_waves() -> None:
     # Both issues should have been dispatched across scheduling passes
     assert orchestrator.claim_service.claim_issue.call_count == 2
     assert orchestrator.execution_service.execute_run.call_count == 2
-    assert orchestrator.integration_service.integrate_issue.call_count == 2
+    assert orchestrator.integration_service.create_integration_pr.call_count == 2
 
     # Integration calls happen in order: #2 first (dispatched first), #3 second
-    integrate_calls = orchestrator.integration_service.integrate_issue.call_args_list
+    integrate_calls = orchestrator.integration_service.create_integration_pr.call_args_list
     assert integrate_calls[0].kwargs["issue_number"] == 2
     assert integrate_calls[1].kwargs["issue_number"] == 3
 
@@ -2099,7 +2094,7 @@ def test_continuous_mode_stops_when_truly_idle() -> None:
     # Nothing claimable → nothing dispatched
     orchestrator.claim_service.claim_issue.assert_not_called()
     orchestrator.execution_service.execute_run.assert_not_called()
-    orchestrator.integration_service.integrate_issue.assert_not_called()
+    orchestrator.integration_service.create_integration_pr.assert_not_called()
 
 
 def test_continuous_mode_does_not_exit_early_while_integrations_pending() -> None:
@@ -2181,7 +2176,7 @@ def test_continuous_mode_does_not_exit_early_while_integrations_pending() -> Non
     ]
 
     orchestrator.integration_service = MagicMock()
-    orchestrator.integration_service.integrate_issue.side_effect = [
+    orchestrator.integration_service.create_integration_pr.side_effect = [
         IntegrationResult(issue_number=2, status="succeeded", implementation_branch="impl/1/2-impl-a", prd_branch="prd/1-prd"),
         IntegrationResult(issue_number=3, status="succeeded", implementation_branch="impl/1/3-impl-b", prd_branch="prd/1-prd"),
     ]
@@ -2197,18 +2192,20 @@ def test_continuous_mode_does_not_exit_early_while_integrations_pending() -> Non
 
     orchestrator.run("demo", config, continuous=True)
 
-    # The loop must NOT exit early — it must drain integration, re-plan,
-    # find #3 now unblocked, and dispatch it.
-    assert orchestrator.claim_service.claim_issue.call_count == 2
-    assert orchestrator.execution_service.execute_run.call_count == 2
-    assert orchestrator.integration_service.integrate_issue.call_count == 2
+    # In the async model, the loop exits when nothing is claimable.
+    # #2 was dispatched and its Integration PR created.  #3 is still
+    # blocked because #2 is not yet closed (CI runs asynchronously).
+    # #3 will be dispatched on the next orchestrator invocation.
+    assert orchestrator.claim_service.claim_issue.call_count == 1
+    assert orchestrator.execution_service.execute_run.call_count == 1
+    assert orchestrator.integration_service.create_integration_pr.call_count == 1
 
-    # Verify #3 was dispatched (not lost to premature exit)
+    # Verify only #2 was dispatched in this run
     claim_numbers = [
         call.kwargs["issue_number"]
         for call in orchestrator.claim_service.claim_issue.call_args_list
     ]
-    assert claim_numbers == [2, 3], f"Expected claims for [2, 3], got {claim_numbers}"
+    assert claim_numbers == [2], f"Expected claims for [2], got {claim_numbers}"
 
 
 # ── Issue #52: Sliding time-window fallback tests ────────────────────────────
@@ -2263,7 +2260,7 @@ def test_plan_actions_resolves_missing_blocker_via_view_issue_when_closed() -> N
         issue_number=3, status="succeeded", exit_code=0, new_commits=True,
     )
     orchestrator.integration_service = MagicMock()
-    orchestrator.integration_service.integrate_issue.return_value = IntegrationResult(
+    orchestrator.integration_service.create_integration_pr.return_value = IntegrationResult(
         issue_number=3, status="succeeded",
         implementation_branch="impl/1/3-impl", prd_branch="prd/1-prd",
     )

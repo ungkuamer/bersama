@@ -484,3 +484,142 @@ None
         parsed.orchestration.implementation_branch
         == "impl/1/9-implement-something"
     )
+
+
+def test_parse_orchestration_includes_integration_pr_fields() -> None:
+    """Orchestration metadata parses Integration PR and Integration Status fields."""
+    issue = GitHubIssue(
+        number=10,
+        title="Implementation with integration PR",
+        body="""
+## Parent PRD
+#1
+
+## What to Build
+Build it.
+
+## Acceptance Criteria
+- [ ] Done.
+
+## Blocked By
+None
+
+## Orchestration
+- Agent Run: run-abc
+- Claimed At: 2026-05-30T10:00:00Z
+- Implementation Branch: impl/1/10-build-it
+- Integration PR: #42
+- Integration Status: pending_validation
+""".strip(),
+        labels=("implementation",),
+    )
+
+    parsed = parse_issue(issue)
+
+    assert isinstance(parsed, ImplementationIssue)
+    assert parsed.orchestration.integration_pr == "42"
+    assert parsed.orchestration.integration_status == "pending_validation"
+
+
+def test_parse_orchestration_integration_pr_without_hash_prefix() -> None:
+    """Integration PR field is parsed as raw value regardless of # prefix."""
+    issue = GitHubIssue(
+        number=11,
+        title="Implementation with PR",
+        body="""
+## Parent PRD
+#1
+
+## What to Build
+Build it.
+
+## Acceptance Criteria
+- [ ] Done.
+
+## Blocked By
+None
+
+## Orchestration
+- Agent Run: run-def
+- Claimed At: 2026-05-30T10:00:00Z
+- Implementation Branch: impl/1/11-build-it
+- Integration PR: 42
+- Integration Status: merged
+""".strip(),
+        labels=("implementation",),
+    )
+
+    parsed = parse_issue(issue)
+
+    assert isinstance(parsed, ImplementationIssue)
+    assert parsed.orchestration.integration_pr == "42"
+    assert parsed.orchestration.integration_status == "merged"
+
+
+def test_parse_orchestration_without_integration_fields_returns_none() -> None:
+    """When Integration PR and Integration Status are absent, they default to None."""
+    issue = GitHubIssue(
+        number=12,
+        title="Implementation without integration",
+        body="""
+## Parent PRD
+#1
+
+## What to Build
+Build it.
+
+## Acceptance Criteria
+- [ ] Done.
+
+## Blocked By
+None
+
+## Orchestration
+- Agent Run: run-ghi
+- Claimed At: 2026-05-30T10:00:00Z
+- Implementation Branch: impl/1/12-build-it
+""".strip(),
+        labels=("implementation",),
+    )
+
+    parsed = parse_issue(issue)
+
+    assert isinstance(parsed, ImplementationIssue)
+    assert parsed.orchestration.integration_pr is None
+    assert parsed.orchestration.integration_status is None
+
+
+def test_parse_orchestration_integration_status_values() -> None:
+    """Integration Status supports all defined states."""
+    for status in ("pending_validation", "merged", "conflict", "failed"):
+        issue = GitHubIssue(
+            number=13,
+            title="Test status",
+            body=f"""
+## Parent PRD
+#1
+
+## What to Build
+Build it.
+
+## Acceptance Criteria
+- [ ] Done.
+
+## Blocked By
+None
+
+## Orchestration
+- Agent Run: run-xyz
+- Claimed At: 2026-05-30T10:00:00Z
+- Implementation Branch: impl/1/13-test
+- Integration PR: #99
+- Integration Status: {status}
+""".strip(),
+            labels=("implementation",),
+        )
+
+        parsed = parse_issue(issue)
+
+        assert isinstance(parsed, ImplementationIssue)
+        assert parsed.orchestration.integration_pr == "99"
+        assert parsed.orchestration.integration_status == status, f"Failed for status: {status}"
