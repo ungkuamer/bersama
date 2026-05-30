@@ -59,45 +59,68 @@ class IntegrationResult:
 
 
 class IntegrationWorkspaceGateway:
-    def __init__(self, runner: GitRunner = run_git) -> None:
+    def __init__(
+        self,
+        runner: GitRunner = run_git,
+        lock: "threading.Lock | None" = None,
+    ) -> None:
         self._runner = runner
+        self._lock = lock
 
     def update_branch(
         self, *, worktree_path: str, implementation_branch: str, prd_branch: str
     ) -> None:
         # 1. Fetch latest refs from remote
-        self._run(("git", "fetch", "origin"), cwd=worktree_path)
-
-        # 2. Attempt to merge origin/prd_branch into the current local branch
+        if self._lock:
+            self._lock.acquire()
         try:
-            self._run(
-                (
-                    "git",
-                    "merge",
-                    f"origin/{prd_branch}",
-                    "-m",
-                    f"Update implementation branch against latest {prd_branch}",
-                ),
-                cwd=worktree_path,
-            )
-        except IntegrationError as exc:
-            # Clean up the conflicted merge state if possible
+            self._run(("git", "fetch", "origin"), cwd=worktree_path)
+
+            # 2. Attempt to merge origin/prd_branch into the current local branch
             try:
-                self._run(("git", "merge", "--abort"), cwd=worktree_path)
-            except Exception:
-                pass
-            raise exc
+                self._run(
+                    (
+                        "git",
+                        "merge",
+                        f"origin/{prd_branch}",
+                        "-m",
+                        f"Update implementation branch against latest {prd_branch}",
+                    ),
+                    cwd=worktree_path,
+                )
+            except IntegrationError as exc:
+                # Clean up the conflicted merge state if possible
+                try:
+                    self._run(("git", "merge", "--abort"), cwd=worktree_path)
+                except Exception:
+                    pass
+                raise exc
+        finally:
+            if self._lock:
+                self._lock.release()
 
     def push_branch(self, *, worktree_path: str, branch_name: str) -> None:
-        self._run(("git", "push", "origin", branch_name), cwd=worktree_path)
+        if self._lock:
+            self._lock.acquire()
+        try:
+            self._run(("git", "push", "origin", branch_name), cwd=worktree_path)
+        finally:
+            if self._lock:
+                self._lock.release()
 
     def merge_into_prd(
         self, *, worktree_path: str, implementation_branch: str, prd_branch: str
     ) -> None:
-        self._run(
-            ("git", "push", "origin", f"{implementation_branch}:{prd_branch}"),
-            cwd=worktree_path,
-        )
+        if self._lock:
+            self._lock.acquire()
+        try:
+            self._run(
+                ("git", "push", "origin", f"{implementation_branch}:{prd_branch}"),
+                cwd=worktree_path,
+            )
+        finally:
+            if self._lock:
+                self._lock.release()
 
     def _run(self, command: tuple[str, ...], *, cwd: str) -> str:
         try:

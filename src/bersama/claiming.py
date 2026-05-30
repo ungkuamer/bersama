@@ -47,8 +47,13 @@ class ClaimResult:
 
 
 class ClaimWorkspaceGateway:
-    def __init__(self, runner: GitRunner = run_git) -> None:
+    def __init__(
+        self,
+        runner: GitRunner = run_git,
+        lock: "threading.Lock | None" = None,
+    ) -> None:
         self._runner = runner
+        self._lock = lock
 
     def ensure_remote_branch_from_base(
         self, *, repo_path: str, base_branch: str, branch_name: str
@@ -56,16 +61,22 @@ class ClaimWorkspaceGateway:
         if self.remote_branch_exists(repo_path=repo_path, branch_name=branch_name):
             return True
 
-        self._run(("git", "fetch", "origin", base_branch), cwd=repo_path)
-        self._run(
-            ("git", "branch", "--create-reflog", branch_name, f"origin/{base_branch}"),
-            cwd=repo_path,
-        )
+        if self._lock:
+            self._lock.acquire()
         try:
-            self._run(("git", "push", "origin", f"{branch_name}:{branch_name}"), cwd=repo_path)
-        except ClaimError:
-            self._run(("git", "branch", "-D", branch_name), cwd=repo_path)
-            raise
+            self._run(("git", "fetch", "origin", base_branch), cwd=repo_path)
+            self._run(
+                ("git", "branch", "--create-reflog", branch_name, f"origin/{base_branch}"),
+                cwd=repo_path,
+            )
+            try:
+                self._run(("git", "push", "origin", f"{branch_name}:{branch_name}"), cwd=repo_path)
+            except ClaimError:
+                self._run(("git", "branch", "-D", branch_name), cwd=repo_path)
+                raise
+        finally:
+            if self._lock:
+                self._lock.release()
         return False
 
     def create_worktree(
@@ -74,26 +85,32 @@ class ClaimWorkspaceGateway:
         worktree_path = str(Path(worktree_root) / f"issue-{issue_number}")
         self._run(("mkdir", "-p", worktree_root), cwd=repo_path)
 
-        # Robustly clean up any stale worktree at this path
-        if Path(worktree_path).exists():
-            try:
-                self._run(("git", "worktree", "remove", "--force", worktree_path), cwd=repo_path)
-            except Exception:
-                import shutil
+        if self._lock:
+            self._lock.acquire()
+        try:
+            # Robustly clean up any stale worktree at this path
+            if Path(worktree_path).exists():
                 try:
-                    shutil.rmtree(worktree_path)
+                    self._run(("git", "worktree", "remove", "--force", worktree_path), cwd=repo_path)
+                except Exception:
+                    import shutil
+                    try:
+                        shutil.rmtree(worktree_path)
+                    except Exception:
+                        pass
+                try:
+                    self._run(("git", "worktree", "prune"), cwd=repo_path)
                 except Exception:
                     pass
-            try:
-                self._run(("git", "worktree", "prune"), cwd=repo_path)
-            except Exception:
-                pass
 
-        self._run(("git", "fetch", "origin", branch_name), cwd=repo_path)
-        self._run(
-            ("git", "worktree", "add", worktree_path, branch_name),
-            cwd=repo_path,
-        )
+            self._run(("git", "fetch", "origin", branch_name), cwd=repo_path)
+            self._run(
+                ("git", "worktree", "add", worktree_path, branch_name),
+                cwd=repo_path,
+            )
+        finally:
+            if self._lock:
+                self._lock.release()
         return worktree_path
 
     def remote_branch_exists(self, *, repo_path: str, branch_name: str) -> bool:

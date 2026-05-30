@@ -87,8 +87,19 @@ class Orchestrator:
         self.claim_workspace = claim_workspace_gateway or ClaimWorkspaceGateway()
         self.integration_workspace = integration_workspace_gateway or IntegrationWorkspaceGateway()
         self.now_provider = now_provider or _utc_now
+        self._repo_lock = threading.Lock()
         self._executor = executor if executor is not None else ThreadPoolExecutor()
         self._active_agent_run_issue_numbers: set[int] = set()
+
+        # If no external gateway was provided, inject the shared
+        # Repository Operation Lock into the internally-created gateways
+        # so that all shared repository metadata mutations are serialized.
+        if git_workspace_gateway is None:
+            self.git_workspace._lock = self._repo_lock
+        if claim_workspace_gateway is None:
+            self.claim_workspace._lock = self._repo_lock
+        if integration_workspace_gateway is None:
+            self.integration_workspace._lock = self._repo_lock
 
         self.prd_preparation_service = PrdPreparationService(
             issues=self.issues,
