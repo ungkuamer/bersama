@@ -881,3 +881,203 @@ def test_claim_failure_does_not_block_other_concurrent_issues() -> None:
         issue_number=4,
     )
 
+
+def test_execute_claims_tracks_active_agent_runs_in_memory() -> None:
+    """The orchestrator tracks dispatched issues as in-memory active runs during execution."""
+    issues_gateway = MagicMock()
+
+    prd_1 = GitHubIssueRecord(
+        number=1,
+        title="PRD 1",
+        body="## Problem Statement\n\nPlan work.\n\n## Orchestration\n- PRD Branch: prd/1-prd-1",
+        labels=("prd",),
+        state="open",
+    )
+    impl_2 = GitHubIssueRecord(
+        number=2,
+        title="Implementation child",
+        body="## Parent PRD\n#1\n\n## What to Build\nBuild it.\n\n## Acceptance Criteria\n- [ ] Done.\n\n## Blocked By\nNone",
+        labels=("implementation", "ready-for-agent"),
+        state="open",
+    )
+    impl_3 = GitHubIssueRecord(
+        number=3,
+        title="Another child",
+        body="## Parent PRD\n#1\n\n## What to Build\nBuild it too.\n\n## Acceptance Criteria\n- [ ] Done.\n\n## Blocked By\nNone",
+        labels=("implementation", "ready-for-agent"),
+        state="open",
+    )
+    issues_gateway.list_issues.return_value = (prd_1, impl_2, impl_3)
+
+    fake_executor = FakeExecutor()
+
+    orchestrator = Orchestrator(
+        issues_gateway=issues_gateway,
+        now_provider=lambda: "2026-05-29T17:00:00Z",
+        executor=fake_executor,
+    )
+    orchestrator.reconciliation_service = MagicMock()
+    orchestrator.prd_preparation_service = MagicMock()
+
+    orchestrator.claim_service = MagicMock()
+    orchestrator.claim_service.claim_issue.side_effect = [
+        ClaimResult(
+            issue_number=2,
+            agent_run_id="run-aaa",
+            implementation_branch="impl/1/2-implementation-child",
+            worktree_path="/worktrees/demo/issue-2",
+        ),
+        ClaimResult(
+            issue_number=3,
+            agent_run_id="run-bbb",
+            implementation_branch="impl/1/3-another-child",
+            worktree_path="/worktrees/demo/issue-3",
+        ),
+    ]
+
+    orchestrator.execution_service = MagicMock()
+    orchestrator.execution_service.execute_run.side_effect = [
+        ExecutionResult(
+            issue_number=2,
+            status="succeeded",
+            exit_code=0,
+            new_commits=True,
+        ),
+        ExecutionResult(
+            issue_number=3,
+            status="succeeded",
+            exit_code=0,
+            new_commits=True,
+        ),
+    ]
+
+    orchestrator.integration_service = MagicMock()
+    orchestrator.integration_service.integrate_issue.side_effect = [
+        IntegrationResult(issue_number=2, status="succeeded", implementation_branch="impl/1/2-implementation-child", prd_branch="prd/1-prd-1"),
+        IntegrationResult(issue_number=3, status="succeeded", implementation_branch="impl/1/3-another-child", prd_branch="prd/1-prd-1"),
+    ]
+
+    repos = {
+        "demo": RepoConfig(
+            name="demo",
+            repo_path=Path("/repos/demo"),
+            main_branch="main",
+            worktree_root=Path("/worktrees/demo"),
+            global_concurrency=2,
+            per_prd_concurrency=2,
+            default_harness="local",
+        )
+    }
+    config = AppConfig(repos=repos, harnesses={})
+
+    # Before run, the set is empty
+    assert len(orchestrator._active_agent_run_issue_numbers) == 0
+
+    orchestrator.run("demo", config)
+
+    # After run completes, the active set is cleared
+    assert len(orchestrator._active_agent_run_issue_numbers) == 0
+
+    # Both issues were dispatched
+    assert len(fake_executor.submitted) == 2
+
+
+def test_continuous_mode_passes_active_runs_to_planner() -> None:
+    """In continuous mode, in-memory active runs are passed to the planner on subsequent passes."""
+    issues_gateway = MagicMock()
+
+    prd_1 = GitHubIssueRecord(
+        number=1,
+        title="PRD 1",
+        body="## Problem Statement\n\nPlan work.\n\n## Orchestration\n- PRD Branch: prd/1-prd-1",
+        labels=("prd",),
+        state="open",
+    )
+    impl_2 = GitHubIssueRecord(
+        number=2,
+        title="Implementation child",
+        body="## Parent PRD\n#1\n\n## What to Build\nBuild it.\n\n## Acceptance Criteria\n- [ ] Done.\n\n## Blocked By\nNone",
+        labels=("implementation", "ready-for-agent"),
+        state="open",
+    )
+    impl_3 = GitHubIssueRecord(
+        number=3,
+        title="Another child",
+        body="## Parent PRD\n#1\n\n## What to Build\nBuild it too.\n\n## Acceptance Criteria\n- [ ] Done.\n\n## Blocked By\n#2",
+        labels=("implementation", "ready-for-agent"),
+        state="open",
+    )
+
+    # First plan/list: all issues present (impl_2 claimable, impl_3 blocked by #2)
+    # After first pass, #2 is claimed (gets claim metadata in GitHub)
+    # Second pass: #2 has claim metadata (not ready-for-agent), #3 is still blocked
+    claimed_2 = GitHubIssueRecord(
+        number=2,
+        title="Implementation child",
+        body="## Parent PRD\n#1\n\n## What to Build\nBuild it.\n\n## Acceptance Criteria\n- [ ] Done.\n\n## Blocked By\nNone\n\n## Orchestration\n- Agent Run: run-aaa\n- Claimed At: 2026-05-29T13:00:00Z\n- Implementation Branch: impl/1/2-implementation-child",
+        labels=("implementation",),
+        state="open",
+    )
+
+    issues_gateway.list_issues.side_effect = [
+        (prd_1, impl_2, impl_3),   # first pass: start reconciliation
+        (prd_1, impl_2, impl_3),   # first pass: plan actions (impl_2 claimable)
+        (prd_1, claimed_2, impl_3),  # second pass: start reconciliation
+        (prd_1, claimed_2, impl_3),  # second pass: plan actions (impl_3 still blocked, no more work)
+    ]
+
+    fake_executor = FakeExecutor()
+
+    orchestrator = Orchestrator(
+        issues_gateway=issues_gateway,
+        now_provider=lambda: "2026-05-29T17:00:00Z",
+        executor=fake_executor,
+    )
+    orchestrator.reconciliation_service = MagicMock()
+    orchestrator.prd_preparation_service = MagicMock()
+
+    orchestrator.claim_service = MagicMock()
+    orchestrator.claim_service.claim_issue.return_value = ClaimResult(
+        issue_number=2,
+        agent_run_id="run-aaa",
+        implementation_branch="impl/1/2-implementation-child",
+        worktree_path="/worktrees/demo/issue-2",
+    )
+
+    orchestrator.execution_service = MagicMock()
+    orchestrator.execution_service.execute_run.return_value = ExecutionResult(
+        issue_number=2,
+        status="succeeded",
+        exit_code=0,
+        new_commits=True,
+    )
+
+    orchestrator.integration_service = MagicMock()
+    orchestrator.integration_service.integrate_issue.return_value = IntegrationResult(
+        issue_number=2,
+        status="succeeded",
+        implementation_branch="impl/1/2-implementation-child",
+        prd_branch="prd/1-prd-1",
+    )
+
+    repos = {
+        "demo": RepoConfig(
+            name="demo",
+            repo_path=Path("/repos/demo"),
+            main_branch="main",
+            worktree_root=Path("/worktrees/demo"),
+            global_concurrency=2,
+            per_prd_concurrency=1,
+            default_harness="local",
+        )
+    }
+    config = AppConfig(repos=repos, harnesses={})
+
+    orchestrator.run("demo", config, continuous=True)
+
+    # In the first pass, impl_2 was claimable and dispatched
+    assert orchestrator.claim_service.claim_issue.call_count == 1
+    # The second pass found no claimable issues (impl_2 is blocked, impl_3 still blocked)
+    # Reconcile was called at start/end of each pass (2 passes = 4 calls)
+    assert orchestrator.reconciliation_service.reconcile.call_count == 4
+

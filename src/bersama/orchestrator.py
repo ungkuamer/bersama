@@ -86,6 +86,7 @@ class Orchestrator:
         self.integration_workspace = integration_workspace_gateway or IntegrationWorkspaceGateway()
         self.now_provider = now_provider or _utc_now
         self._executor = executor if executor is not None else ThreadPoolExecutor()
+        self._active_agent_run_issue_numbers: set[int] = set()
 
         self.prd_preparation_service = PrdPreparationService(
             issues=self.issues,
@@ -155,6 +156,7 @@ class Orchestrator:
             per_prd_concurrency=repo_config.per_prd_concurrency,
             stale_claim_timeout=timedelta(hours=2),
             now=now_dt,
+            active_agent_run_issue_numbers=frozenset(self._active_agent_run_issue_numbers),
         )
         state["claimable_issues"] = list(planner_result.claimable_issue_numbers)
         return state
@@ -236,6 +238,11 @@ class Orchestrator:
         if not claimable_issues:
             return state
 
+        # Track in-memory active Agent Runs so the planner knows about them
+        # during subsequent scheduling passes (e.g. in continuous mode).
+        for issue_number in claimable_issues:
+            self._active_agent_run_issue_numbers.add(issue_number)
+
         futures = []
         for issue_number in claimable_issues:
             future = self._executor.submit(
@@ -250,6 +257,10 @@ class Orchestrator:
 
         for future in futures:
             future.result()
+
+        # Clear in-memory tracking now that all dispatched runs have finished.
+        for issue_number in claimable_issues:
+            self._active_agent_run_issue_numbers.discard(issue_number)
 
         return state
 

@@ -57,18 +57,20 @@ def plan_issue_actions(
     per_prd_concurrency: int,
     stale_claim_timeout: timedelta,
     now: datetime,
+    active_agent_run_issue_numbers: frozenset[int] = frozenset(),
 ) -> PlannerResult:
     issue_records_by_number = {record.number: record for record in issue_records}
     parsed_by_number = {
         record.number: _parse_issue_record(record) for record in issue_records
     }
-    active_claims_by_prd = _count_active_claims_by_prd(
+    active_claims_by_prd, unassigned_in_memory = _count_active_claims_by_prd(
         parsed_by_number,
         issue_records_by_number,
         stale_claim_timeout=stale_claim_timeout,
         now=now,
+        active_agent_run_issue_numbers=active_agent_run_issue_numbers,
     )
-    global_slots = max(0, global_concurrency - sum(active_claims_by_prd.values()))
+    global_slots = max(0, global_concurrency - sum(active_claims_by_prd.values()) - unassigned_in_memory)
     remaining_prd_slots = {
         prd_number: max(0, per_prd_concurrency - count)
         for prd_number, count in active_claims_by_prd.items()
@@ -242,8 +244,11 @@ def _count_active_claims_by_prd(
     *,
     stale_claim_timeout: timedelta,
     now: datetime,
-) -> dict[int, int]:
+    active_agent_run_issue_numbers: frozenset[int] = frozenset(),
+) -> tuple[dict[int, int], int]:
     counts: dict[int, int] = {}
+    # Track which issue numbers are already counted via durable GitHub claims.
+    counted_issue_numbers: set[int] = set()
     for parsed in parsed_by_number.values():
         if not isinstance(parsed, ImplementationIssue):
             continue
@@ -255,7 +260,27 @@ def _count_active_claims_by_prd(
         if _is_stale_claim(parsed, stale_claim_timeout=stale_claim_timeout, now=now):
             continue
         counts[parsed.parent_prd_number] = counts.get(parsed.parent_prd_number, 0) + 1
-    return counts
+        counted_issue_numbers.add(parsed.issue.number)
+
+    # Add in-memory active Agent Runs that are not already counted via GitHub claims.
+    unassigned_count = 0
+    for issue_number in sorted(active_agent_run_issue_numbers):
+        if issue_number in counted_issue_numbers:
+            continue
+        parsed = parsed_by_number.get(issue_number)
+        if not isinstance(parsed, ImplementationIssue):
+            unassigned_count += 1
+            continue
+        record = issue_records_by_number.get(issue_number)
+        if record is None or record.state != "open":
+            unassigned_count += 1
+            continue
+        if parsed.parent_prd_number is None:
+            unassigned_count += 1
+            continue
+        counts[parsed.parent_prd_number] = counts.get(parsed.parent_prd_number, 0) + 1
+
+    return counts, unassigned_count
 
 
 def _validate_dependencies(
