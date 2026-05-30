@@ -794,7 +794,7 @@ export default function App() {
               ) : (
                 <ScrollArea className="h-[280px]">
                   <div className="divide-y divide-zinc-900">
-                    {runs.map((run) => {
+                    {[...runs].reverse().map((run) => {
                       const isSelected = selectedRunIssue === run.issue_number;
                       return (
                         <div 
@@ -858,17 +858,32 @@ export default function App() {
 
           {/* Local Log Tails Console */}
           <Card className="dashboard-glass-panel flex flex-col grow shrink overflow-hidden min-h-[220px]">
-            <CardHeader className="py-3.5 border-b border-zinc-800 px-4 flex flex-row items-center justify-between bg-zinc-950/70">
-              <div className="flex items-center gap-2">
-                <Terminal className="size-4 text-emerald-400" />
-                <div>
-                  <CardTitle className="text-xs tracking-wider font-bold uppercase text-white font-mono flex items-center gap-1.5">
-                    Terminal Console
-                  </CardTitle>
-                  <CardDescription className="text-[10px] text-zinc-500 font-mono">
-                    {selectedRunIssue ? `Issue #${selectedRunIssue} Harness Log` : 'Select an agent run to read harness logs'}
-                  </CardDescription>
+            <CardHeader className="py-2.5 border-b border-zinc-800/80 px-4 flex flex-row items-center justify-between bg-black select-none gap-4">
+              <div className="flex items-center gap-3">
+                {/* macOS Window Controls */}
+                <div className="flex items-center gap-1.5 mr-1">
+                  <span className="size-2.5 rounded-full bg-[#ef4444]/90 hover:bg-[#ef4444] transition-colors cursor-pointer" title="Close" />
+                  <span className="size-2.5 rounded-full bg-[#f59e0b]/90 hover:bg-[#f59e0b] transition-colors cursor-pointer" title="Minimize" />
+                  <span className="size-2.5 rounded-full bg-[#10b981]/90 hover:bg-[#10b981] transition-colors cursor-pointer" title="Maximize" />
                 </div>
+                
+                <span className="text-zinc-850 font-mono text-sm">/</span>
+
+                {/* Tab Container */}
+                <div className="flex items-center gap-2 bg-black border border-zinc-900 px-3 py-1 rounded text-[11px] font-mono text-zinc-300 shadow-inner">
+                  <Terminal className="size-3.5 text-emerald-400" />
+                  <span className="font-semibold tracking-tight">harness.log</span>
+                  {selectedRunIssue && (
+                    <span className="text-[9px] bg-emerald-950/60 border border-emerald-900/60 text-emerald-400 px-1 rounded-sm uppercase font-bold">
+                      #{selectedRunIssue}
+                    </span>
+                  )}
+                </div>
+
+                {/* Status / Description */}
+                <span className="hidden md:inline text-[10px] text-zinc-500 font-mono font-medium tracking-tight">
+                  {selectedRunIssue ? `Tailing active runner for Issue #${selectedRunIssue}` : 'Idle — No active run selected'}
+                </span>
               </div>
               {selectedRunIssue !== null && (
                 <div className="flex items-center gap-2 text-[10px] font-mono">
@@ -885,7 +900,7 @@ export default function App() {
                     <option value={300}>300 lines</option>
                   </select>
 
-                  <span className="text-zinc-700">|</span>
+                  <span className="text-zinc-800">|</span>
 
                   {/* Polling Switch */}
                   <button
@@ -893,7 +908,7 @@ export default function App() {
                     className={`dashboard-control px-1.5 py-0.5 rounded border font-semibold tracking-wider text-[9px] ${
                       pollLogsActive 
                         ? 'bg-emerald-950/40 text-emerald-400 border-emerald-900 animate-pulse' 
-                        : 'bg-zinc-900 text-zinc-500'
+                        : 'bg-black text-zinc-500'
                     }`}
                   >
                     {pollLogsActive ? 'STREAM ON' : 'STREAM OFF'}
@@ -915,7 +930,7 @@ export default function App() {
                 </div>
               )}
             </CardHeader>
-            <CardContent className="p-0 grow bg-[#050506] flex flex-col font-mono overflow-hidden">
+            <CardContent className="p-0 grow bg-black flex flex-col font-mono overflow-hidden">
               {selectedRunIssue === null ? (
                 <div className="grow flex flex-col items-center justify-center p-6 text-zinc-600 text-center font-mono">
                   <Terminal className="size-8 text-zinc-800 mb-2" />
@@ -928,7 +943,7 @@ export default function App() {
                 </div>
               ) : (
                 <div className="grow flex flex-col overflow-hidden text-[10px]">
-                  <div className="bg-[#0c0c0e] px-4 py-1.5 border-b border-zinc-900 text-zinc-500 text-[9px] flex items-center justify-between shrink-0 font-mono">
+                  <div className="bg-black px-4 py-1.5 border-b border-zinc-900 text-zinc-500 text-[9px] flex items-center justify-between shrink-0 font-mono">
                     <span className="truncate pr-4">PATH: {logTail.log_path}</span>
                     <span className="shrink-0">{logTail.lines_returned} lines</span>
                   </div>
@@ -939,7 +954,7 @@ export default function App() {
                     aria-label={`Issue #${logTail.issue_number} harness log tail`}
                     aria-live="polite"
                     onScroll={handleLogScroll}
-                    className="terminal-scrollbar dashboard-focus relative grow p-4 bg-[#030304] overflow-y-auto"
+                    className="terminal-scrollbar dashboard-focus relative grow p-4 bg-black overflow-y-auto"
                   >
                     <div className="space-y-1 font-mono text-zinc-300 whitespace-pre-wrap leading-relaxed select-text">
                       {logTail.content ? (

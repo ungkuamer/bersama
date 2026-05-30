@@ -84,36 +84,36 @@
 }
 
 .dark {
-    --background: oklch(0.145 0 0);
+    --background: oklch(0 0 0);
     --foreground: oklch(0.985 0 0);
-    --card: oklch(0.205 0 0);
+    --card: oklch(0 0 0);
     --card-foreground: oklch(0.985 0 0);
-    --popover: oklch(0.205 0 0);
+    --popover: oklch(0 0 0);
     --popover-foreground: oklch(0.985 0 0);
-    --primary: oklch(0.922 0 0);
-    --primary-foreground: oklch(0.205 0 0);
-    --secondary: oklch(0.269 0 0);
+    --primary: oklch(0.985 0 0);
+    --primary-foreground: oklch(0 0 0);
+    --secondary: oklch(0.08 0 0);
     --secondary-foreground: oklch(0.985 0 0);
-    --muted: oklch(0.269 0 0);
-    --muted-foreground: oklch(0.708 0 0);
-    --accent: oklch(0.269 0 0);
+    --muted: oklch(0.08 0 0);
+    --muted-foreground: oklch(0.5 0 0);
+    --accent: oklch(0.08 0 0);
     --accent-foreground: oklch(0.985 0 0);
-    --destructive: oklch(0.704 0.191 22.216);
-    --border: oklch(1 0 0 / 10%);
-    --input: oklch(1 0 0 / 15%);
-    --ring: oklch(0.556 0 0);
+    --destructive: oklch(0.6 0.2 20);
+    --border: oklch(0.15 0 0);
+    --input: oklch(0.12 0 0);
+    --ring: oklch(0.985 0 0);
     --chart-1: oklch(0.87 0 0);
     --chart-2: oklch(0.556 0 0);
     --chart-3: oklch(0.439 0 0);
     --chart-4: oklch(0.371 0 0);
     --chart-5: oklch(0.269 0 0);
-    --sidebar: oklch(0.205 0 0);
+    --sidebar: oklch(0 0 0);
     --sidebar-foreground: oklch(0.985 0 0);
     --sidebar-primary: oklch(0.488 0.243 264.376);
     --sidebar-primary-foreground: oklch(0.985 0 0);
-    --sidebar-accent: oklch(0.269 0 0);
+    --sidebar-accent: oklch(0.08 0 0);
     --sidebar-accent-foreground: oklch(0.985 0 0);
-    --sidebar-border: oklch(1 0 0 / 10%);
+    --sidebar-border: oklch(0.15 0 0);
     --sidebar-ring: oklch(0.556 0 0);
 }
 
@@ -131,112 +131,87 @@
 
 @layer components {
   .dashboard-shell {
-    background:
-      radial-gradient(circle at 18% 0%, rgb(20 184 166 / 0.08), transparent 28rem),
-      radial-gradient(circle at 86% 12%, rgb(59 130 246 / 0.07), transparent 30rem),
-      linear-gradient(180deg, #0b0b0e 0%, #070708 48%, #050506 100%);
+    background: #000000;
   }
 
   .dashboard-shell::before {
-    content: "";
-    position: fixed;
-    inset: 0;
-    pointer-events: none;
-    background-image:
-      linear-gradient(rgb(255 255 255 / 0.025) 1px, transparent 1px),
-      linear-gradient(90deg, rgb(255 255 255 / 0.02) 1px, transparent 1px);
-    background-size: 48px 48px;
-    mask-image: linear-gradient(to bottom, rgb(0 0 0 / 0.9), rgb(0 0 0 / 0.18));
+    content: none;
   }
 
   .dashboard-glass-panel {
-    background:
-      linear-gradient(180deg, rgb(24 24 27 / 0.82), rgb(9 9 11 / 0.9)),
-      rgb(9 9 11 / 0.92);
-    border-color: rgb(63 63 70 / 0.72);
-    box-shadow:
-      inset 0 1px 0 rgb(255 255 255 / 0.045),
-      0 18px 54px rgb(0 0 0 / 0.32);
-    backdrop-filter: blur(18px) saturate(118%);
+    background: #000000;
+    border-color: #16161a;
+    box-shadow: none;
+    backdrop-filter: none;
   }
 
   .dashboard-glass-surface {
-    background:
-      linear-gradient(180deg, rgb(24 24 27 / 0.56), rgb(9 9 11 / 0.76)),
-      rgb(9 9 11 / 0.82);
-    border-color: rgb(63 63 70 / 0.62);
-    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.035);
+    background: #000000;
+    border-color: #16161a;
+    box-shadow: none;
   }
 
   .dashboard-control {
-    border-color: rgb(63 63 70 / 0.74);
-    background: rgb(9 9 11 / 0.76);
-    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.035);
+    border-color: #16161a;
+    background: #000000;
+    box-shadow: none;
     transition:
       border-color 160ms ease,
       background-color 160ms ease,
-      color 160ms ease,
-      box-shadow 160ms ease,
-      transform 160ms ease;
+      color 160ms ease;
   }
 
   .dashboard-control:hover {
-    border-color: rgb(113 113 122 / 0.82);
-    background: rgb(24 24 27 / 0.82);
-    color: rgb(244 244 245);
+    border-color: #2e2e33;
+    background: #09090b;
+    color: #ffffff;
   }
 
   .dashboard-control:focus-visible,
   .dashboard-focus:focus-visible {
-    outline: 2px solid rgb(45 212 191 / 0.88);
+    outline: 2px solid rgb(250 250 250 / 0.8);
     outline-offset: 2px;
-    box-shadow:
-      0 0 0 4px rgb(20 184 166 / 0.16),
-      inset 0 1px 0 rgb(255 255 255 / 0.05);
+    box-shadow: none;
   }
 
   .dashboard-row {
     transition:
       border-color 160ms ease,
-      background-color 160ms ease,
-      box-shadow 160ms ease;
+      background-color 160ms ease;
   }
 
   .dashboard-row:hover {
-    background: rgb(24 24 27 / 0.58);
-    box-shadow: inset 2px 0 0 rgb(45 212 191 / 0.72);
+    background: #09090b;
+    box-shadow: none;
   }
 
   .dashboard-row:focus-visible {
-    outline: 2px solid rgb(45 212 191 / 0.88);
+    outline: 2px solid rgb(250 250 250 / 0.8);
     outline-offset: -2px;
-    box-shadow:
-      inset 2px 0 0 rgb(45 212 191 / 0.9),
-      0 0 0 4px rgb(20 184 166 / 0.14);
+    box-shadow: none;
   }
 
   .terminal-scrollbar {
-    scrollbar-color: rgb(63 63 70) rgb(3 3 4);
+    scrollbar-color: rgb(30 30 30) rgb(0 0 0);
     scrollbar-width: thin;
   }
 
   .terminal-scrollbar::-webkit-scrollbar {
-    width: 10px;
-    height: 10px;
+    width: 6px;
+    height: 6px;
   }
 
   .terminal-scrollbar::-webkit-scrollbar-track {
-    background: rgb(3 3 4);
-    border-left: 1px solid rgb(39 39 42 / 0.7);
+    background: rgb(0 0 0);
+    border-left: 1px solid #16161a;
   }
 
   .terminal-scrollbar::-webkit-scrollbar-thumb {
-    background: linear-gradient(180deg, rgb(82 82 91), rgb(39 39 42));
-    border: 2px solid rgb(3 3 4);
+    background: #16161a;
     border-radius: 999px;
   }
 
   .terminal-scrollbar::-webkit-scrollbar-thumb:hover {
-    background: linear-gradient(180deg, rgb(113 113 122), rgb(63 63 70));
+    background: #2e2e33;
   }
 }
