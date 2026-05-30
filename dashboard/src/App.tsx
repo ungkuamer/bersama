@@ -28,6 +28,8 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/com
 import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Button } from '@/components/ui/button'
+import SideDrawer from '@/components/SideDrawer'
+import { ShimmerText } from '@/components/Shimmer'
 
 const API_BASE = import.meta.env.DEV ? `http://${window.location.hostname}:8000` : '';
 
@@ -167,6 +169,8 @@ export default function App() {
   const [expandedPrds, setExpandedPrds] = useState<Record<number, boolean>>({});
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState<string>('');
+  const [drawerIssue, setDrawerIssue] = useState<Issue | null>(null);
+  const [drawerOpen, setDrawerOpen] = useState<boolean>(false);
   
   const terminalViewportRef = useRef<HTMLDivElement>(null);
   const previousLogContentRef = useRef<string | null>(null);
@@ -794,8 +798,8 @@ export default function App() {
             </CardHeader>
             <CardContent className="p-0 grow overflow-hidden">
               {loading ? (
-                <div className="h-full flex items-center justify-center p-6 text-xs text-zinc-500">
-                  Loading runs...
+                <div className="h-full flex items-center justify-center p-6">
+                  <ShimmerText lines={3} className="w-full max-w-[200px]" />
                 </div>
               ) : runs.length === 0 ? (
                 <div className="h-full flex flex-col items-center justify-center p-8 text-center">
@@ -969,8 +973,8 @@ export default function App() {
                   <p className="text-[9px] text-zinc-700 mt-1">Pick a claimed/active run from the list to display active logs.</p>
                 </div>
               ) : !logTail ? (
-                <div className="grow flex items-center justify-center p-6 text-zinc-500 text-xs font-mono">
-                  Fetching logs from worktree...
+                <div className="grow flex items-center justify-center p-6">
+                  <ShimmerText lines={2} className="w-full max-w-[180px]" />
                 </div>
               ) : (
                 <div className="grow flex flex-col overflow-hidden text-[10px]">
@@ -1069,8 +1073,8 @@ export default function App() {
             </CardHeader>
             <CardContent className="p-0 grow overflow-hidden">
               {loading ? (
-                <div className="h-full flex items-center justify-center p-8 text-xs text-zinc-500">
-                  Syncing with GitHub issues...
+                <div className="h-full flex items-center justify-center p-8">
+                  <ShimmerText lines={4} className="w-full max-w-[220px]" />
                 </div>
               ) : filteredPrds.length === 0 ? (
                 <div className="h-full flex flex-col items-center justify-center p-12 text-center">
@@ -1105,7 +1109,14 @@ export default function App() {
                                 PRD #{prd.number}
                               </span>
                               <div>
-                                <h3 className="text-xs font-bold text-white tracking-wide leading-none mb-1.5">
+                                <h3
+                                  className="text-xs font-bold text-white tracking-wide leading-none mb-1.5 cursor-pointer hover:text-teal-400 transition-colors"
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    setDrawerIssue(prd);
+                                    setDrawerOpen(true);
+                                  }}
+                                >
                                   {prd.title}
                                 </h3>
                                 {prd.prd_branch && (
@@ -1195,7 +1206,13 @@ export default function App() {
                                             <span className="text-[10px] font-bold text-white hover:underline cursor-pointer">
                                               #{c.number}
                                             </span>
-                                            <span className="text-[11px] text-zinc-300 font-semibold leading-tight font-sans">
+                                            <span
+                                              className="text-[11px] text-zinc-300 font-semibold leading-tight font-sans cursor-pointer hover:text-teal-400 transition-colors"
+                                              onClick={() => {
+                                                setDrawerIssue(c);
+                                                setDrawerOpen(true);
+                                              }}
+                                            >
                                               {c.title}
                                             </span>
                                           </div>
@@ -1441,6 +1458,27 @@ export default function App() {
         </section>
 
       </main>
+
+      {/* Side Drawer Inspector */}
+      <SideDrawer
+        issue={drawerIssue}
+        open={drawerOpen}
+        onOpenChange={setDrawerOpen}
+        onClaim={openClaimForm}
+        onStart={startImplementationIssue}
+        onIntegrate={integrateImplementationIssue}
+        onViewLog={(num) => setSelectedRunIssue(selectedRunIssue === num ? null : num)}
+        claimState={drawerIssue ? claimIssueState[drawerIssue.number] : undefined}
+        startState={drawerIssue ? startIssueState[drawerIssue.number] : undefined}
+        integrateState={drawerIssue ? integrateIssueState[drawerIssue.number] : undefined}
+        claimAgentRunId={drawerIssue ? claimAgentRunIds[drawerIssue.number] : ''}
+        onClaimAgentRunIdChange={(val) => {
+          if (drawerIssue) {
+            setClaimAgentRunIds(prev => ({ ...prev, [drawerIssue.number]: val }));
+          }
+        }}
+        selectedRunIssue={selectedRunIssue}
+      />
 
       {/* Footer Info Box */}
       <footer className="dashboard-glass-panel border-t px-6 py-3 flex items-center justify-between text-[10px] text-zinc-500 mt-auto shrink-0">

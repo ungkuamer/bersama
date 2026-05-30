@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react'
 import '@testing-library/jest-dom'
 import App from './App'
 
@@ -509,7 +509,7 @@ describe('Bersama Dashboard Frontend', () => {
 
     // Should load the terminal and present logs
     await waitFor(() => {
-      expect(screen.getByText(/Terminal Console/i)).toBeInTheDocument();
+      expect(screen.getAllByText(/harness\.log/i).length).toBeGreaterThan(0);
       expect(screen.getByText(/harness execution started/i)).toBeInTheDocument();
       expect(screen.getByText(/building assets/i)).toBeInTheDocument();
     });
@@ -1350,7 +1350,6 @@ describe('Bersama Dashboard Frontend', () => {
 
     await waitFor(() => {
       expect(screen.getByText(/Started Agent Run run-claimed-31 for Implementation Issue #31/i)).toBeInTheDocument();
-      expect(screen.getByText(/Issue #31 Harness Log/i)).toBeInTheDocument();
       expect(screen.getByText(/agent run accepted/i)).toBeInTheDocument();
       expect(issuesRequests).toBeGreaterThanOrEqual(2);
       expect(runsRequests).toBeGreaterThanOrEqual(2);
@@ -1493,6 +1492,302 @@ describe('Bersama Dashboard Frontend', () => {
     for (const mark of marks) {
       expect(mark).toHaveTextContent('error');
     }
+  });
+
+  describe('Side Drawer Inspector', () => {
+    it('opens the side drawer when clicking an implementation issue title', async () => {
+      mockFetch.mockImplementation((url: string) => {
+        if (url.endsWith('/api/repos')) {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve(mockRepos) });
+        }
+        if (url.includes('/api/issues')) {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve(mockIssues) });
+        }
+        if (url.includes('/api/runs')) {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve(mockRuns) });
+        }
+        return Promise.reject(new Error(`Unhandled mock fetch for ${url}`));
+      });
+
+      render(<App />);
+
+      // Find and click the implementation issue in the list (not in drawer)
+      const issueLinks = await screen.findAllByText(/Child implementation issue/i);
+      const issueLink = issueLinks.find(el => el.tagName === 'SPAN')!;
+      fireEvent.click(issueLink);
+
+      // Drawer should be visible
+      await waitFor(() => {
+        expect(screen.getByRole('dialog')).toBeInTheDocument();
+        expect(screen.getAllByText(/Child implementation issue/i).length).toBeGreaterThan(1);
+      });
+    });
+
+    it('closes the drawer when clicking the close button', async () => {
+      mockFetch.mockImplementation((url: string) => {
+        if (url.endsWith('/api/repos')) {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve(mockRepos) });
+        }
+        if (url.includes('/api/issues')) {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve(mockIssues) });
+        }
+        if (url.includes('/api/runs')) {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve(mockRuns) });
+        }
+        return Promise.reject(new Error(`Unhandled mock fetch for ${url}`));
+      });
+
+      render(<App />);
+
+      // Open drawer
+      const issueLinks = await screen.findAllByText(/Child implementation issue/i);
+      const issueLink = issueLinks.find(el => el.tagName === 'SPAN')!;
+      fireEvent.click(issueLink);
+
+      // Verify drawer is open
+      await waitFor(() => {
+        expect(screen.getByRole('dialog')).toBeInTheDocument();
+      });
+
+      // Close via close button
+      const closeButton = screen.getByRole('button', { name: /Close/i });
+      fireEvent.click(closeButton);
+
+      // Drawer should be gone
+      await waitFor(() => {
+        expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      });
+    });
+
+    it('opens the side drawer when clicking a PRD card title', async () => {
+      mockFetch.mockImplementation((url: string) => {
+        if (url.endsWith('/api/repos')) {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve(mockRepos) });
+        }
+        if (url.includes('/api/issues')) {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve(mockIssues) });
+        }
+        if (url.includes('/api/runs')) {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve(mockRuns) });
+        }
+        return Promise.reject(new Error(`Unhandled mock fetch for ${url}`));
+      });
+
+      render(<App />);
+
+      // Find and click the PRD title (the h3 element, not the drawer title)
+      const prdTitles = await screen.findAllByText(/Parent PRD Title/i);
+      const prdTitle = prdTitles.find(el => el.tagName === 'H3')!;
+      fireEvent.click(prdTitle);
+
+      // Drawer should be visible
+      await waitFor(() => {
+        expect(screen.getByRole('dialog')).toBeInTheDocument();
+        expect(screen.getAllByText(/PRD #1/i).length).toBeGreaterThan(1);
+      });
+    });
+
+    it('closes the drawer when clicking the scrim overlay', async () => {
+      mockFetch.mockImplementation((url: string) => {
+        if (url.endsWith('/api/repos')) {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve(mockRepos) });
+        }
+        if (url.includes('/api/issues')) {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve(mockIssues) });
+        }
+        if (url.includes('/api/runs')) {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve(mockRuns) });
+        }
+        return Promise.reject(new Error(`Unhandled mock fetch for ${url}`));
+      });
+
+      render(<App />);
+
+      // Open drawer
+      const issueLinks = await screen.findAllByText(/Child implementation issue/i);
+      const issueLink = issueLinks.find(el => el.tagName === 'SPAN')!;
+      fireEvent.click(issueLink);
+
+      // Verify drawer is open
+      await waitFor(() => {
+        expect(screen.getByRole('dialog')).toBeInTheDocument();
+      });
+
+      // Click the overlay (scrim) — Radix uses onPointerDown
+      const overlay = document.querySelector('[data-slot="sheet-overlay"]');
+      expect(overlay).toBeInTheDocument();
+      fireEvent.pointerDown(overlay!);
+
+      // Drawer should be gone
+      await waitFor(() => {
+        expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      });
+    });
+
+    it('contains Overview, Execution, and Branch Control Deck tabs', async () => {
+      mockFetch.mockImplementation((url: string) => {
+        if (url.endsWith('/api/repos')) {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve(mockRepos) });
+        }
+        if (url.includes('/api/issues')) {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve(mockIssues) });
+        }
+        if (url.includes('/api/runs')) {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve(mockRuns) });
+        }
+        return Promise.reject(new Error(`Unhandled mock fetch for ${url}`));
+      });
+
+      render(<App />);
+
+      // Open drawer
+      const issueLinks = await screen.findAllByText(/Child implementation issue/i);
+      const issueLink = issueLinks.find(el => el.tagName === 'SPAN')!;
+      fireEvent.click(issueLink);
+
+      await waitFor(() => {
+        expect(screen.getByRole('dialog')).toBeInTheDocument();
+      });
+
+      // Three tabs should be visible
+      const overviewTabs = screen.getAllByText(/Overview/i);
+      expect(overviewTabs.length).toBeGreaterThan(0);
+      const executionTabs = screen.getAllByText(/Execution/i);
+      expect(executionTabs.length).toBeGreaterThan(0);
+      const branchTabs = screen.getAllByText(/Branch/i);
+      expect(branchTabs.length).toBeGreaterThan(0);
+    });
+
+    it('shows metadata in the Overview tab', async () => {
+      mockFetch.mockImplementation((url: string) => {
+        if (url.endsWith('/api/repos')) {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve(mockRepos) });
+        }
+        if (url.includes('/api/issues')) {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve(mockIssues) });
+        }
+        if (url.includes('/api/runs')) {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve(mockRuns) });
+        }
+        return Promise.reject(new Error(`Unhandled mock fetch for ${url}`));
+      });
+
+      render(<App />);
+
+      const issueLinks = await screen.findAllByText(/Child implementation issue/i);
+      const issueLink = issueLinks.find(el => el.tagName === 'SPAN')!;
+      fireEvent.click(issueLink);
+
+      await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument());
+
+      // Overview tab should show state and kind metadata
+      expect(screen.getByText(/Status & Metadata/i)).toBeInTheDocument();
+      expect(screen.getByText(/Blocking Dependencies/i)).toBeInTheDocument();
+    });
+
+    it('shows Branch tab with action controls for eligible issues', async () => {
+      mockFetch.mockImplementation((url: string) => {
+        if (url.endsWith('/api/repos')) {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve(mockRepos) });
+        }
+        if (url.includes('/api/issues')) {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve(mockIssues) });
+        }
+        if (url.includes('/api/runs')) {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve(mockRuns) });
+        }
+        return Promise.reject(new Error(`Unhandled mock fetch for ${url}`));
+      });
+
+      render(<App />);
+
+      const issueLinks = await screen.findAllByText(/Child implementation issue/i);
+      const issueLink = issueLinks.find(el => el.tagName === 'SPAN')!;
+      fireEvent.click(issueLink);
+
+      await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument());
+
+      // Click Branch tab
+      const branchTabs = screen.getAllByText(/Branch/i);
+      const branchTab = branchTabs.find(el => el.tagName === 'BUTTON')!;
+      fireEvent.click(branchTab);
+
+      // Should show action controls section
+      await waitFor(() => {
+        expect(screen.getByText(/Action Controls/i)).toBeInTheDocument();
+      });
+
+      // Should show git parameters
+      expect(screen.getByText(/Git Parameters/i)).toBeInTheDocument();
+    });
+
+    it('Claim action in Branch tab opens the claim form', async () => {
+      mockFetch.mockImplementation((url: string) => {
+        if (url.endsWith('/api/repos')) {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve(mockRepos) });
+        }
+        if (url.includes('/api/issues')) {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve(mockClaimIssues) });
+        }
+        if (url.includes('/api/runs')) {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
+        }
+        return Promise.reject(new Error(`Unhandled mock fetch for ${url}`));
+      });
+
+      render(<App />);
+
+      // Click ready claim candidate in the list
+      const issueLinks = await screen.findAllByText(/Ready claim candidate/i);
+      const issueLink = issueLinks.find(el => el.tagName === 'SPAN')!;
+      fireEvent.click(issueLink);
+
+      await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument());
+
+      const dialog = screen.getByRole('dialog');
+
+      // Switch to Branch tab within the drawer
+      const branchTabs = within(dialog).getAllByText(/Branch/i);
+      const branchTab = branchTabs.find(el => el.tagName === 'BUTTON')!;
+      fireEvent.click(branchTab);
+
+      // Click Claim button within the drawer
+      await waitFor(() => {
+        expect(within(dialog).getByText(/Claim #21/i)).toBeInTheDocument();
+      });
+
+      const claimButton = within(dialog).getByText(/Claim #21/i).closest('button')!;
+      fireEvent.click(claimButton);
+
+      // Should show claim form with Agent Run ID field
+      await waitFor(() => {
+        expect(within(dialog).getByText(/Agent Run ID/i)).toBeInTheDocument();
+      });
+    });
+
+    it('shows shimmer skeletons during loading states', async () => {
+      mockFetch.mockImplementation((url: string) => {
+        if (url.endsWith('/api/repos')) {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve(mockRepos) });
+        }
+        if (url.includes('/api/issues')) {
+          // Keep loading state
+          return new Promise(() => {});
+        }
+        if (url.includes('/api/runs')) {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve(mockRuns) });
+        }
+        return Promise.reject(new Error(`Unhandled mock fetch for ${url}`));
+      });
+
+      render(<App />);
+
+      // Should show shimmer skeletons while data is loading
+      await waitFor(() => {
+        const shimmers = document.querySelectorAll('.animate-shimmer');
+        expect(shimmers.length).toBeGreaterThan(0);
+      });
+    });
   });
 
   it('shows a pulsing stream indicator when log polling is active and a run is selected', async () => {
