@@ -1,9 +1,7 @@
 from __future__ import annotations
 
 import json
-import queue
 import sys
-import threading
 import uuid
 from concurrent.futures import ThreadPoolExecutor, Executor
 from dataclasses import dataclass
@@ -18,6 +16,7 @@ from bersama.claiming import ClaimWorkspaceGateway, ImplementationClaimService
 from bersama.execution import HarnessExecutionService
 from bersama.integration import IntegrationWorkspaceGateway, IntegrationService
 from bersama.reconciliation import ReconciliationService
+from bersama.repo_lock import RepoLock
 
 
 @dataclass(frozen=True)
@@ -110,20 +109,16 @@ class Orchestrator:
         self.claim_workspace = claim_workspace_gateway or ClaimWorkspaceGateway()
         self.integration_workspace = integration_workspace_gateway or IntegrationWorkspaceGateway()
         self.now_provider = now_provider or _utc_now
-        self._repo_lock = threading.Lock()
+        self._repo_lock: RepoLock | None = None  # bound when repo_path is known
         self._executor = executor if executor is not None else ThreadPoolExecutor()
         self._event_emitter = event_emitter or _default_event_emitter
         self._active_agent_run_issue_numbers: set[int] = set()
 
-        # If no external gateway was provided, inject the shared
-        # Repository Operation Lock into the internally-created gateways
-        # so that all shared repository metadata mutations are serialized.
-        if git_workspace_gateway is None:
-            self.git_workspace._lock = self._repo_lock
-        if claim_workspace_gateway is None:
-            self.claim_workspace._lock = self._repo_lock
-        if integration_workspace_gateway is None:
-            self.integration_workspace._lock = self._repo_lock
+        # Track whether internal gateways were created so we can inject
+        # the RepoLock later when repo_path is known (via _bind_repo_lock).
+        self._internal_git_workspace = git_workspace_gateway is None
+        self._internal_claim_workspace = claim_workspace_gateway is None
+        self._internal_integration_workspace = integration_workspace_gateway is None
 
         self.prd_preparation_service = PrdPreparationService(
             issues=self.issues,
@@ -146,22 +141,31 @@ class Orchestrator:
             now_provider=self.now_provider,
         )
 
-        # ── Serialized Integration Lane ───────────────────────────────
-        # Successful Agent Runs enter this queue when execution completes.
-        # A dedicated daemon thread drains the queue one item at a time,
-        # serializing all PRD-branch mutations without consuming Agent Run
-        # Capacity.
-        self._integration_queue: queue.Queue[tuple[int, str, str, str]] = queue.Queue()
-        self._integration_lock = threading.Lock()
-        self._integration_worker_started = False
+    def _bind_repo_lock(self, repo_path: str) -> None:
+        """Create a system-wide RepoLock bound to *repo_path* and inject it
+        into the internally-created gateways so that all shared repository
+        metadata mutations are serialized across processes.
+
+        Safe to call multiple times — subsequent calls are no-ops.
+        """
+        if self._repo_lock is not None:
+            return  # already bound
+        self._repo_lock = RepoLock(repo_path=repo_path)
+        if self._internal_git_workspace:
+            self.git_workspace._lock = self._repo_lock
+        if self._internal_claim_workspace:
+            self.claim_workspace._lock = self._repo_lock
+        if self._internal_integration_workspace:
+            self.integration_workspace._lock = self._repo_lock
 
     def reconcile_start(self, state: OrchestrationState) -> OrchestrationState:
         self.reconciliation_service.reconcile()
+        self._poll_pending_integrations(state)
         return state
 
     def prepare_prds(self, state: OrchestrationState) -> OrchestrationState:
         repo_config = state["config"].repo(state["repo_name"])
-        records = self.issues.list_issues(state="open")
+        records = self.issues.list_issues(state="open", labels=("prd",))
         for record in records:
             from bersama.issues import parse_issue, GitHubIssue, PrdIssue
             parsed = parse_issue(
@@ -182,7 +186,6 @@ class Orchestrator:
 
     def plan_actions(self, state: OrchestrationState) -> OrchestrationState:
         repo_config = state["config"].repo(state["repo_name"])
-        records = self.issues.list_issues(state="all")
 
         from datetime import UTC, datetime, timedelta
         now_str = self.now_provider()
@@ -195,9 +198,61 @@ class Orchestrator:
         else:
             now_dt = now_dt.astimezone(UTC)
 
+        # Fetch open issues without time window (must see all open
+        # issues for correct scheduling).
+        open_records = list(
+            self.issues.list_issues(
+                state="open",
+                labels=("prd", "implementation"),
+            )
+        )
+        # Fetch closed issues with a 24h sliding window to keep the
+        # dataset manageable.
+        updated_since = (now_dt - timedelta(hours=24)).strftime("%Y-%m-%d")
+        closed_records = list(
+            self.issues.list_issues(
+                state="closed",
+                labels=("prd", "implementation"),
+                updated_since=updated_since,
+            )
+        )
+        # Deduplicate by number (open and closed fetches may overlap).
+        records_by_number: dict[int, GitHubIssueRecord] = {}
+        for rec in open_records + closed_records:
+            records_by_number[rec.number] = rec
+        records = list(records_by_number.values())
+
+        # Resolve blocking dependencies that fell out of the sliding
+        # window cache via single-issue lookups (gh issue view <num>).
+        from bersama.issues import parse_issue, GitHubIssue, ImplementationIssue
+        records_by_number = {r.number: r for r in records}
+        missing_blockers: set[int] = set()
+        for record in records:
+            parsed = parse_issue(
+                GitHubIssue(
+                    number=record.number,
+                    title=record.title,
+                    body=record.body,
+                    labels=record.labels,
+                )
+            )
+            if isinstance(parsed, ImplementationIssue):
+                for blocker_number in parsed.blocked_by:
+                    if blocker_number not in records_by_number:
+                        missing_blockers.add(blocker_number)
+
+        for blocker_number in sorted(missing_blockers):
+            try:
+                blocker_record = self.issues.view_issue(blocker_number)
+                records.append(blocker_record)
+            except Exception:
+                # If the blocker lookup fails (e.g. issue was deleted),
+                # the planner will generate a diagnostic for it.
+                pass
+
         from bersama.planner import plan_issue_actions
         planner_result = plan_issue_actions(
-            records,
+            tuple(records),
             global_concurrency=repo_config.global_concurrency,
             per_prd_concurrency=repo_config.per_prd_concurrency,
             stale_claim_timeout=timedelta(hours=2),
@@ -205,58 +260,11 @@ class Orchestrator:
             active_agent_run_issue_numbers=frozenset(self._active_agent_run_issue_numbers),
         )
         state["claimable_issues"] = list(planner_result.claimable_issue_numbers)
+
+        # Poll pending integration PRs asynchronously during scheduling.
+        self._poll_pending_integrations(state)
+
         return state
-
-    def _ensure_integration_worker(self) -> None:
-        """Start the serialized integration worker thread if not already running."""
-        if not self._integration_worker_started:
-            self._integration_worker_started = True
-            worker = threading.Thread(target=self._run_integration_worker, daemon=True)
-            worker.start()
-
-    def _run_integration_worker(self) -> None:
-        """Continuously drain the integration queue, one issue at a time.
-        The lock ensures only one integration mutates any PRD branch at a time."""
-        while True:
-            item = self._integration_queue.get()
-            if item is None:  # sentinel
-                break
-            issue_number, agent_run_id, repo_path, worktree_root = item
-            self._event_emitter(SchedulerEvent(
-                event="integration.start",
-                issue_number=issue_number,
-                agent_run_id=agent_run_id,
-            ))
-            try:
-                with self._integration_lock:
-                    result = self.integration_service.integrate_issue(
-                        repo_path=repo_path,
-                        worktree_root=worktree_root,
-                        issue_number=issue_number,
-                    )
-                self._event_emitter(SchedulerEvent(
-                    event="integration.finished",
-                    issue_number=issue_number,
-                    agent_run_id=agent_run_id,
-                    status=result.status,
-                    detail=result.failure_message,
-                ))
-            except Exception as exc:
-                self._event_emitter(SchedulerEvent(
-                    event="integration.finished",
-                    issue_number=issue_number,
-                    agent_run_id=agent_run_id,
-                    status="failed",
-                    detail=str(exc),
-                ))
-                # Integrate_issue handles its own error reporting (labels, comments).
-                pass
-            finally:
-                self._integration_queue.task_done()
-
-    def _drain_integration_queue(self) -> None:
-        """Wait for all pending integrations to complete. Called before shutdown."""
-        self._integration_queue.join()
 
     def _run_agent_run(
         self,
@@ -362,10 +370,31 @@ class Orchestrator:
             )
             return
 
-        # ── Phase 3: Enter Integration Lane ─────────────────────────
-        # Do NOT block Agent Run Capacity here — integration is
-        # serialized by a dedicated worker thread.
-        self._integration_queue.put((issue_number, agent_run_id, repo_path, worktree_root))
+        # ── Phase 3: Create Integration PR (non-blocking) ────────────
+        # PR creation is fast (update, push, create).  CI validation
+        # runs asynchronously on the remote and is polled later in
+        # plan_actions / reconcile.
+        try:
+            integ_result = self.integration_service.create_integration_pr(
+                repo_path=repo_path,
+                worktree_root=worktree_root,
+                issue_number=issue_number,
+            )
+            self._event_emitter(SchedulerEvent(
+                event="integration.pr_created",
+                issue_number=issue_number,
+                agent_run_id=agent_run_id,
+                status=integ_result.status,
+                detail=integ_result.failure_message,
+            ))
+        except Exception as exc:
+            self._event_emitter(SchedulerEvent(
+                event="integration.pr_created",
+                issue_number=issue_number,
+                agent_run_id=agent_run_id,
+                status="failed",
+                detail=str(exc),
+            ))
 
     def execute_claims(self, state: OrchestrationState) -> OrchestrationState:
         repo_config = state["config"].repo(state["repo_name"])
@@ -373,9 +402,6 @@ class Orchestrator:
 
         if not claimable_issues:
             return state
-
-        # Ensure the serialized integration worker is running.
-        self._ensure_integration_worker()
 
         # Track in-memory active Agent Runs so the planner knows about them
         # during subsequent scheduling passes (e.g. in continuous mode).
@@ -409,7 +435,66 @@ class Orchestrator:
 
     def reconcile_end(self, state: OrchestrationState) -> OrchestrationState:
         self.reconciliation_service.reconcile()
+        self._poll_pending_integrations(state)
         return state
+
+    def _poll_pending_integrations(self, state: OrchestrationState) -> None:
+        """Poll integration PRs whose status is ``pending_validation``.
+
+        Called from ``plan_actions`` and ``reconcile`` so that CI/CD
+        validation progresses asynchronously across scheduling cycles.
+        """
+        repo_config = state["config"].repo(state["repo_name"])
+        repo_path = str(repo_config.repo_path)
+        worktree_root = str(repo_config.worktree_root)
+
+        # Fetch open implementation issues that may have pending integrations.
+        # We only need open issues since closed ones have already been integrated.
+        try:
+            open_records = self.issues.list_issues(
+                state="open",
+                labels=("implementation",),
+            )
+        except Exception:
+            return
+
+        from bersama.issues import parse_issue, GitHubIssue, ImplementationIssue
+
+        for record in open_records:
+            parsed = parse_issue(
+                GitHubIssue(
+                    number=record.number,
+                    title=record.title,
+                    body=record.body,
+                    labels=record.labels,
+                )
+            )
+            if not isinstance(parsed, ImplementationIssue):
+                continue
+
+            orchestration = parsed.orchestration
+            if orchestration.integration_status != "pending_validation":
+                continue
+            if not orchestration.integration_pr or orchestration.integration_pr == "N/A":
+                continue
+
+            # Poll this integration PR
+            try:
+                result = self.integration_service.poll_integration_pr(
+                    repo_path=repo_path,
+                    worktree_root=worktree_root,
+                    issue_number=record.number,
+                )
+                if result.status in ("succeeded", "failed"):
+                    self._event_emitter(SchedulerEvent(
+                        event="integration.poll_result",
+                        issue_number=record.number,
+                        agent_run_id=orchestration.agent_run_id,
+                        status=result.status,
+                        detail=result.failure_message,
+                    ))
+            except Exception:
+                pass
 
     def build_workflow(self) -> Any:
         workflow = StateGraph(OrchestrationState)
@@ -429,6 +514,8 @@ class Orchestrator:
         return workflow.compile()
 
     def run(self, repo_name: str, config: AppConfig, continuous: bool = False) -> None:
+        repo_config = config.repo(repo_name)
+        self._bind_repo_lock(str(repo_config.repo_path))
         if continuous:
             self._run_continuous(repo_name, config)
         else:
@@ -439,8 +526,6 @@ class Orchestrator:
                 "claimable_issues": [],
             }
             compiled_graph.invoke(initial_state)
-            # Wait for all pending integrations to complete before returning.
-            self._drain_integration_queue()
 
     def _run_continuous(self, repo_name: str, config: AppConfig) -> None:
         """Continuous drain scheduling for dependency waves.
@@ -456,6 +541,10 @@ class Orchestrator:
         Stop condition: no claimable issues AND no active Agent Runs
         AND no pending integrations.
         """
+        # Phase 0: Bind the system-wide repo lock to the repository directory.
+        repo_config = config.repo(repo_name)
+        self._bind_repo_lock(str(repo_config.repo_path))
+
         # Phase 1: Reconciliation at orchestrator start (once).
         self.reconciliation_service.reconcile()
 
@@ -467,43 +556,33 @@ class Orchestrator:
         }
         state = self.prepare_prds(state)
 
-        # Phase 3: Ensure the serialised integration worker is running.
-        self._ensure_integration_worker()
-
-        # Phase 4: Continuous scheduling loop.
+        # Phase 3: Continuous scheduling loop.
         while True:
             # ---- Planning Pass ----
             state = self.plan_actions(state)
             claimable = state.get("claimable_issues", [])
 
             # ---- Stop Condition ----
-            # Stop only when truly idle: nothing claimable, no active
-            # Agent Runs, and no integrations still in flight.
+            # Stop only when truly idle: nothing claimable and no active
+            # Agent Runs.
             active_runs = bool(self._active_agent_run_issue_numbers)
-            pending_integrations = self._integration_queue.unfinished_tasks > 0
-            if not claimable and not active_runs and not pending_integrations:
+            if not claimable and not active_runs:
                 break
 
             if claimable:
                 # ---- Execute ----
                 # Dispatches claimable issues, waits for their execution
-                # to complete, and enqueues successful runs for integration.
+                # to complete, and creates Integration PRs for successful runs.
                 state = self.execute_claims(state)
 
-            # ---- Drain Integrations ----
-            # Wait for all pending integrations to finish *before* the
-            # next planning pass.  This is the key to dependency-wave
-            # draining: integrated (closed) issues unblock dependents.
-            self._drain_integration_queue()
-
             # ---- Meaningful-Outcome Reconciliation ----
-            # After integrations, issue states may have changed
-            # (issues closed, labels updated, etc.).
+            # After execution + PR creation, issue states may have changed
+            # (issues closed, labels updated, etc.).  Also polls pending
+            # integration PRs for CI completion.
             self.reconciliation_service.reconcile()
+            self._poll_pending_integrations(state)
 
-        # Phase 5: Final reconciliation at orchestrator end.
+        # Phase 4: Final reconciliation at orchestrator end.
         self.reconciliation_service.reconcile()
-
-        # Drain any straggling integrations (should be none, but defensive).
-        self._drain_integration_queue()
+        self._poll_pending_integrations(state)
 

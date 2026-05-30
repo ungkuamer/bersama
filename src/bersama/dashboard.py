@@ -349,7 +349,9 @@ def create_dashboard_app(
             gateway._cwd = repo_cfg.repo_path
 
         try:
-            issue_records = gateway.list_issues(state="all")
+            issue_records = gateway.list_issues(
+                state="all", labels=("prd", "implementation")
+            )
         except Exception as exc:
             raise HTTPException(
                 status_code=500, detail=f"Failed to list GitHub issues: {exc}"

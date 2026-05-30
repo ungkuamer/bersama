@@ -253,6 +253,52 @@ def test_execution_failure_by_no_commits(tmp_path: Path) -> None:
     assert "created no new commits" in state["failure_reason"]
 
 
+def test_execution_timeout_kills_process_group(tmp_path: Path) -> None:
+    repo_path, worktree_root, worktree_path = setup_test_git_repo(tmp_path)
+    issues = get_mock_issues()
+
+    # Harness that sleeps indefinitely (hanging)
+    harnesses = {
+        "local-agent": HarnessConfig(
+            name="local-agent",
+            command="bash",
+            args_template=("-c", "sleep 999"),
+            timeout_seconds=2,
+        )
+    }
+    repos = {
+        "demo": RepoConfig(
+            name="demo",
+            repo_path=repo_path,
+            main_branch="main",
+            worktree_root=worktree_root,
+            global_concurrency=2,
+            per_prd_concurrency=1,
+            default_harness="local-agent",
+        )
+    }
+    config = AppConfig(repos=repos, harnesses=harnesses)
+
+    service = HarnessExecutionService(issues=issues)
+    result = service.execute_run(
+        repo_name="demo",
+        issue_number=8,
+        config=config,
+    )
+
+    assert result.status == "failed"
+    assert "timed out" in result.failure_reason.lower()
+    assert result.exit_code != 0
+    assert result.new_commits is False
+
+    # Check Run State JSON
+    state_file = worktree_path / "run-state.json"
+    assert state_file.exists()
+    state = json.loads(state_file.read_text())
+    assert state["status"] == "failed"
+    assert "timed out" in state["failure_reason"].lower()
+
+
 def test_execution_env_context_delivery(tmp_path: Path) -> None:
     repo_path, worktree_root, worktree_path = setup_test_git_repo(tmp_path)
     issues = get_mock_issues()

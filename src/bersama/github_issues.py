@@ -53,7 +53,14 @@ class GitHubIssueGateway:
         *,
         state: str = "open",
         label: str | None = None,
+        labels: tuple[str, ...] | None = None,
+        updated_since: str | None = None,
     ) -> tuple[GitHubIssueRecord, ...]:
+        if label is not None and labels is not None:
+            raise ValueError(
+                "Cannot specify both 'label' and 'labels'; use 'labels' for OR-based multi-label filtering."
+            )
+
         command = [
             "gh",
             "issue",
@@ -63,6 +70,15 @@ class GitHubIssueGateway:
             "--json",
             "number,title,body,labels,state",
         ]
+
+        search_terms: list[str] = []
+        if labels is not None:
+            search_terms.append(f"label:{','.join(labels)}")
+        if updated_since is not None:
+            search_terms.append(f"updated:>={updated_since}")
+        if search_terms:
+            command.extend(["--search", " ".join(search_terms)])
+
         if label is not None:
             command.extend(["--label", label])
 

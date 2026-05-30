@@ -203,3 +203,115 @@ def test_close_issue_does_not_add_success_comment() -> None:
     gateway.close_issue(4)
 
     assert runner.commands == [("gh", "issue", "close", "4")]
+
+
+def test_list_issues_filters_by_multiple_labels_using_search() -> None:
+    """When labels tuple is provided, issues are filtered by OR'd labels via --search."""
+    runner = FakeRunner("[]")
+
+    gateway = GitHubIssueGateway(runner=runner)
+
+    issues = gateway.list_issues(state="all", labels=("prd", "implementation"))
+
+    assert issues == ()
+    assert runner.commands == [
+        (
+            "gh",
+            "issue",
+            "list",
+            "--state",
+            "all",
+            "--json",
+            "number,title,body,labels,state",
+            "--search",
+            "label:prd,implementation",
+        )
+    ]
+
+
+def test_list_issues_filters_by_single_label_in_labels_tuple() -> None:
+    """Single-element labels tuple still uses --search for consistency."""
+    runner = FakeRunner("[]")
+
+    gateway = GitHubIssueGateway(runner=runner)
+
+    issues = gateway.list_issues(state="open", labels=("prd",))
+
+    assert issues == ()
+    assert runner.commands == [
+        (
+            "gh",
+            "issue",
+            "list",
+            "--state",
+            "open",
+            "--json",
+            "number,title,body,labels,state",
+            "--search",
+            "label:prd",
+        )
+    ]
+
+
+def test_list_issues_filters_by_updated_since_date() -> None:
+    """updated_since adds an updated:>= filter via --search."""
+    runner = FakeRunner("[]")
+
+    gateway = GitHubIssueGateway(runner=runner)
+
+    issues = gateway.list_issues(state="closed", updated_since="2026-05-29")
+
+    assert issues == ()
+    assert runner.commands == [
+        (
+            "gh",
+            "issue",
+            "list",
+            "--state",
+            "closed",
+            "--json",
+            "number,title,body,labels,state",
+            "--search",
+            "updated:>=2026-05-29",
+        )
+    ]
+
+
+def test_list_issues_combines_labels_and_updated_since_in_search() -> None:
+    """Both labels and updated_since are combined into a single --search query."""
+    runner = FakeRunner("[]")
+
+    gateway = GitHubIssueGateway(runner=runner)
+
+    issues = gateway.list_issues(
+        state="all", labels=("prd", "implementation"), updated_since="2026-05-29"
+    )
+
+    assert issues == ()
+    assert runner.commands == [
+        (
+            "gh",
+            "issue",
+            "list",
+            "--state",
+            "all",
+            "--json",
+            "number,title,body,labels,state",
+            "--search",
+            "label:prd,implementation updated:>=2026-05-29",
+        )
+    ]
+
+
+def test_list_issues_labels_and_single_label_are_mutually_exclusive() -> None:
+    """Passing both label and labels raises ValueError."""
+    runner = FakeRunner()
+    gateway = GitHubIssueGateway(runner=runner)
+
+    raised = False
+    try:
+        gateway.list_issues(state="open", label="prd", labels=("implementation",))
+    except ValueError:
+        raised = True
+
+    assert raised, "Expected ValueError when both label and labels are provided"

@@ -48,7 +48,7 @@ class GitWorkspaceGateway:
     def __init__(
         self,
         runner: GitRunner = run_git,
-        lock: "threading.Lock | None" = None,
+        lock: "object | None" = None,
     ) -> None:
         self._runner = runner
         self._lock = lock

@@ -43,6 +43,8 @@ class OrchestrationMetadata:
     claimed_at: str | None = None
     prd_branch: str | None = None
     implementation_branch: str | None = None
+    integration_pr: str | None = None
+    integration_status: str | None = None
 
 
 @dataclass(frozen=True)
@@ -101,8 +103,9 @@ def _parse_implementation_issue(issue: GitHubIssue) -> ImplementationIssue:
 
     def get_section(names: list[str]) -> str | None:
         for name in names:
+            normalized = _normalize_header(name)
             for key, val in sections.items():
-                if key.strip().lower() == name.lower():
+                if key.lower() == normalized.lower():
                     return val
         return None
 
@@ -166,6 +169,15 @@ def _parse_implementation_issue(issue: GitHubIssue) -> ImplementationIssue:
     )
 
 
+def _normalize_header(name: str) -> str:
+    """Normalize a section header by stripping markdown formatting, trailing colons, and whitespace."""
+    name = name.strip()
+    for ch in ("*", "_", "`"):
+        name = name.replace(ch, "")
+    name = name.rstrip(":")
+    return name.strip()
+
+
 def _parse_sections(body: str) -> dict[str, str]:
     matches = list(SECTION_RE.finditer(body))
     if not matches:
@@ -175,7 +187,7 @@ def _parse_sections(body: str) -> dict[str, str]:
     for index, match in enumerate(matches):
         start = match.end()
         end = matches[index + 1].start() if index + 1 < len(matches) else len(body)
-        sections[match.group("name").strip()] = body[start:end].strip()
+        sections[_normalize_header(match.group("name"))] = body[start:end].strip()
     return sections
 
 
@@ -199,6 +211,16 @@ def _parse_blocked_by(body: str) -> tuple[tuple[int, ...], Diagnostic | None]:
     )
 
 
+def _strip_hash_prefix(value: str | None) -> str | None:
+    """Strip optional leading '#' from a PR number value."""
+    if value is None:
+        return None
+    stripped = value.strip()
+    if stripped.startswith("#"):
+        return stripped[1:].strip()
+    return stripped
+
+
 def _parse_orchestration(body: str | None) -> OrchestrationMetadata:
     if not body:
         return OrchestrationMetadata()
@@ -212,6 +234,8 @@ def _parse_orchestration(body: str | None) -> OrchestrationMetadata:
         claimed_at=values.get("claimed at"),
         prd_branch=values.get("prd branch"),
         implementation_branch=values.get("implementation branch"),
+        integration_pr=_strip_hash_prefix(values.get("integration pr")),
+        integration_status=values.get("integration status"),
     )
 
 
@@ -221,8 +245,7 @@ def upsert_section(body: str, section_name: str, section_body: str) -> str:
         return f"{body.rstrip()}\n\n## {section_name}\n{section_body.strip()}".strip()
 
     for index, match in enumerate(matches):
-        name = match.group("name").strip()
-        if name != section_name:
+        if _normalize_header(match.group("name")) != _normalize_header(section_name):
             continue
 
         section_start = match.start()
