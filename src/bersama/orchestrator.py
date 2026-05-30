@@ -420,16 +420,17 @@ class Orchestrator:
             )
             futures.append(future)
 
-        # Wait for all Agent Runs (claim + execute) to complete.
-        # Integration runs in the background, serialized by the dedicated worker.
-        for future in futures:
-            future.result()
-
-        # Clear in-memory tracking now that all dispatched runs have finished
-        # execution. Agent Run Capacity is freed immediately — integration
-        # does not consume capacity.
-        for issue_number in claimable_issues:
-            self._active_agent_run_issue_numbers.discard(issue_number)
+        try:
+            # Wait for all Agent Runs (claim + execute) to complete.
+            # Integration runs in the background, serialized by the dedicated worker.
+            for future in futures:
+                future.result()
+        finally:
+            # Clear in-memory tracking now that all dispatched runs have finished
+            # execution or an executor future has raised unexpectedly. Agent Run
+            # Capacity is freed immediately — integration does not consume capacity.
+            for issue_number in claimable_issues:
+                self._active_agent_run_issue_numbers.discard(issue_number)
 
         return state
 

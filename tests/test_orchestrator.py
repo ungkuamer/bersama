@@ -32,6 +32,23 @@ class FakeExecutor:
         self._shutdown_called = True
 
 
+class RaisingFutureExecutor:
+    """Executor that reports a raised future after dispatch."""
+
+    def __init__(self, exception: Exception) -> None:
+        self.exception = exception
+        self.submitted: list[tuple] = []
+
+    def submit(self, fn, *args, **kwargs):
+        self.submitted.append((fn, args, kwargs))
+        future: Future = Future()
+        future.set_exception(self.exception)
+        return future
+
+    def shutdown(self, wait: bool = True) -> None:
+        pass
+
+
 class PassBasedListIssuesMock:
     """A mock list_issues side effect that tracks continuous mode loop passes
     and correctly filters open/closed issues within each pass."""
@@ -1475,6 +1492,57 @@ def test_execute_claims_tracks_active_agent_runs_in_memory() -> None:
 
     # Both issues were dispatched
     assert len(fake_executor.submitted) == 2
+
+
+def test_execute_claims_clears_in_memory_active_runs_after_raised_future() -> None:
+    """Unexpected raised futures must not leak in-memory Agent Run Capacity."""
+    issues_gateway = MagicMock()
+    issues_gateway.update_body = MagicMock()
+    issues_gateway.add_comment = MagicMock()
+    issues_gateway.add_labels = MagicMock()
+    issues_gateway.remove_labels = MagicMock()
+
+    orchestrator = Orchestrator(
+        issues_gateway=issues_gateway,
+        now_provider=lambda: "2026-05-29T17:00:00Z",
+        executor=RaisingFutureExecutor(RuntimeError("executor future failed")),
+    )
+
+    repos = {
+        "demo": RepoConfig(
+            name="demo",
+            repo_path=Path("/repos/demo"),
+            main_branch="main",
+            worktree_root=Path("/worktrees/demo"),
+            global_concurrency=2,
+            per_prd_concurrency=2,
+            default_harness="local",
+        )
+    }
+    config = AppConfig(repos=repos, harnesses={})
+    state = {
+        "repo_name": "demo",
+        "config": config,
+        "claimable_issues": [2, 3],
+    }
+
+    assert len(orchestrator._active_agent_run_issue_numbers) == 0
+
+    with patch.object(orchestrator, "_run_agent_run") as run_agent_run:
+        try:
+            orchestrator.execute_claims(state)
+        except RuntimeError as exc:
+            assert str(exc) == "executor future failed"
+        else:
+            raise AssertionError("Expected execute_claims to propagate the raised future exception.")
+
+        assert run_agent_run.call_count == 0
+
+    assert len(orchestrator._active_agent_run_issue_numbers) == 0
+    issues_gateway.update_body.assert_not_called()
+    issues_gateway.add_comment.assert_not_called()
+    issues_gateway.add_labels.assert_not_called()
+    issues_gateway.remove_labels.assert_not_called()
 
 
 def test_continuous_mode_passes_active_runs_to_planner() -> None:
