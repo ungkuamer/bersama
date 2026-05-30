@@ -29,20 +29,44 @@ An open Implementation Issue that must be completed before another Implementatio
 _Avoid_: Dependency, prerequisite, blocker
 
 **Claimed Implementation Issue**:
-An Implementation Issue that has been reserved for exactly one agent run. It is no longer eligible for other agents to claim while that run is active.
+An Implementation Issue that has been reserved for exactly one Agent Run that is ready to start immediately. It is no longer eligible for other agents to claim while that run is active.
 _Avoid_: Picked-up ticket, assigned issue, locked task
 
+**Stale Claim**:
+A claim on an Implementation Issue whose Agent Run is no longer considered active because its claim metadata is older than the configured timeout.
+_Avoid_: Dead job, abandoned task, orphaned worker
+
 **Failed Implementation Issue**:
-An Implementation Issue that an agent attempted but did not complete. It requires human review before it can become ready for autonomous execution again.
+An Implementation Issue that an agent attempted but did not complete, including cases where its Agent Run succeeded but integration into the Parent PRD branch failed. It requires human review before it can become ready for autonomous execution again.
 _Avoid_: Retriable ticket, errored task, stuck issue
 
 **Agent Run**:
 A single autonomous attempt to complete one Claimed Implementation Issue. An Agent Run either completes the issue or leaves it as a Failed Implementation Issue.
 _Avoid_: Agent session, worker job, execution
 
+**Concurrent Agent Run**:
+An Agent Run that executes at the same time as another Agent Run in the same orchestrator process.
+_Avoid_: Parallel task, worker task, background job
+
+**Agent Run Capacity**:
+The number of Agent Runs that may execute at the same time. Agent Run Capacity is separate from serialized integration into a Parent PRD branch.
+_Avoid_: Queue capacity, worker count, integration capacity
+
 **Agent Harness**:
 The executable adapter that performs an Agent Run for a Claimed Implementation Issue. The orchestrator selects an Agent Harness, but the harness owns the coding-agent behavior.
 _Avoid_: Agent, worker, runner
+
+**Execution Scheduler**:
+The orchestration component that selects Ready Implementation Issues and starts Agent Runs within configured concurrency limits.
+_Avoid_: Task queue, worker pool, job scheduler
+
+**Scheduling Pass**:
+One evaluation of Implementation Issue state that selects Ready Implementation Issues for available Agent Run capacity.
+_Avoid_: Queue polling, batch, sweep
+
+**Repository Operation Lock**:
+A process-local guard that prevents concurrent orchestration operations from mutating the same repository metadata at the same time.
+_Avoid_: Global lock, worker lock, queue lock
 
 **Orchestration Control Center**:
 The human-facing dashboard for inspecting PRD Issue and Implementation Issue state, triggering orchestration operations, and reviewing Agent Run logs.
