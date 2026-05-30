@@ -24,6 +24,16 @@ class MergeConflictError(UpdateError):
     pass
 
 
+class PrCreationError(IntegrationError):
+    """Raised when creating a Pull Request via gh pr create fails."""
+    pass
+
+
+class PrMergeError(IntegrationError):
+    """Raised when merging a Pull Request via gh pr merge fails."""
+    pass
+
+
 class PushError(IntegrationError):
     """Raised when pushing a branch fails."""
     pass
@@ -108,9 +118,82 @@ class IntegrationWorkspaceGateway:
             if self._lock:
                 self._lock.release()
 
+    def create_pr(
+        self,
+        *,
+        worktree_path: str,
+        implementation_branch: str,
+        prd_branch: str,
+        title: str,
+        body: str = "",
+    ) -> str:
+        """Create a Pull Request from implementation_branch into prd_branch.
+
+        Uses ``gh pr create`` and returns the PR number as a string.
+        """
+        if self._lock:
+            self._lock.acquire()
+        try:
+            cmd: tuple[str, ...] = (
+                "gh",
+                "pr",
+                "create",
+                "--head",
+                implementation_branch,
+                "--base",
+                prd_branch,
+                "--title",
+                title,
+                "--body",
+                body,
+                "--json",
+                "number",
+                "--jq",
+                ".number",
+            )
+            result = self._run(cmd, cwd=worktree_path)
+            return result.strip()
+        finally:
+            if self._lock:
+                self._lock.release()
+
+    def merge_pr(
+        self,
+        *,
+        worktree_path: str,
+        pr_number: str,
+        merge_option: str = "--squash",
+    ) -> str:
+        """Merge a Pull Request programmatically.
+
+        Uses ``gh pr merge`` with the configured merge option
+        (default: ``--squash``).
+        """
+        if self._lock:
+            self._lock.acquire()
+        try:
+            cmd: tuple[str, ...] = (
+                "gh",
+                "pr",
+                "merge",
+                pr_number,
+                merge_option,
+            )
+            result = self._run(cmd, cwd=worktree_path)
+            return result.strip()
+        finally:
+            if self._lock:
+                self._lock.release()
+
     def merge_into_prd(
         self, *, worktree_path: str, implementation_branch: str, prd_branch: str
     ) -> None:
+        """Deprecated: use ``create_pr`` + ``merge_pr`` instead.
+
+        Direct branch pushing bypasses PR validation (branch protection,
+        CI checks).  Kept for backward compatibility with existing
+        callers during the migration window.
+        """
         if self._lock:
             self._lock.acquire()
         try:
@@ -138,7 +221,11 @@ class IntegrationWorkspaceGateway:
                 raise UpdateError(detail) from exc
             elif "git push" in cmd_str:
                 raise PushError(detail) from exc
-            
+            elif "gh pr create" in cmd_str:
+                raise PrCreationError(detail) from exc
+            elif "gh pr merge" in cmd_str:
+                raise PrMergeError(detail) from exc
+
             raise IntegrationError(detail) from exc
 
 
@@ -275,11 +362,19 @@ class IntegrationService:
                 branch_name=implementation_branch,
             )
 
-            # 5c. Merge implementation branch into PRD branch
-            self._workspace.merge_into_prd(
+            # 5c. Create PR from implementation branch into PRD branch
+            pr_number = self._workspace.create_pr(
                 worktree_path=worktree_path,
                 implementation_branch=implementation_branch,
                 prd_branch=prd_branch,
+                title=f"Integration: #{issue_number} into {prd_branch}",
+                body=f"Automated integration of implementation branch `{implementation_branch}` into PRD branch `{prd_branch}`.",
+            )
+
+            # 5d. Merge the PR
+            self._workspace.merge_pr(
+                worktree_path=worktree_path,
+                pr_number=pr_number,
             )
 
         except MergeConflictError as exc:
@@ -309,6 +404,38 @@ class IntegrationService:
                 issue_number=issue_number,
                 status="failed",
                 failure_type="update_failure",
+                failure_message=msg,
+                implementation_branch=implementation_branch,
+                prd_branch=prd_branch,
+            )
+
+        except PrCreationError as exc:
+            msg = f"PR creation failure during integration:\n{exc}"
+            self._issues.add_comment(
+                issue_number,
+                f"Integration failed for implementation branch `{implementation_branch}` into PRD branch `{prd_branch}`.\n\n**Diagnostics:**\n{msg}",
+            )
+            self._issues.add_labels(issue_number, "needs-triage")
+            return IntegrationResult(
+                issue_number=issue_number,
+                status="failed",
+                failure_type="push_failure",
+                failure_message=msg,
+                implementation_branch=implementation_branch,
+                prd_branch=prd_branch,
+            )
+
+        except PrMergeError as exc:
+            msg = f"PR merge failure during integration:\n{exc}"
+            self._issues.add_comment(
+                issue_number,
+                f"Integration failed for implementation branch `{implementation_branch}` into PRD branch `{prd_branch}`.\n\n**Diagnostics:**\n{msg}",
+            )
+            self._issues.add_labels(issue_number, "needs-triage")
+            return IntegrationResult(
+                issue_number=issue_number,
+                status="failed",
+                failure_type="push_failure",
                 failure_message=msg,
                 implementation_branch=implementation_branch,
                 prd_branch=prd_branch,

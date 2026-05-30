@@ -223,6 +223,17 @@ def test_integration_workspace_gateway_does_not_acquire_lock_when_lock_is_none()
         worktree_path="/worktrees/demo/issue-2",
         branch_name="impl/1/2-child",
     )
+    workspace.create_pr(
+        worktree_path="/worktrees/demo/issue-2",
+        implementation_branch="impl/1/2-child",
+        prd_branch="prd/1-prd",
+        title="Integration: #2 into prd/1-prd",
+        body="Automated integration.",
+    )
+    workspace.merge_pr(
+        worktree_path="/worktrees/demo/issue-2",
+        pr_number="42",
+    )
     workspace.merge_into_prd(
         worktree_path="/worktrees/demo/issue-2",
         implementation_branch="impl/1/2-child",
@@ -254,6 +265,39 @@ def test_integration_workspace_gateway_acquires_lock_for_push_branch() -> None:
     workspace.push_branch(
         worktree_path="/worktrees/demo/issue-2",
         branch_name="impl/1/2-child",
+    )
+
+    assert len(lock.acquire_calls) >= 1, "Expected lock.acquire() to be called"
+    assert len(lock.release_calls) >= 1, "Expected lock.release() to be called"
+    assert not lock.locked, "Lock should be released after operation"
+
+
+def test_integration_workspace_gateway_acquires_lock_for_create_pr() -> None:
+    lock = RecordingLock()
+    runner = FakeGitRunner()
+    workspace = IntegrationWorkspaceGateway(runner=runner, lock=lock)
+
+    workspace.create_pr(
+        worktree_path="/worktrees/demo/issue-2",
+        implementation_branch="impl/1/2-child",
+        prd_branch="prd/1-prd",
+        title="Integration: #2 into prd/1-prd",
+        body="Automated integration.",
+    )
+
+    assert len(lock.acquire_calls) >= 1, "Expected lock.acquire() to be called"
+    assert len(lock.release_calls) >= 1, "Expected lock.release() to be called"
+    assert not lock.locked, "Lock should be released after operation"
+
+
+def test_integration_workspace_gateway_acquires_lock_for_merge_pr() -> None:
+    lock = RecordingLock()
+    runner = FakeGitRunner()
+    workspace = IntegrationWorkspaceGateway(runner=runner, lock=lock)
+
+    workspace.merge_pr(
+        worktree_path="/worktrees/demo/issue-2",
+        pr_number="42",
     )
 
     assert len(lock.acquire_calls) >= 1, "Expected lock.acquire() to be called"

@@ -9,6 +9,8 @@ from bersama.integration import (
     IntegrationService,
     IntegrationWorkspaceGateway,
     MergeConflictError,
+    PrCreationError,
+    PrMergeError,
     PushError,
     UpdateError,
 )
@@ -107,6 +109,34 @@ def test_integrate_issue_success_flow(tmp_path: Path) -> None:
 
     issues = get_mock_issues()
     runner = FakeGitRunner()
+
+    # Pre-configure the gh pr create output so it returns a PR number
+    expected_pr_create_cmd = (
+        "gh",
+        "pr",
+        "create",
+        "--head",
+        "impl/1/8-child-impl",
+        "--base",
+        "prd/1-parent-prd",
+        "--title",
+        "Integration: #8 into prd/1-parent-prd",
+        "--body",
+        "Automated integration of implementation branch `impl/1/8-child-impl` into PRD branch `prd/1-parent-prd`.",
+        "--json",
+        "number",
+        "--jq",
+        ".number",
+    )
+    expected_pr_merge_cmd = (
+        "gh",
+        "pr",
+        "merge",
+        "42",
+        "--squash",
+    )
+    runner.outputs[expected_pr_create_cmd] = "42\n"
+
     workspace = IntegrationWorkspaceGateway(runner=runner)
     service = IntegrationService(issues=issues, workspace=workspace)
 
@@ -137,15 +167,8 @@ def test_integrate_issue_success_flow(tmp_path: Path) -> None:
             str(worktree_path),
         ),
         (("git", "push", "origin", "impl/1/8-child-impl"), str(worktree_path)),
-        (
-            (
-                "git",
-                "push",
-                "origin",
-                "impl/1/8-child-impl:prd/1-parent-prd",
-            ),
-            str(worktree_path),
-        ),
+        (expected_pr_create_cmd, str(worktree_path)),
+        (expected_pr_merge_cmd, str(worktree_path)),
     ]
 
 
@@ -254,6 +277,86 @@ def test_integrate_issue_push_failure(tmp_path: Path) -> None:
     assert result.status == "failed"
     assert result.failure_type == "push_failure"
     assert "Push/Merge failure" in result.failure_message
+    assert issues.closed_issues == []
+    assert issues.added_labels == [(8, ("needs-triage",))]
+    assert len(issues.comments) == 1
+
+
+def test_integrate_issue_pr_creation_failure(tmp_path: Path) -> None:
+    worktree_root = tmp_path / "worktrees"
+    worktree_root.mkdir()
+    worktree_path = worktree_root / "issue-8"
+    worktree_path.mkdir()
+
+    issues = get_mock_issues()
+    runner = FakeGitRunner()
+    pr_create_cmd = (
+        "gh", "pr", "create",
+        "--head", "impl/1/8-child-impl",
+        "--base", "prd/1-parent-prd",
+        "--title", "Integration: #8 into prd/1-parent-prd",
+        "--body", "Automated integration of implementation branch `impl/1/8-child-impl` into PRD branch `prd/1-parent-prd`.",
+        "--json", "number",
+        "--jq", ".number",
+    )
+    runner.fail(pr_create_cmd, "gh: pull request create failed")
+
+    workspace = IntegrationWorkspaceGateway(runner=runner)
+    service = IntegrationService(issues=issues, workspace=workspace)
+
+    result = service.integrate_issue(
+        repo_path="/repos/demo",
+        worktree_root=str(worktree_root),
+        issue_number=8,
+    )
+
+    assert result.succeeded is False
+    assert result.status == "failed"
+    assert result.failure_type == "push_failure"
+    assert "PR creation failure" in result.failure_message
+    assert issues.closed_issues == []
+    assert issues.added_labels == [(8, ("needs-triage",))]
+    assert len(issues.comments) == 1
+
+
+def test_integrate_issue_pr_merge_failure(tmp_path: Path) -> None:
+    worktree_root = tmp_path / "worktrees"
+    worktree_root.mkdir()
+    worktree_path = worktree_root / "issue-8"
+    worktree_path.mkdir()
+
+    issues = get_mock_issues()
+    runner = FakeGitRunner()
+
+    # gh pr create succeeds, returns PR number 42
+    pr_create_cmd = (
+        "gh", "pr", "create",
+        "--head", "impl/1/8-child-impl",
+        "--base", "prd/1-parent-prd",
+        "--title", "Integration: #8 into prd/1-parent-prd",
+        "--body", "Automated integration of implementation branch `impl/1/8-child-impl` into PRD branch `prd/1-parent-prd`.",
+        "--json", "number",
+        "--jq", ".number",
+    )
+    runner.outputs[pr_create_cmd] = "42\n"
+
+    # gh pr merge fails
+    pr_merge_cmd = ("gh", "pr", "merge", "42", "--squash")
+    runner.fail(pr_merge_cmd, "gh: pull request merge failed")
+
+    workspace = IntegrationWorkspaceGateway(runner=runner)
+    service = IntegrationService(issues=issues, workspace=workspace)
+
+    result = service.integrate_issue(
+        repo_path="/repos/demo",
+        worktree_root=str(worktree_root),
+        issue_number=8,
+    )
+
+    assert result.succeeded is False
+    assert result.status == "failed"
+    assert result.failure_type == "push_failure"
+    assert "PR merge failure" in result.failure_message
     assert issues.closed_issues == []
     assert issues.added_labels == [(8, ("needs-triage",))]
     assert len(issues.comments) == 1
@@ -390,11 +493,62 @@ def setup_real_test_git_repo(tmp_path: Path) -> tuple[Path, Path, Path]:
     return repo_path, worktree_root, worktree_path
 
 
+class HybridGitRunner:
+    """A GitRunner that delegates real git commands to subprocess but fakes
+    gh commands for testing PR workflows against a local bare repo.
+
+    On gh pr create: returns a fake PR number and pushes the implementation
+    branch as the PRD branch (simulating what a real PR merge would do).
+    On gh pr merge: does nothing (the merge was effectively done at create time
+    for test purposes).
+    """
+
+    def __init__(self, repo_path: str) -> None:
+        self._repo_path = repo_path
+        self.commands: list[tuple[tuple[str, ...], str]] = []
+
+    def __call__(self, command: tuple[str, ...], *, cwd: str) -> str:
+        self.commands.append((command, cwd))
+        if command[0] == "gh":
+            return self._handle_gh(command, cwd=cwd)
+        # Real git commands
+        completed = subprocess.run(
+            command,
+            check=True,
+            capture_output=True,
+            text=True,
+            cwd=cwd,
+        )
+        return completed.stdout
+
+    def _handle_gh(self, command: tuple[str, ...], *, cwd: str) -> str:
+        if command[:3] == ("gh", "pr", "create"):
+            # Parse --head and --base
+            head_idx = command.index("--head") + 1
+            base_idx = command.index("--base") + 1
+            head_branch = command[head_idx]
+            base_branch = command[base_idx]
+            # Simulate the PR merge by pushing head to base
+            subprocess.run(
+                ("git", "push", "origin", f"{head_branch}:{base_branch}"),
+                check=True,
+                capture_output=True,
+                text=True,
+                cwd=cwd,
+            )
+            return "42\n"  # Fake PR number
+        elif command[:3] == ("gh", "pr", "merge"):
+            # Already merged at create time in our simulation
+            return "Pull request #42 merged\n"
+        raise RuntimeError(f"Unexpected gh command: {command}")
+
+
 def test_real_git_integration_success(tmp_path: Path) -> None:
     repo_path, worktree_root, worktree_path = setup_real_test_git_repo(tmp_path)
     issues = get_mock_issues()
 
-    workspace = IntegrationWorkspaceGateway()
+    runner = HybridGitRunner(repo_path=str(repo_path))
+    workspace = IntegrationWorkspaceGateway(runner=runner)
     service = IntegrationService(issues=issues, workspace=workspace)
 
     result = service.integrate_issue(
@@ -407,8 +561,7 @@ def test_real_git_integration_success(tmp_path: Path) -> None:
     assert result.status == "succeeded"
     assert issues.closed_issues == [8]
 
-    # Verify that the implementation branch was pushed to remote and integrated into remote prd branch!
-    # Let's run git log origin/prd/1-parent-prd to make sure it includes the harness commit "harness commit"
+    # Verify that the implementation branch was integrated into remote PRD branch
     log_res = subprocess.run(
         ["git", "log", "origin/prd/1-parent-prd", "--oneline"],
         cwd=repo_path,
@@ -417,3 +570,8 @@ def test_real_git_integration_success(tmp_path: Path) -> None:
         check=True,
     )
     assert "harness commit" in log_res.stdout
+
+    # Verify the gh commands were called
+    assert any(
+        cmd[:2] == ("gh", "pr") for cmd, _ in runner.commands
+    ), "Expected gh pr commands to be invoked"
