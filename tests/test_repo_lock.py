@@ -7,14 +7,19 @@ integration, while keeping worktree-local harness execution parallel.
 
 from __future__ import annotations
 
+import multiprocessing
+import os
 import subprocess
+import tempfile
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from pathlib import Path
 
 from bersama.claiming import ClaimWorkspaceGateway
 from bersama.prd_preparation import GitWorkspaceGateway
 from bersama.integration import IntegrationWorkspaceGateway
+from bersama.repo_lock import RepoLock
 
 
 class FakeGitRunner:
@@ -331,30 +336,91 @@ def test_multiple_gateways_share_the_same_lock() -> None:
     ), f"Operations overlapped: {results}"
 
 
-def test_orchestrator_passes_repo_lock_to_all_gateways() -> None:
-    """The Orchestrator must create a single Repository Operation Lock
-    and pass it to the claim, PRD preparation, and integration gateways."""
+def test_orchestrator_repo_lock_is_none_when_no_repo_path() -> None:
+    """When created without repo_path, the Orchestrator's _repo_lock is None
+    and gateways receive None. The lock is bound when run() provides repo_path."""
     from bersama.orchestrator import Orchestrator
 
     orchestrator = Orchestrator()
 
-    assert hasattr(orchestrator, "_repo_lock"), "Orchestrator must have _repo_lock"
-    assert orchestrator._repo_lock is not None, "_repo_lock must not be None"
-    assert hasattr(orchestrator._repo_lock, "acquire"), \
-        "_repo_lock must be a lock with acquire()"
-    assert hasattr(orchestrator._repo_lock, "release"), \
-        "_repo_lock must be a lock with release()"
+    # Before run(), the lock is not yet bound (no repo_path known)
+    assert orchestrator._repo_lock is None, \
+        "_repo_lock should be None before run() binds it to a repo_path"
 
     claim_lock = orchestrator.claim_workspace._lock
     git_lock = orchestrator.git_workspace._lock
     integration_lock = orchestrator.integration_workspace._lock
 
-    assert claim_lock is orchestrator._repo_lock, \
-        "ClaimWorkspaceGateway must use the orchestrator's repo lock"
-    assert git_lock is orchestrator._repo_lock, \
-        "GitWorkspaceGateway must use the orchestrator's repo lock"
-    assert integration_lock is orchestrator._repo_lock, \
-        "IntegrationWorkspaceGateway must use the orchestrator's repo lock"
+    assert claim_lock is None, \
+        "ClaimWorkspaceGateway should have no lock before run()"
+    assert git_lock is None, \
+        "GitWorkspaceGateway should have no lock before run()"
+    assert integration_lock is None, \
+        "IntegrationWorkspaceGateway should have no lock before run()"
+
+
+def test_orchestrator_binds_repo_lock_on_run() -> None:
+    """When run() is invoked with a repo_path, the Orchestrator creates
+    a RepoLock bound to that path and injects it into all gateways."""
+    import tempfile
+    from pathlib import Path
+    from bersama.orchestrator import Orchestrator
+    from bersama.repo_lock import RepoLock
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        repo_path = Path(tmpdir) / "repo"
+        repo_path.mkdir()
+
+        orchestrator = Orchestrator()
+        orchestrator._bind_repo_lock(str(repo_path))
+
+        assert isinstance(orchestrator._repo_lock, RepoLock), \
+            "_repo_lock should be a RepoLock instance"
+        assert orchestrator._repo_lock._repo_path == str(repo_path), \
+            "RepoLock should be bound to the given repo_path"
+
+        claim_lock = orchestrator.claim_workspace._lock
+        git_lock = orchestrator.git_workspace._lock
+        integration_lock = orchestrator.integration_workspace._lock
+
+        assert claim_lock is orchestrator._repo_lock, \
+            "ClaimWorkspaceGateway must use the orchestrator's repo lock"
+        assert git_lock is orchestrator._repo_lock, \
+            "GitWorkspaceGateway must use the orchestrator's repo lock"
+        assert integration_lock is orchestrator._repo_lock, \
+            "IntegrationWorkspaceGateway must use the orchestrator's repo lock"
+
+
+def test_orchestrator_does_not_bind_lock_when_gateways_provided() -> None:
+    """When external gateways are provided, the Orchestrator does not
+    override their locks. The caller is responsible for lock injection."""
+    from bersama.claiming import ClaimWorkspaceGateway
+    from bersama.prd_preparation import GitWorkspaceGateway
+    from bersama.integration import IntegrationWorkspaceGateway
+    from bersama.orchestrator import Orchestrator
+
+    claim = ClaimWorkspaceGateway()
+    git = GitWorkspaceGateway()
+    integration = IntegrationWorkspaceGateway()
+
+    orchestrator = Orchestrator(
+        claim_workspace_gateway=claim,
+        git_workspace_gateway=git,
+        integration_workspace_gateway=integration,
+    )
+
+    assert claim._lock is None
+    assert git._lock is None
+    assert integration._lock is None
+
+    # After _bind_repo_lock, only internal gateways get the lock.
+    # External gateways are untouched.
+    with tempfile.TemporaryDirectory() as tmpdir:
+        orchestrator._bind_repo_lock(tmpdir)
+
+    assert claim._lock is None, "External gateway lock should not be touched"
+    assert git._lock is None, "External gateway lock should not be touched"
+    assert integration._lock is None, "External gateway lock should not be touched"
 
 
 def test_harness_execution_service_does_not_receive_repo_lock() -> None:
@@ -369,3 +435,190 @@ def test_harness_execution_service_does_not_receive_repo_lock() -> None:
         "HarnessExecutionService must not hold the Repository Operation Lock"
     assert not hasattr(orchestrator.execution_service, "_lock"), \
         "HarnessExecutionService must not hold any lock"
+
+
+# ── RepoLock Tests ───────────────────────────────────────────────────
+
+
+def test_repo_lock_acquire_and_release() -> None:
+    """RepoLock acquires an exclusive file lock and releases it."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        lock = RepoLock(repo_path=tmpdir)
+        assert not lock.locked, "Lock should not be held initially"
+
+        lock.acquire()
+        assert lock.locked, "Lock should be held after acquire"
+
+        lock.release()
+        assert not lock.locked, "Lock should be released"
+
+
+def test_repo_lock_context_manager() -> None:
+    """RepoLock works as a context manager."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        lock = RepoLock(repo_path=tmpdir)
+        with lock:
+            assert lock.locked, "Lock should be held inside context"
+        assert not lock.locked, "Lock should be released after context"
+
+
+def test_repo_lock_creates_lockfile_in_repo_path() -> None:
+    """RepoLock creates the lock file inside the given repo directory."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        lock = RepoLock(repo_path=tmpdir)
+        lock.acquire()
+        lockfile = Path(tmpdir) / ".repo.lock"
+        assert lockfile.exists(), f"Lock file should exist at {lockfile}"
+        lock.release()
+
+
+def test_repo_lock_custom_lockfile_name() -> None:
+    """RepoLock supports a custom lock file name."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        lock = RepoLock(repo_path=tmpdir, lockfile_name=".custom.lock")
+        lock.acquire()
+        lockfile = Path(tmpdir) / ".custom.lock"
+        assert lockfile.exists()
+        lock.release()
+
+
+def test_repo_lock_exclusive() -> None:
+    """Only one RepoLock can hold the same lock file at a time."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        lock1 = RepoLock(repo_path=tmpdir)
+        lock2 = RepoLock(repo_path=tmpdir)
+
+        lock1.acquire()
+        assert lock1.locked
+        assert not lock2.locked
+
+        # lock2 should not be able to acquire (non-blocking)
+        acquired = lock2.acquire(blocking=False)
+        assert not acquired, "Second lock should not acquire when first holds it"
+
+        lock1.release()
+        assert not lock1.locked
+
+        # Now lock2 can acquire
+        acquired = lock2.acquire(blocking=False)
+        assert acquired, "Second lock should acquire after first releases"
+        lock2.release()
+
+
+def test_repo_lock_releases_on_exception() -> None:
+    """RepoLock releases even when an exception is raised inside the context."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        lock = RepoLock(repo_path=tmpdir)
+        try:
+            with lock:
+                raise RuntimeError("boom")
+        except RuntimeError:
+            pass
+        assert not lock.locked, "Lock must be released after exception"
+
+
+def test_repo_lock_closes_fd_on_release() -> None:
+    """Releasing the lock closes the underlying file descriptor."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        lock = RepoLock(repo_path=tmpdir)
+        lock.acquire()
+        lock.release()
+        # Acquire again to verify fd was properly closed and can be reopened
+        lock.acquire()
+        lock.release()
+
+
+# ── Multi-Process Lock Tests ──────────────────────────────────────────
+
+
+def _child_acquire_and_hold(repo_path: str, ready: multiprocessing.synchronize.Event, done: multiprocessing.synchronize.Event) -> None:
+    """Child process: acquire the lock, signal ready, wait for done, release."""
+    lock = RepoLock(repo_path=repo_path)
+    lock.acquire()
+    ready.set()
+    done.wait()
+    lock.release()
+
+
+def _child_try_acquire_nonblocking(repo_path: str, result_queue: multiprocessing.Queue) -> None:
+    """Child process: try non-blocking acquire, put result in queue."""
+    lock = RepoLock(repo_path=repo_path)
+    acquired = lock.acquire(blocking=False)
+    result_queue.put(acquired)
+    if acquired:
+        lock.release()
+
+
+def test_repo_lock_serializes_across_processes() -> None:
+    """Two processes cannot hold the same repo lock simultaneously."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        ready = multiprocessing.Event()
+        done = multiprocessing.Event()
+
+        p1 = multiprocessing.Process(
+            target=_child_acquire_and_hold, args=(tmpdir, ready, done)
+        )
+        p1.start()
+        ready.wait(timeout=5)
+
+        # Now process 1 holds the lock. Process 2 should fail to acquire non-blocking.
+        result_queue: multiprocessing.Queue[bool] = multiprocessing.Queue()
+        p2 = multiprocessing.Process(
+            target=_child_try_acquire_nonblocking, args=(tmpdir, result_queue)
+        )
+        p2.start()
+        p2.join(timeout=5)
+
+        acquired_by_p2 = result_queue.get(timeout=5)
+        assert not acquired_by_p2, (
+            "Second process should not acquire lock while first holds it"
+        )
+
+        # Release process 1
+        done.set()
+        p1.join(timeout=5)
+
+        # Now process 3 should acquire successfully
+        result_queue2: multiprocessing.Queue[bool] = multiprocessing.Queue()
+        p3 = multiprocessing.Process(
+            target=_child_try_acquire_nonblocking, args=(tmpdir, result_queue2)
+        )
+        p3.start()
+        p3.join(timeout=5)
+
+        acquired_by_p3 = result_queue2.get(timeout=5)
+        assert acquired_by_p3, (
+            "Third process should acquire lock after first releases"
+        )
+
+
+def test_repo_lock_serializes_concurrent_cli_processes() -> None:
+    """Simulates concurrent CLI processes using the lock and verifies they
+    serialize safely without colliding."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        shared_counter = multiprocessing.Value("i", 0)
+        num_processes = 4
+
+        def _child_increment(repo_path: str, counter: multiprocessing.Value) -> None:
+            lock = RepoLock(repo_path=repo_path)
+            with lock:
+                current = counter.value
+                # Simulate work that would collide if not serialized
+                time.sleep(0.01)
+                counter.value = current + 1
+
+        processes = []
+        for _ in range(num_processes):
+            p = multiprocessing.Process(
+                target=_child_increment, args=(tmpdir, shared_counter)
+            )
+            processes.append(p)
+            p.start()
+
+        for p in processes:
+            p.join(timeout=10)
+
+        assert shared_counter.value == num_processes, (
+            f"Expected counter={num_processes}, got {shared_counter.value}. "
+            "Processes likely collided without proper serialization."
+        )

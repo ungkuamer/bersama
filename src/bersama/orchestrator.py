@@ -18,6 +18,7 @@ from bersama.claiming import ClaimWorkspaceGateway, ImplementationClaimService
 from bersama.execution import HarnessExecutionService
 from bersama.integration import IntegrationWorkspaceGateway, IntegrationService
 from bersama.reconciliation import ReconciliationService
+from bersama.repo_lock import RepoLock
 
 
 @dataclass(frozen=True)
@@ -110,20 +111,16 @@ class Orchestrator:
         self.claim_workspace = claim_workspace_gateway or ClaimWorkspaceGateway()
         self.integration_workspace = integration_workspace_gateway or IntegrationWorkspaceGateway()
         self.now_provider = now_provider or _utc_now
-        self._repo_lock = threading.Lock()
+        self._repo_lock: RepoLock | None = None  # bound when repo_path is known
         self._executor = executor if executor is not None else ThreadPoolExecutor()
         self._event_emitter = event_emitter or _default_event_emitter
         self._active_agent_run_issue_numbers: set[int] = set()
 
-        # If no external gateway was provided, inject the shared
-        # Repository Operation Lock into the internally-created gateways
-        # so that all shared repository metadata mutations are serialized.
-        if git_workspace_gateway is None:
-            self.git_workspace._lock = self._repo_lock
-        if claim_workspace_gateway is None:
-            self.claim_workspace._lock = self._repo_lock
-        if integration_workspace_gateway is None:
-            self.integration_workspace._lock = self._repo_lock
+        # Track whether internal gateways were created so we can inject
+        # the RepoLock later when repo_path is known (via _bind_repo_lock).
+        self._internal_git_workspace = git_workspace_gateway is None
+        self._internal_claim_workspace = claim_workspace_gateway is None
+        self._internal_integration_workspace = integration_workspace_gateway is None
 
         self.prd_preparation_service = PrdPreparationService(
             issues=self.issues,
@@ -145,6 +142,23 @@ class Orchestrator:
             issues=self.issues,
             now_provider=self.now_provider,
         )
+
+    def _bind_repo_lock(self, repo_path: str) -> None:
+        """Create a system-wide RepoLock bound to *repo_path* and inject it
+        into the internally-created gateways so that all shared repository
+        metadata mutations are serialized across processes.
+
+        Safe to call multiple times — subsequent calls are no-ops.
+        """
+        if self._repo_lock is not None:
+            return  # already bound
+        self._repo_lock = RepoLock(repo_path=repo_path)
+        if self._internal_git_workspace:
+            self.git_workspace._lock = self._repo_lock
+        if self._internal_claim_workspace:
+            self.claim_workspace._lock = self._repo_lock
+        if self._internal_integration_workspace:
+            self.integration_workspace._lock = self._repo_lock
 
         # ── Serialized Integration Lane ───────────────────────────────
         # Successful Agent Runs enter this queue when execution completes.
@@ -429,6 +443,8 @@ class Orchestrator:
         return workflow.compile()
 
     def run(self, repo_name: str, config: AppConfig, continuous: bool = False) -> None:
+        repo_config = config.repo(repo_name)
+        self._bind_repo_lock(str(repo_config.repo_path))
         if continuous:
             self._run_continuous(repo_name, config)
         else:
@@ -456,6 +472,10 @@ class Orchestrator:
         Stop condition: no claimable issues AND no active Agent Runs
         AND no pending integrations.
         """
+        # Phase 0: Bind the system-wide repo lock to the repository directory.
+        repo_config = config.repo(repo_name)
+        self._bind_repo_lock(str(repo_config.repo_path))
+
         # Phase 1: Reconciliation at orchestrator start (once).
         self.reconciliation_service.reconcile()
 
