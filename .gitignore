@@ -3,3 +3,8 @@ __pycache__/
 .pytest_cache/
 worktrees/
 bersama.yaml
+
+# graphify
+graphify-out/manifest.json
+graphify-out/cost.json
+
