@@ -440,8 +440,12 @@ None
     assert result.succeeded is False
     assert "Ownership mismatch" in result.failure_message
     # The provisional write happened.
-    assert len(issue_gateway.updated_bodies) == 1
+    assert len(issue_gateway.updated_bodies) == 2
     assert "Claim Status: setting up" in issue_gateway.updated_bodies[0][1]
+    assert "Claim Status: failed claim" in issue_gateway.updated_bodies[1][1]
+    assert issue_gateway.added_labels == [(7, ("needs-triage",))]
+    assert len(issue_gateway.added_comments) == 1
+    assert "Failed Claim Setup" in issue_gateway.added_comments[0][1]
     # No branch or worktree commands were issued (after hook, re-read fails).
     git_command_args = " ".join(" ".join(cmd) for cmd, _ in git_runner.commands)
     assert "branch" not in git_command_args
@@ -518,6 +522,73 @@ None
     # A diagnostic comment was posted.
     assert len(issue_gateway.added_comments) == 1
     assert "Failed Claim Setup" in issue_gateway.added_comments[0][1]
+
+
+def test_claim_issue_stops_when_provisional_lifecycle_mutation_fails() -> None:
+    issue_gateway = FakeIssueGateway(
+        GitHubIssueRecord(
+            number=7,
+            title="Claim Implementation Issues and create isolated worktrees",
+            body="""
+## Parent PRD
+#5
+
+## What to Build
+Claim the issue.
+
+## Acceptance Criteria
+- [ ] It works.
+
+## Blocked By
+None
+""".strip(),
+            labels=("implementation", "ready-for-agent"),
+            state="open",
+        ),
+        GitHubIssueRecord(
+            number=5,
+            title="Prepare PRD",
+            body="""
+## Orchestration
+- PRD Branch: prd/5-prepare-prd
+""".strip(),
+            labels=("prd",),
+            state="open",
+        ),
+    )
+
+    original_update_body = issue_gateway.update_body
+
+    def fail_first_update(number: int, body: str) -> None:
+        if "Claim Status: setting up" in body:
+            raise RuntimeError("Mutation outcome is ambiguous: body update did not confirm whether the change applied.")
+        original_update_body(number, body)
+
+    issue_gateway.update_body = fail_first_update
+    git_runner = FakeGitRunner()
+    workspace = ClaimWorkspaceGateway(runner=git_runner)
+    service = ImplementationClaimService(
+        issues=issue_gateway,
+        workspace=workspace,
+        now_provider=lambda: "2026-05-29T09:30:00Z",
+    )
+
+    result = service.claim_issue(
+        repo_path="/repos/demo",
+        worktree_root="/worktrees/demo",
+        issue_number=7,
+        agent_run_id="run-123",
+    )
+
+    assert result.succeeded is False
+    assert "Mutation outcome is ambiguous" in result.failure_message
+    assert issue_gateway.added_labels == [(7, ("needs-triage",))]
+    assert len(issue_gateway.added_comments) == 1
+    assert "Failed Claim Setup" in issue_gateway.added_comments[0][1]
+    assert "Lifecycle Mutation failed before repository setup" in issue_gateway.added_comments[0][1]
+    assert len(issue_gateway.updated_bodies) == 1
+    assert "Claim Status: failed claim" in issue_gateway.updated_bodies[0][1]
+    assert git_runner.commands == []
 
 
 def test_competing_claims_only_one_reaches_active_claim() -> None:
