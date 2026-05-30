@@ -141,6 +141,15 @@ class Orchestrator:
             now_provider=self.now_provider,
         )
 
+    def _emit_scheduler_diagnostic(self, *, issue_number: int, detail: str) -> None:
+        self._event_emitter(SchedulerEvent(
+            event="scheduler.diagnostic",
+            issue_number=issue_number,
+            agent_run_id=None,
+            status="recoverable",
+            detail=detail,
+        ))
+
     def _bind_repo_lock(self, repo_path: str) -> None:
         """Create a system-wide RepoLock bound to *repo_path* and inject it
         into the internally-created gateways so that all shared repository
@@ -226,7 +235,7 @@ class Orchestrator:
         # window cache via single-issue lookups (gh issue view <num>).
         from bersama.issues import parse_issue, GitHubIssue, ImplementationIssue
         records_by_number = {r.number: r for r in records}
-        missing_blockers: set[int] = set()
+        missing_blockers_by_issue: dict[int, set[int]] = {}
         for record in records:
             parsed = parse_issue(
                 GitHubIssue(
@@ -239,16 +248,21 @@ class Orchestrator:
             if isinstance(parsed, ImplementationIssue):
                 for blocker_number in parsed.blocked_by:
                     if blocker_number not in records_by_number:
-                        missing_blockers.add(blocker_number)
+                        missing_blockers_by_issue.setdefault(record.number, set()).add(blocker_number)
 
-        for blocker_number in sorted(missing_blockers):
-            try:
-                blocker_record = self.issues.view_issue(blocker_number)
-                records.append(blocker_record)
-            except Exception:
-                # If the blocker lookup fails (e.g. issue was deleted),
-                # the planner will generate a diagnostic for it.
-                pass
+        for issue_number, blocker_numbers in sorted(missing_blockers_by_issue.items()):
+            for blocker_number in sorted(blocker_numbers):
+                try:
+                    blocker_record = self.issues.view_issue(blocker_number)
+                    records.append(blocker_record)
+                except Exception as exc:
+                    self._emit_scheduler_diagnostic(
+                        issue_number=issue_number,
+                        detail=f"Blocking dependency #{blocker_number} lookup failed: {exc}",
+                    )
+                    # If the blocker lookup fails (e.g. issue was deleted),
+                    # the planner will generate a diagnostic for it.
+                    pass
 
         from bersama.planner import plan_issue_actions
         planner_result = plan_issue_actions(
@@ -456,7 +470,11 @@ class Orchestrator:
                 state="open",
                 labels=("implementation",),
             )
-        except Exception:
+        except Exception as exc:
+            self._emit_scheduler_diagnostic(
+                issue_number=0,
+                detail=f"Integration Pull Request polling issue listing failed: {exc}",
+            )
             return
 
         from bersama.issues import parse_issue, GitHubIssue, ImplementationIssue
