@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, type ReactNode } from 'react'
 import { 
   Terminal, 
   RefreshCw, 
@@ -160,6 +160,7 @@ export default function App() {
   const [startIssueState, setStartIssueState] = useState<Record<number, ImplementationStartState>>({});
   const [integrateIssueState, setIntegrateIssueState] = useState<Record<number, ImplementationIntegrationState>>({});
   const [hasNewPausedLogOutput, setHasNewPausedLogOutput] = useState<boolean>(false);
+  const [logSearchQuery, setLogSearchQuery] = useState<string>('');
   const logAutoScrollActiveRef = useRef<boolean>(true);
   
   // UI States
@@ -320,6 +321,17 @@ export default function App() {
     if (!viewport) return;
 
     viewport.scrollTop = viewport.scrollHeight;
+  };
+
+  const highlightMatches = (text: string, query: string): ReactNode[] => {
+    if (!query.trim()) return [text];
+    const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const parts = text.split(new RegExp(`(${escaped})`, 'gi'));
+    return parts.map((part, i) =>
+      part.toLowerCase() === query.toLowerCase()
+        ? <mark key={i} className="log-highlight">{part}</mark>
+        : part
+    );
   };
 
   const jumpToLatestLogOutput = () => {
@@ -887,6 +899,18 @@ export default function App() {
               </div>
               {selectedRunIssue !== null && (
                 <div className="flex items-center gap-2 text-[10px] font-mono">
+                  {/* Log search */}
+                  <input
+                    type="text"
+                    placeholder="Search log…"
+                    aria-label="Search log content"
+                    value={logSearchQuery}
+                    onChange={(e) => setLogSearchQuery(e.target.value)}
+                    className="dashboard-control w-[120px] text-zinc-300 rounded px-1.5 py-0.5 focus:outline-none placeholder-zinc-700 text-[10px]"
+                  />
+
+                  <span className="text-zinc-800">|</span>
+
                   {/* Lines Limit */}
                   <select 
                     aria-label="Log tail limit"
@@ -905,12 +929,19 @@ export default function App() {
                   {/* Polling Switch */}
                   <button
                     onClick={() => setPollLogsActive(!pollLogsActive)}
-                    className={`dashboard-control px-1.5 py-0.5 rounded border font-semibold tracking-wider text-[9px] ${
+                    className={`dashboard-control px-1.5 py-0.5 rounded border font-semibold tracking-wider text-[9px] flex items-center gap-1.5 ${
                       pollLogsActive 
-                        ? 'bg-emerald-950/40 text-emerald-400 border-emerald-900 animate-pulse' 
+                        ? 'bg-emerald-950/40 text-emerald-400 border-emerald-900' 
                         : 'bg-black text-zinc-500'
                     }`}
                   >
+                    {pollLogsActive && (
+                      <span
+                        title="Streaming active"
+                        className="stream-indicator"
+                        aria-label="Streaming active"
+                      />
+                    )}
                     {pollLogsActive ? 'STREAM ON' : 'STREAM OFF'}
                   </button>
 
@@ -961,7 +992,7 @@ export default function App() {
                         logTail.content.split('\n').map((line, idx) => (
                           <div key={idx} className="table-row">
                             <span className="table-cell text-zinc-700 select-none pr-3 text-right w-8">{idx + 1}</span>
-                            <span className="table-cell text-[#f4f4f5]">{line}</span>
+                            <span className="table-cell text-[#f4f4f5]">{highlightMatches(line, logSearchQuery)}</span>
                           </div>
                         ))
                       ) : (

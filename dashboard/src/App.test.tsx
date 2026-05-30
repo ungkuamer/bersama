@@ -1400,4 +1400,124 @@ describe('Bersama Dashboard Frontend', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent("Implementation Issue worktree does not exist: /worktrees/demo/issue-31");
     expect(screen.queryByText(/SYSTEM FAULT/i)).not.toBeInTheDocument();
   });
+
+  it('renders log search input in terminal console header when a run is selected', async () => {
+    mockFetch.mockImplementation((url: string) => {
+      if (url.endsWith('/api/repos')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(mockRepos) });
+      }
+      if (url.includes('/api/issues')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(mockIssues) });
+      }
+      if (url.includes('/api/runs/8/log')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(mockLogs) });
+      }
+      if (url.includes('/api/runs')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(mockRuns) });
+      }
+      return Promise.reject(new Error(`Unhandled mock fetch for ${url}`));
+    });
+
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole('button', { name: /View Log/i }));
+    await screen.findByText(/harness execution started/i);
+
+    expect(screen.getByPlaceholderText(/Search log/i)).toBeInTheDocument();
+  });
+
+  it('highlights matching search terms with mark elements in the log viewport', async () => {
+    mockFetch.mockImplementation((url: string) => {
+      if (url.endsWith('/api/repos')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(mockRepos) });
+      }
+      if (url.includes('/api/issues')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(mockIssues) });
+      }
+      if (url.includes('/api/runs/8/log')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(mockLogs) });
+      }
+      if (url.includes('/api/runs')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(mockRuns) });
+      }
+      return Promise.reject(new Error(`Unhandled mock fetch for ${url}`));
+    });
+
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole('button', { name: /View Log/i }));
+    await screen.findByText(/harness execution started/i);
+
+    const searchInput = screen.getByPlaceholderText(/Search log/i);
+    fireEvent.change(searchInput, { target: { value: 'harness' } });
+
+    const marks = document.querySelectorAll('mark');
+    expect(marks.length).toBeGreaterThan(0);
+    expect(marks[0]).toHaveTextContent('harness');
+  });
+
+  it('highlights multiple search matches in the same line with separate mark elements', async () => {
+    const multiMatchLogs = {
+      issue_number: 8,
+      log_path: '/path/to/demo/worktrees/issue-8/harness.log',
+      lines_returned: 1,
+      content: 'error error error in the log stream'
+    };
+
+    mockFetch.mockImplementation((url: string) => {
+      if (url.endsWith('/api/repos')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(mockRepos) });
+      }
+      if (url.includes('/api/issues')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(mockIssues) });
+      }
+      if (url.includes('/api/runs/8/log')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(multiMatchLogs) });
+      }
+      if (url.includes('/api/runs')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(mockRuns) });
+      }
+      return Promise.reject(new Error(`Unhandled mock fetch for ${url}`));
+    });
+
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole('button', { name: /View Log/i }));
+    await screen.findByText(/error error error/);
+
+    const searchInput = screen.getByPlaceholderText(/Search log/i);
+    fireEvent.change(searchInput, { target: { value: 'error' } });
+
+    const marks = document.querySelectorAll('mark');
+    expect(marks.length).toBe(3);
+    for (const mark of marks) {
+      expect(mark).toHaveTextContent('error');
+    }
+  });
+
+  it('shows a pulsing stream indicator when log polling is active and a run is selected', async () => {
+    mockFetch.mockImplementation((url: string) => {
+      if (url.endsWith('/api/repos')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(mockRepos) });
+      }
+      if (url.includes('/api/issues')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(mockIssues) });
+      }
+      if (url.includes('/api/runs/8/log')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(mockLogs) });
+      }
+      if (url.includes('/api/runs')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(mockRuns) });
+      }
+      return Promise.reject(new Error(`Unhandled mock fetch for ${url}`));
+    });
+
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole('button', { name: /View Log/i }));
+    await screen.findByText(/harness execution started/i);
+
+    // The stream indicator should be visible when polling is active
+    expect(screen.getByTitle(/Streaming active/i)).toBeInTheDocument();
+  });
 });

@@ -214,4 +214,35 @@
   .terminal-scrollbar::-webkit-scrollbar-thumb:hover {
     background: #2e2e33;
   }
+
+  .log-highlight {
+    background: linear-gradient(135deg, rgba(245, 158, 11, 0.35) 0%, rgba(217, 119, 6, 0.45) 100%);
+    color: #fbbf24;
+    border-radius: 2px;
+    padding: 0 1px;
+    box-shadow: 0 0 8px rgba(245, 158, 11, 0.3), 0 0 2px rgba(245, 158, 11, 0.15);
+  }
+
+  .stream-indicator {
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #10b981;
+    box-shadow: 0 0 6px rgba(16, 185, 129, 0.8), 0 0 12px rgba(16, 185, 129, 0.4);
+    animation: stream-pulse 1.5s ease-in-out infinite;
+  }
+
+  @keyframes stream-pulse {
+    0%, 100% {
+      opacity: 1;
+      transform: scale(1);
+      box-shadow: 0 0 4px rgba(16, 185, 129, 0.6), 0 0 8px rgba(16, 185, 129, 0.3);
+    }
+    50% {
+      opacity: 0.4;
+      transform: scale(1.6);
+      box-shadow: 0 0 10px rgba(16, 185, 129, 1), 0 0 20px rgba(16, 185, 129, 0.5);
+    }
+  }
 }
