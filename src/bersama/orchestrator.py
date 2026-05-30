@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor, Executor
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TypedDict, List, Optional, Any
@@ -77,12 +78,14 @@ class Orchestrator:
         claim_workspace_gateway: Optional[Any] = None,
         integration_workspace_gateway: Optional[Any] = None,
         now_provider: Optional[callable] = None,
+        executor: Optional[Executor] = None,
     ) -> None:
         self.issues = issues_gateway or GitHubIssueGateway()
         self.git_workspace = git_workspace_gateway or GitWorkspaceGateway()
         self.claim_workspace = claim_workspace_gateway or ClaimWorkspaceGateway()
         self.integration_workspace = integration_workspace_gateway or IntegrationWorkspaceGateway()
         self.now_provider = now_provider or _utc_now
+        self._executor = executor if executor is not None else ThreadPoolExecutor()
 
         self.prd_preparation_service = PrdPreparationService(
             issues=self.issues,
@@ -156,35 +159,62 @@ class Orchestrator:
         state["claimable_issues"] = list(planner_result.claimable_issue_numbers)
         return state
 
+    def _run_issue_workflow(
+        self,
+        *,
+        repo_name: str,
+        repo_path: str,
+        worktree_root: str,
+        issue_number: int,
+        config: AppConfig,
+    ) -> None:
+        import uuid
+        agent_run_id = f"run-{uuid.uuid4().hex[:8]}"
+        claim_result = self.claim_service.claim_issue(
+            repo_path=repo_path,
+            worktree_root=worktree_root,
+            issue_number=issue_number,
+            agent_run_id=agent_run_id,
+        )
+        if not claim_result.succeeded:
+            return
+
+        exec_result = self.execution_service.execute_run(
+            repo_name=repo_name,
+            issue_number=issue_number,
+            config=config,
+        )
+        if exec_result.status != "succeeded":
+            return
+
+        self.integration_service.integrate_issue(
+            repo_path=repo_path,
+            worktree_root=worktree_root,
+            issue_number=issue_number,
+        )
+
     def execute_claims(self, state: OrchestrationState) -> OrchestrationState:
         repo_config = state["config"].repo(state["repo_name"])
         claimable_issues = state.get("claimable_issues", [])
 
-        import uuid
+        if not claimable_issues:
+            return state
+
+        futures = []
         for issue_number in claimable_issues:
-            agent_run_id = f"run-{uuid.uuid4().hex[:8]}"
-            claim_result = self.claim_service.claim_issue(
+            future = self._executor.submit(
+                self._run_issue_workflow,
+                repo_name=state["repo_name"],
                 repo_path=str(repo_config.repo_path),
                 worktree_root=str(repo_config.worktree_root),
-                issue_number=issue_number,
-                agent_run_id=agent_run_id,
-            )
-            if not claim_result.succeeded:
-                continue
-
-            exec_result = self.execution_service.execute_run(
-                repo_name=state["repo_name"],
                 issue_number=issue_number,
                 config=state["config"],
             )
-            if exec_result.status != "succeeded":
-                continue
+            futures.append(future)
 
-            self.integration_service.integrate_issue(
-                repo_path=str(repo_config.repo_path),
-                worktree_root=str(repo_config.worktree_root),
-                issue_number=issue_number,
-            )
+        for future in futures:
+            future.result()
+
         return state
 
     def reconcile_end(self, state: OrchestrationState) -> OrchestrationState:
