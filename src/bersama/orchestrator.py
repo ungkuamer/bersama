@@ -493,8 +493,14 @@ class Orchestrator:
                         status=result.status,
                         detail=result.failure_message,
                     ))
-            except Exception:
-                pass
+            except Exception as exc:
+                self._event_emitter(SchedulerEvent(
+                    event="integration.poll_failed",
+                    issue_number=record.number,
+                    agent_run_id=orchestration.agent_run_id,
+                    status="failed",
+                    detail=str(exc),
+                ))
 
     def build_workflow(self) -> Any:
         workflow = StateGraph(OrchestrationState)
@@ -585,4 +591,3 @@ class Orchestrator:
         # Phase 4: Final reconciliation at orchestrator end.
         self.reconciliation_service.reconcile()
         self._poll_pending_integrations(state)
-
