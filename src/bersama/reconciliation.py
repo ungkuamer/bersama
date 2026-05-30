@@ -181,6 +181,7 @@ class ReconciliationService:
             if isinstance(parsed, ImplementationIssue) and not parsed.diagnostics:
                 orchestration = parsed.orchestration
                 if orchestration.claimed_at:
+                    claim_status = parse_claim_status(orchestration.claim_status)
                     claimed_at_str = orchestration.claimed_at.strip()
                     if claimed_at_str.endswith("Z"):
                         claimed_at_str = claimed_at_str[:-1] + "+00:00"
@@ -195,15 +196,40 @@ class ReconciliationService:
                     except ValueError:
                         is_stale = True
 
-                    if is_stale and "needs-triage" not in record.labels:
+                    if (
+                        claim_status is ClaimStatus.FAILED
+                        and "needs-triage" not in record.labels
+                    ):
                         self._issues.add_labels(record.number, "needs-triage")
                         comment_body = (
-                            f"Claim for issue #{record.number} has become stale.\n\n"
+                            f"Failed Claim Setup for issue #{record.number} requires human review.\n\n"
                             f"**Diagnostics:**\n"
+                            f"- Claim Status: {orchestration.claim_status}\n"
                             f"- Claimed at: {orchestration.claimed_at}\n"
-                            f"- Timeout configured: {self._stale_claim_timeout}\n"
-                            f"- Agent Run ID: {orchestration.agent_run_id or 'unknown'}"
+                            f"- Agent Run ID: {orchestration.agent_run_id or 'unknown'}\n"
+                            f"- Implementation Branch: {orchestration.implementation_branch or 'unknown'}"
                         )
+                        self._issues.add_comment(record.number, comment_body)
+                    elif is_stale and "needs-triage" not in record.labels:
+                        if claim_status is ClaimStatus.SETTING_UP:
+                            comment_body = (
+                                f"Interrupted Claim Setup detected for issue #{record.number}.\n\n"
+                                f"**Diagnostics:**\n"
+                                f"- Claim Status: {orchestration.claim_status}\n"
+                                f"- Claimed at: {orchestration.claimed_at}\n"
+                                f"- Timeout configured: {self._stale_claim_timeout}\n"
+                                f"- Agent Run ID: {orchestration.agent_run_id or 'unknown'}\n"
+                                f"- Implementation Branch: {orchestration.implementation_branch or 'unknown'}"
+                            )
+                        else:
+                            comment_body = (
+                                f"Claim for issue #{record.number} has become stale.\n\n"
+                                f"**Diagnostics:**\n"
+                                f"- Claimed at: {orchestration.claimed_at}\n"
+                                f"- Timeout configured: {self._stale_claim_timeout}\n"
+                                f"- Agent Run ID: {orchestration.agent_run_id or 'unknown'}"
+                            )
+                        self._issues.add_labels(record.number, "needs-triage")
                         self._issues.add_comment(record.number, comment_body)
 
             # C. Check for PRD Issue child completion (ready-for-human)

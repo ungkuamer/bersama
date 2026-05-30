@@ -396,12 +396,8 @@ None
     assert "unrecognised-claim-status" in comment_text or "Claim Status" in comment_text
 
 
-def test_failed_claim_status_does_not_block_reconciliation_healing() -> None:
-    """A failed claim that is otherwise well-formed should not block reconciliation healing.
-
-    Reconciliation treats failed claim as a recognised state — no extra diagnostic
-    for the claim status value itself. The issue may have other problems.
-    """
+def test_failed_claim_status_moves_issue_to_needs_triage_for_human_review() -> None:
+    """A failed claim setup remains reviewable until a human resolves it."""
     issue = GitHubIssueRecord(
         number=21,
         title="Failed claim issue",
@@ -435,11 +431,10 @@ None
     )
     service.reconcile()
 
-    # No diagnostics from parsing, so no needs-triage/needs-info from malformed section.
-    # The claim status value "failed claim" is recognised — it should not produce a diagnostic.
-    # Within the 2h window so not stale either.
-    assert (21, ("needs-triage",)) not in gateway.added_labels
-    assert (21, ("needs-info",)) not in gateway.added_labels
+    assert (21, ("needs-triage",)) in gateway.added_labels
+    assert len(gateway.comments) == 1
+    assert "Failed Claim Setup" in gateway.comments[0][1]
+    assert "Claim Status: failed claim" in gateway.comments[0][1]
 
 
 def test_active_claim_status_preserves_normal_behaviour() -> None:
@@ -548,3 +543,122 @@ def test_malformed_claim_status_with_other_diagnostics_combined() -> None:
     comment = gateway.comments[0][1]
     assert "Unrecognised Claim Status" in comment
     assert "Missing What to Build" in comment or "missing-what-to-build" in comment
+
+
+def test_stale_provisional_claim_setup_moves_to_needs_triage_with_diagnostics() -> None:
+    issue = GitHubIssueRecord(
+        number=25,
+        title="Interrupted claim setup",
+        body="""
+## Parent PRD
+#2
+
+## What to Build
+Build it.
+
+## Acceptance Criteria
+- [ ] Done.
+
+## Blocked By
+None
+
+## Orchestration
+- Agent Run: run-stale
+- Claimed At: 2026-05-30T08:00:00Z
+- Claim Status: setting up
+- Implementation Branch: impl/2/25-build-it
+        """.strip(),
+        labels=("implementation",),
+        state="open",
+    )
+    gateway = FakeIssueGateway(issue)
+    service = ReconciliationService(
+        issues=gateway,
+        stale_claim_timeout=timedelta(hours=2),
+        now_provider=lambda: "2026-05-30T11:00:00Z",
+    )
+
+    service.reconcile()
+
+    assert (25, ("needs-triage",)) in gateway.added_labels
+    assert len(gateway.comments) == 1
+    assert "Interrupted Claim Setup" in gateway.comments[0][1]
+    assert "Claim Status: setting up" in gateway.comments[0][1]
+
+
+def test_legacy_claim_metadata_without_claim_status_stays_backward_compatible() -> None:
+    issue = GitHubIssueRecord(
+        number=26,
+        title="Legacy claimed issue",
+        body="""
+## Parent PRD
+#2
+
+## What to Build
+Build it.
+
+## Acceptance Criteria
+- [ ] Done.
+
+## Blocked By
+None
+
+## Orchestration
+- Agent Run: run-legacy
+- Claimed At: 2026-05-30T10:00:00Z
+- Implementation Branch: impl/2/26-build-it
+        """.strip(),
+        labels=("implementation",),
+        state="open",
+    )
+    gateway = FakeIssueGateway(issue)
+    service = ReconciliationService(
+        issues=gateway,
+        stale_claim_timeout=timedelta(hours=2),
+        now_provider=lambda: "2026-05-30T11:00:00Z",
+    )
+
+    service.reconcile()
+
+    assert len(gateway.added_labels) == 0
+    assert len(gateway.comments) == 0
+
+
+def test_stale_legacy_claim_metadata_uses_existing_stale_claim_path() -> None:
+    issue = GitHubIssueRecord(
+        number=27,
+        title="Legacy stale claim",
+        body="""
+## Parent PRD
+#2
+
+## What to Build
+Build it.
+
+## Acceptance Criteria
+- [ ] Done.
+
+## Blocked By
+None
+
+## Orchestration
+- Agent Run: run-legacy-stale
+- Claimed At: 2026-05-30T08:00:00Z
+- Implementation Branch: impl/2/27-build-it
+        """.strip(),
+        labels=("implementation",),
+        state="open",
+    )
+    gateway = FakeIssueGateway(issue)
+    service = ReconciliationService(
+        issues=gateway,
+        stale_claim_timeout=timedelta(hours=2),
+        now_provider=lambda: "2026-05-30T11:00:00Z",
+    )
+
+    service.reconcile()
+
+    assert (27, ("needs-triage",)) in gateway.added_labels
+    assert len(gateway.comments) == 1
+    assert "has become stale" in gateway.comments[0][1]
+    assert "Claim Status" not in gateway.comments[0][1]
