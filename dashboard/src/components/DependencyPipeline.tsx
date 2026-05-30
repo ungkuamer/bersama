@@ -3,8 +3,8 @@ import { useMemo } from 'react';
 export interface PipelineNode {
   number: number;
   status?: string;
-  blocked_by: number[];
-  active_blockers: number[];
+  blocked_by?: number[];
+  active_blockers?: number[];
 }
 
 interface DependencyPipelineProps {
@@ -27,7 +27,7 @@ function topologicalSort(nodes: PipelineNode[]): PipelineNode[] {
   }
 
   for (const n of nodes) {
-    for (const blocker of n.blocked_by) {
+    for (const blocker of n.blocked_by || []) {
       // Edge: blocker -> n
       if (nodeMap.has(blocker)) {
         if (!adjacency.has(blocker)) adjacency.set(blocker, []);

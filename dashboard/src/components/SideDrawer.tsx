@@ -8,12 +8,11 @@ import {
 } from '@/components/ui/sheet'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Shimmer, ShimmerText, ShimmerCard } from '@/components/Shimmer'
+import { ShimmerCard } from '@/components/Shimmer'
 import {
   Info,
   Play,
   GitBranch,
-  Clock,
   AlertCircle,
   CheckCircle2,
   GitMerge,
