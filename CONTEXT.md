@@ -32,6 +32,18 @@ _Avoid_: Dependency, prerequisite, blocker
 An Implementation Issue that has been reserved for exactly one Agent Run that is ready to start immediately. It is no longer eligible for other agents to claim while that run is active.
 _Avoid_: Picked-up ticket, assigned issue, locked task
 
+**Claim Setup**:
+The transition during which a Ready Implementation Issue is being reserved for an Agent Run. It is not yet a Claimed Implementation Issue because the Agent Run is not ready to start immediately.
+_Avoid_: Partial claim, half-claimed issue, pre-claim
+
+**Active Claim**:
+A Claim Setup that has successfully become a Claimed Implementation Issue. The owning Agent Run has the repository state it needs to begin execution.
+_Avoid_: Final claim, confirmed claim, locked issue
+
+**Failed Claim Setup**:
+A Claim Setup that did not become an Active Claim. The Implementation Issue requires human review before another Agent Run can claim it.
+_Avoid_: Broken claim, abandoned setup, failed reservation
+
 **Stale Claim**:
 A claim on an Implementation Issue whose Agent Run is no longer considered active because its claim metadata is older than the configured timeout.
 _Avoid_: Dead job, abandoned task, orphaned worker
@@ -64,14 +76,26 @@ _Avoid_: Task queue, worker pool, job scheduler
 One evaluation of Implementation Issue state that selects Ready Implementation Issues for available Agent Run capacity.
 _Avoid_: Queue polling, batch, sweep
 
+**Discovery Operation**:
+A read-only orchestration operation that observes GitHub Issues, git references, worktrees, or Integration Pull Request status without changing lifecycle state.
+_Avoid_: Read step, lookup, scan
+
+**Lifecycle Mutation**:
+An orchestration operation that changes issue lifecycle state, claim state, repository branches, worktrees, or Integration Pull Request state.
+_Avoid_: Write step, update, side effect
+
 **Repository Operation Lock**:
-A process-local guard that prevents concurrent orchestration operations from mutating the same repository metadata at the same time.
+A system-wide file-based guard that prevents concurrent orchestration processes from mutating the same repository metadata at the same time.
 _Avoid_: Global lock, worker lock, queue lock
+
+**Integration Pull Request**:
+A GitHub Pull Request created programmatically by the orchestrator to merge the successful commits of an Agent Run's implementation branch into its Parent PRD's PRD branch.
+_Avoid_: Pull Request, PR, merge request
+
+**Integrated Implementation Issue**:
+An Implementation Issue that has had its successful Agent Run commits merged back into its Parent PRD's PRD branch via an Integration Pull Request and has been closed.
+_Avoid_: Completed ticket, merged issue, done task
 
 **Orchestration Control Center**:
 The human-facing dashboard for inspecting PRD Issue and Implementation Issue state, triggering orchestration operations, and reviewing Agent Run logs.
 _Avoid_: Admin panel, scaffold dashboard, cockpit
-
-**Integrated Implementation Issue**:
-An Implementation Issue that has had its successful Agent Run commits merged back into its Parent PRD's PRD branch and has been closed.
-_Avoid_: Completed ticket, merged issue, done task

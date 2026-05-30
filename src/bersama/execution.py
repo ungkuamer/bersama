@@ -188,7 +188,8 @@ class HarnessExecutionService:
                     preexec_fn=os.setsid,
                 )
                 try:
-                    process.wait(timeout=harness.timeout_seconds)
+                    timeout = harness.timeout_seconds if harness.timeout_seconds is not None else 1800
+                    process.wait(timeout=timeout)
                     exit_code = process.returncode
                 except subprocess.TimeoutExpired:
                     timeout_expired = True

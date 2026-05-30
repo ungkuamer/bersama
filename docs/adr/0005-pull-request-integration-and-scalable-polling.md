@@ -1,0 +1,3 @@
+# Pull Request Integration and Scalable Polling
+
+Rather than merging implementation branches directly to PRD branches, the orchestrator programmatically opens an Integration Pull Request and reconciles its lifecycle asynchronously. Instead of blocking thread pools waiting for CI/CD checks to pass on the PR, the orchestrator tracks PR state durably in the GitHub Issue body. During each Scheduling Pass, the orchestrator checks active integration states, merging passed PRs, and flagging failures for human review. To prevent API throttling, issue queries are strictly filtered using relevant labels and a recent sliding time-window, falling back to single-issue lookups when resolving older dependencies.
