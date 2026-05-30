@@ -2,12 +2,29 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 @import "@fontsource-variable/geist";
+@import "@fontsource-variable/geist-mono";
 
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
     --font-heading: var(--font-sans);
     --font-sans: 'Geist Variable', sans-serif;
+    --font-mono: 'Geist Mono Variable', monospace;
+    --text-xs: 0.75rem;
+    --text-sm: 0.875rem;
+    --text-base: 1rem;
+    --text-lg: 1.125rem;
+    --text-xl: 1.25rem;
+    --text-2xl: 1.5rem;
+    --leading-xs: 1rem;
+    --leading-sm: 1.25rem;
+    --leading-base: 1.5rem;
+    --leading-lg: 1.75rem;
+    --leading-xl: 1.75rem;
+    --leading-2xl: 2rem;
+    --tracking-tight: -0.025em;
+    --tracking-normal: 0;
+    --tracking-wide: 0.025em;
     --color-sidebar-ring: var(--sidebar-ring);
     --color-sidebar-border: var(--sidebar-border);
     --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -125,7 +142,7 @@
     @apply bg-background text-foreground;
     }
   html {
-    @apply font-mono;
+    @apply font-sans;
     }
 }
 
@@ -169,7 +186,7 @@
 
   .dashboard-control:focus-visible,
   .dashboard-focus:focus-visible {
-    outline: 2px solid rgb(250 250 250 / 0.8);
+    outline: 2px solid #2dd4bf;
     outline-offset: 2px;
     box-shadow: none;
   }
@@ -186,7 +203,7 @@
   }
 
   .dashboard-row:focus-visible {
-    outline: 2px solid rgb(250 250 250 / 0.8);
+    outline: 2px solid #2dd4bf;
     outline-offset: -2px;
     box-shadow: none;
   }

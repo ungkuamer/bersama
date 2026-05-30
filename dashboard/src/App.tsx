@@ -671,12 +671,12 @@ export default function App() {
             <h1 className="text-sm font-bold text-white tracking-widest uppercase flex items-center gap-2">
               Bersama <span className="text-zinc-600">//</span> Agent Orchestration
             </h1>
-            <p className="text-[10px] text-zinc-500 font-mono tracking-tight">Standalone Scaffold Dashboard</p>
+            <p className="text-[10px] text-zinc-500 tracking-tight">Standalone Scaffold Dashboard</p>
           </div>
         </div>
 
         {/* Global Statistics Panel */}
-        <div className="flex flex-wrap items-center gap-4 text-xs font-mono">
+        <div className="flex flex-wrap items-center gap-4 text-xs">
           {/* Active Repo Selector */}
           {repos.length > 0 && (
             <div className="dashboard-glass-surface flex items-center gap-2 border rounded px-2 py-1">
@@ -770,11 +770,11 @@ export default function App() {
           <Card className="dashboard-glass-panel flex flex-col grow shrink overflow-hidden max-h-[380px]">
             <CardHeader className="py-3.5 border-b border-zinc-800 px-4 flex flex-row items-center justify-between">
               <div>
-                <CardTitle className="text-xs tracking-wider font-bold uppercase text-white font-mono flex items-center gap-2">
+                <CardTitle className="text-xs tracking-wider font-bold uppercase text-white flex items-center gap-2">
                   <Layers className="size-3.5 text-zinc-500" />
                   Recent Agent Runs
                 </CardTitle>
-                <CardDescription className="text-[10px] text-zinc-500 font-mono">Agent execution history</CardDescription>
+                <CardDescription className="text-[10px] text-zinc-500">Agent execution history</CardDescription>
               </div>
               <Badge variant="outline" className="font-mono text-[9px] border-zinc-800 text-zinc-400">
                 {runs.length} Runs
@@ -782,11 +782,11 @@ export default function App() {
             </CardHeader>
             <CardContent className="p-0 grow overflow-hidden">
               {loading ? (
-                <div className="h-full flex items-center justify-center p-6 text-xs text-zinc-500 font-mono">
+                <div className="h-full flex items-center justify-center p-6 text-xs text-zinc-500">
                   Loading runs...
                 </div>
               ) : runs.length === 0 ? (
-                <div className="h-full flex flex-col items-center justify-center p-8 text-center font-mono">
+                <div className="h-full flex flex-col items-center justify-center p-8 text-center">
                   <Server className="size-6 text-zinc-700 mb-2" />
                   <p className="text-xs text-zinc-500">No active worktrees or runs registered</p>
                   <p className="text-[9px] text-zinc-600 mt-1 max-w-[200px]">Runs are initialized when implementation issues are claimed.</p>
@@ -996,17 +996,17 @@ export default function App() {
             {/* Header Controls for filtering */}
             <CardHeader className="py-4 border-b border-zinc-800 px-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
               <div>
-                <CardTitle className="text-sm font-mono text-white flex items-center gap-2 uppercase tracking-wider">
+                <CardTitle className="text-sm text-white flex items-center gap-2 uppercase tracking-wider">
                   <Database className="size-4 text-zinc-500" />
                   Product Roadmap & Implementation Lifecycle
                 </CardTitle>
-                <CardDescription className="text-xs text-zinc-500 font-mono">
+                <CardDescription className="text-xs text-zinc-500">
                   PRD issues hierarchy derived from GitHub Issues state
                 </CardDescription>
               </div>
 
               {/* Filtering / Search Controls */}
-              <div className="flex items-center gap-2 font-mono text-xs">
+              <div className="flex items-center gap-2 text-xs">
                 {/* Search */}
                 <input 
                   type="text" 
@@ -1038,11 +1038,11 @@ export default function App() {
             </CardHeader>
             <CardContent className="p-0 grow overflow-hidden">
               {loading ? (
-                <div className="h-full flex items-center justify-center p-8 text-xs text-zinc-500 font-mono">
+                <div className="h-full flex items-center justify-center p-8 text-xs text-zinc-500">
                   Syncing with GitHub issues...
                 </div>
               ) : filteredPrds.length === 0 ? (
-                <div className="h-full flex flex-col items-center justify-center p-12 text-center font-mono">
+                <div className="h-full flex flex-col items-center justify-center p-12 text-center">
                   <FileText className="size-8 text-zinc-700 mb-2" />
                   <p className="text-xs text-zinc-500">No PRD Issues found matching search criteria</p>
                   <p className="text-[10px] text-zinc-600 mt-1 max-w-[340px]">
@@ -1074,7 +1074,7 @@ export default function App() {
                                 PRD #{prd.number}
                               </span>
                               <div>
-                                <h3 className="text-xs font-mono font-bold text-white tracking-wide leading-none mb-1.5">
+                                <h3 className="text-xs font-bold text-white tracking-wide leading-none mb-1.5">
                                   {prd.title}
                                 </h3>
                                 {prd.prd_branch && (
@@ -1097,7 +1097,7 @@ export default function App() {
                                     preparePrdIssue(prd.number);
                                   }}
                                   disabled={isPreparingPrd}
-                                  className="dashboard-control font-mono text-[9px] uppercase tracking-wider text-zinc-200"
+                                  className="dashboard-control text-[9px] uppercase tracking-wider text-zinc-200"
                                 >
                                   <GitBranch data-icon="inline-start" className={isPreparingPrd ? 'animate-pulse' : ''} />
                                   {isPreparingPrd ? 'Preparing' : 'Prepare'} PRD #{prd.number}
@@ -1131,7 +1131,7 @@ export default function App() {
                           {isExpanded && (
                             <div className="p-4 bg-[#050506] divide-y divide-zinc-900">
                               {children.length === 0 ? (
-                                <div className="text-center py-4 font-mono text-[10px] text-zinc-600">
+                                <div className="text-center py-4 text-[10px] text-zinc-600">
                                   No implementation issue slices declared for this PRD.
                                 </div>
                               ) : (
@@ -1164,7 +1164,7 @@ export default function App() {
                                             <span className="text-[10px] font-bold text-white hover:underline cursor-pointer">
                                               #{c.number}
                                             </span>
-                                            <span className="text-[11px] text-zinc-300 font-semibold leading-tight">
+                                            <span className="text-[11px] text-zinc-300 font-semibold leading-tight font-sans">
                                               {c.title}
                                             </span>
                                           </div>
@@ -1287,7 +1287,7 @@ export default function App() {
                                                     ...prev,
                                                     [c.number]: event.target.value
                                                   }))}
-                                                  className="dashboard-control min-w-0 w-full sm:w-[260px] rounded px-2 py-1 text-[10px] text-zinc-200 focus:outline-none"
+                                                  className="dashboard-control min-w-0 w-full sm:w-[260px] rounded px-2 py-1 text-[10px] text-zinc-200 focus:outline-none font-mono"
                                                 />
                                                 <Button
                                                   type="submit"
@@ -1299,7 +1299,7 @@ export default function App() {
                                                       : `Submit claim for Implementation Issue #${c.number}`
                                                   }
                                                   disabled={isClaimingIssue}
-                                                  className="dashboard-control font-mono text-[9px] uppercase tracking-wider text-zinc-200"
+                                                  className="dashboard-control text-[9px] uppercase tracking-wider text-zinc-200"
                                                 >
                                                   <Send data-icon="inline-start" className={isClaimingIssue ? 'animate-pulse' : ''} />
                                                   {isClaimingIssue ? 'Claiming' : 'Submit'} #{c.number}
@@ -1354,7 +1354,7 @@ export default function App() {
                                             variant="outline"
                                             onClick={() => integrateImplementationIssue(c.number)}
                                             disabled={isIntegratingIssue}
-                                            className="dashboard-control font-mono text-[9px] uppercase tracking-wider text-zinc-200"
+                                            className="dashboard-control text-[9px] uppercase tracking-wider text-zinc-200"
                                           >
                                             <GitMerge data-icon="inline-start" className={isIntegratingIssue ? 'animate-pulse' : ''} />
                                             {isIntegratingIssue ? 'Integrating' : 'Integrate'} #{c.number}
@@ -1373,7 +1373,7 @@ export default function App() {
                                             }
                                             onClick={() => startImplementationIssue(c.number)}
                                             disabled={isStartingIssue}
-                                            className="dashboard-control font-mono text-[9px] uppercase tracking-wider text-zinc-200"
+                                            className="dashboard-control text-[9px] uppercase tracking-wider text-zinc-200"
                                           >
                                             <Play data-icon="inline-start" className={isStartingIssue ? 'animate-pulse' : ''} />
                                             {isStartingIssue ? 'Starting' : 'Start'} #{c.number}
@@ -1386,7 +1386,7 @@ export default function App() {
                                             size="xs"
                                             variant="outline"
                                             onClick={() => openClaimForm(c.number)}
-                                            className="dashboard-control font-mono text-[9px] uppercase tracking-wider text-zinc-200"
+                                            className="dashboard-control text-[9px] uppercase tracking-wider text-zinc-200"
                                           >
                                             <Hand data-icon="inline-start" />
                                             Claim #{c.number}
@@ -1412,7 +1412,7 @@ export default function App() {
       </main>
 
       {/* Footer Info Box */}
-      <footer className="dashboard-glass-panel border-t px-6 py-3 flex items-center justify-between text-[10px] text-zinc-500 font-mono mt-auto shrink-0">
+      <footer className="dashboard-glass-panel border-t px-6 py-3 flex items-center justify-between text-[10px] text-zinc-500 mt-auto shrink-0">
         <div className="flex items-center gap-2">
           <span className="size-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
           <span>Engine Connected</span>
