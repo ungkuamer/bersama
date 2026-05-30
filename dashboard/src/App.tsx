@@ -28,6 +28,7 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/com
 import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Button } from '@/components/ui/button'
+import DependencyPipeline from '@/components/DependencyPipeline'
 
 const API_BASE = import.meta.env.DEV ? `http://${window.location.hostname}:8000` : '';
 
@@ -1156,6 +1157,11 @@ export default function App() {
                             >
                               {prepareState.message}
                             </div>
+                          )}
+
+                          {/* Dependency Pipeline Map */}
+                          {isExpanded && children.length > 0 && (
+                            <DependencyPipeline children={children} />
                           )}
 
                           {/* PRD Children (Implementation Issues) */}

@@ -262,4 +262,30 @@
       box-shadow: 0 0 10px rgba(16, 185, 129, 1), 0 0 20px rgba(16, 185, 129, 0.5);
     }
   }
+
+  .pipeline-node-running {
+    animation: pipeline-pulse 2s ease-in-out infinite;
+  }
+
+  .pipeline-text-running {
+    animation: pipeline-text-pulse 2s ease-in-out infinite;
+  }
+
+  @keyframes pipeline-pulse {
+    0%, 100% {
+      opacity: 0.8;
+    }
+    50% {
+      opacity: 1;
+    }
+  }
+
+  @keyframes pipeline-text-pulse {
+    0%, 100% {
+      opacity: 0.7;
+    }
+    50% {
+      opacity: 1;
+    }
+  }
 }
