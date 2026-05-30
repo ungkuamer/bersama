@@ -1,5 +1,11 @@
 from __future__ import annotations
 
+import json
+import queue
+import sys
+import threading
+import uuid
+from concurrent.futures import ThreadPoolExecutor, Executor
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TypedDict, List, Optional, Any
@@ -12,6 +18,15 @@ from bersama.claiming import ClaimWorkspaceGateway, ImplementationClaimService
 from bersama.execution import HarnessExecutionService
 from bersama.integration import IntegrationWorkspaceGateway, IntegrationService
 from bersama.reconciliation import ReconciliationService
+
+
+@dataclass(frozen=True)
+class SchedulerEvent:
+    event: str  # e.g. "claim.attempt", "claim.succeeded", "agent_run.start"
+    issue_number: int
+    agent_run_id: str | None = None
+    status: str | None = None  # "succeeded", "failed", etc.
+    detail: str | None = None
 
 
 @dataclass(frozen=True)
@@ -62,6 +77,16 @@ def _utc_now() -> str:
     return datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
+def _default_event_emitter(event: SchedulerEvent) -> None:
+    print(json.dumps({
+        "event": event.event,
+        "issue_number": event.issue_number,
+        "agent_run_id": event.agent_run_id,
+        "status": event.status,
+        "detail": event.detail,
+    }), file=sys.stdout, flush=True)
+
+
 class OrchestrationState(TypedDict, total=False):
     repo_name: str
     config: AppConfig
@@ -77,12 +102,28 @@ class Orchestrator:
         claim_workspace_gateway: Optional[Any] = None,
         integration_workspace_gateway: Optional[Any] = None,
         now_provider: Optional[callable] = None,
+        executor: Optional[Executor] = None,
+        event_emitter: Optional[callable] = None,
     ) -> None:
         self.issues = issues_gateway or GitHubIssueGateway()
         self.git_workspace = git_workspace_gateway or GitWorkspaceGateway()
         self.claim_workspace = claim_workspace_gateway or ClaimWorkspaceGateway()
         self.integration_workspace = integration_workspace_gateway or IntegrationWorkspaceGateway()
         self.now_provider = now_provider or _utc_now
+        self._repo_lock = threading.Lock()
+        self._executor = executor if executor is not None else ThreadPoolExecutor()
+        self._event_emitter = event_emitter or _default_event_emitter
+        self._active_agent_run_issue_numbers: set[int] = set()
+
+        # If no external gateway was provided, inject the shared
+        # Repository Operation Lock into the internally-created gateways
+        # so that all shared repository metadata mutations are serialized.
+        if git_workspace_gateway is None:
+            self.git_workspace._lock = self._repo_lock
+        if claim_workspace_gateway is None:
+            self.claim_workspace._lock = self._repo_lock
+        if integration_workspace_gateway is None:
+            self.integration_workspace._lock = self._repo_lock
 
         self.prd_preparation_service = PrdPreparationService(
             issues=self.issues,
@@ -104,6 +145,15 @@ class Orchestrator:
             issues=self.issues,
             now_provider=self.now_provider,
         )
+
+        # ── Serialized Integration Lane ───────────────────────────────
+        # Successful Agent Runs enter this queue when execution completes.
+        # A dedicated daemon thread drains the queue one item at a time,
+        # serializing all PRD-branch mutations without consuming Agent Run
+        # Capacity.
+        self._integration_queue: queue.Queue[tuple[int, str, str, str]] = queue.Queue()
+        self._integration_lock = threading.Lock()
+        self._integration_worker_started = False
 
     def reconcile_start(self, state: OrchestrationState) -> OrchestrationState:
         self.reconciliation_service.reconcile()
@@ -152,39 +202,209 @@ class Orchestrator:
             per_prd_concurrency=repo_config.per_prd_concurrency,
             stale_claim_timeout=timedelta(hours=2),
             now=now_dt,
+            active_agent_run_issue_numbers=frozenset(self._active_agent_run_issue_numbers),
         )
         state["claimable_issues"] = list(planner_result.claimable_issue_numbers)
         return state
+
+    def _ensure_integration_worker(self) -> None:
+        """Start the serialized integration worker thread if not already running."""
+        if not self._integration_worker_started:
+            self._integration_worker_started = True
+            worker = threading.Thread(target=self._run_integration_worker, daemon=True)
+            worker.start()
+
+    def _run_integration_worker(self) -> None:
+        """Continuously drain the integration queue, one issue at a time.
+        The lock ensures only one integration mutates any PRD branch at a time."""
+        while True:
+            item = self._integration_queue.get()
+            if item is None:  # sentinel
+                break
+            issue_number, agent_run_id, repo_path, worktree_root = item
+            self._event_emitter(SchedulerEvent(
+                event="integration.start",
+                issue_number=issue_number,
+                agent_run_id=agent_run_id,
+            ))
+            try:
+                with self._integration_lock:
+                    result = self.integration_service.integrate_issue(
+                        repo_path=repo_path,
+                        worktree_root=worktree_root,
+                        issue_number=issue_number,
+                    )
+                self._event_emitter(SchedulerEvent(
+                    event="integration.finished",
+                    issue_number=issue_number,
+                    agent_run_id=agent_run_id,
+                    status=result.status,
+                    detail=result.failure_message,
+                ))
+            except Exception as exc:
+                self._event_emitter(SchedulerEvent(
+                    event="integration.finished",
+                    issue_number=issue_number,
+                    agent_run_id=agent_run_id,
+                    status="failed",
+                    detail=str(exc),
+                ))
+                # Integrate_issue handles its own error reporting (labels, comments).
+                pass
+            finally:
+                self._integration_queue.task_done()
+
+    def _drain_integration_queue(self) -> None:
+        """Wait for all pending integrations to complete. Called before shutdown."""
+        self._integration_queue.join()
+
+    def _run_agent_run(
+        self,
+        *,
+        repo_name: str,
+        repo_path: str,
+        worktree_root: str,
+        issue_number: int,
+        config: AppConfig,
+    ) -> None:
+        """Claim + Execute only. Successful results enter the serialized integration lane."""
+        agent_run_id = f"run-{uuid.uuid4().hex[:8]}"
+
+        # ── Phase 1: Claim ──────────────────────────────────────────
+        self._event_emitter(SchedulerEvent(
+            event="claim.attempt",
+            issue_number=issue_number,
+            agent_run_id=agent_run_id,
+        ))
+        try:
+            claim_result = self.claim_service.claim_issue(
+                repo_path=repo_path,
+                worktree_root=worktree_root,
+                issue_number=issue_number,
+                agent_run_id=agent_run_id,
+            )
+        except Exception as exc:
+            self._event_emitter(SchedulerEvent(
+                event="claim.failed",
+                issue_number=issue_number,
+                agent_run_id=agent_run_id,
+                status="failed",
+                detail=str(exc),
+            ))
+            print(
+                f"[scheduler] claim error for #{issue_number}: {exc}",
+                file=sys.stderr,
+            )
+            return
+
+        if not claim_result.succeeded:
+            self._event_emitter(SchedulerEvent(
+                event="claim.failed",
+                issue_number=issue_number,
+                agent_run_id=agent_run_id,
+                status="failed",
+                detail=claim_result.failure_message,
+            ))
+            print(
+                f"[scheduler] claim failed for #{issue_number}: {claim_result.failure_message}",
+                file=sys.stderr,
+            )
+            return
+
+        self._event_emitter(SchedulerEvent(
+            event="claim.succeeded",
+            issue_number=issue_number,
+            agent_run_id=agent_run_id,
+            status="succeeded",
+        ))
+
+        # ── Phase 2: Execute ────────────────────────────────────────
+        self._event_emitter(SchedulerEvent(
+            event="agent_run.start",
+            issue_number=issue_number,
+            agent_run_id=agent_run_id,
+        ))
+        try:
+            exec_result = self.execution_service.execute_run(
+                repo_name=repo_name,
+                issue_number=issue_number,
+                config=config,
+            )
+        except Exception as exc:
+            self._event_emitter(SchedulerEvent(
+                event="agent_run.finished",
+                issue_number=issue_number,
+                agent_run_id=agent_run_id,
+                status="failed",
+                detail=str(exc),
+            ))
+            print(
+                f"[scheduler] execution error for #{issue_number}: {exc}",
+                file=sys.stderr,
+            )
+            return
+
+        finish_status = exec_result.status
+        finish_detail = exec_result.failure_reason if finish_status != "succeeded" else None
+        self._event_emitter(SchedulerEvent(
+            event="agent_run.finished",
+            issue_number=issue_number,
+            agent_run_id=agent_run_id,
+            status=finish_status,
+            detail=finish_detail,
+        ))
+
+        if exec_result.status != "succeeded":
+            reason = exec_result.failure_reason or exec_result.status
+            print(
+                f"[scheduler] execution non-success for #{issue_number}: status={exec_result.status}, reason={reason}",
+                file=sys.stderr,
+            )
+            return
+
+        # ── Phase 3: Enter Integration Lane ─────────────────────────
+        # Do NOT block Agent Run Capacity here — integration is
+        # serialized by a dedicated worker thread.
+        self._integration_queue.put((issue_number, agent_run_id, repo_path, worktree_root))
 
     def execute_claims(self, state: OrchestrationState) -> OrchestrationState:
         repo_config = state["config"].repo(state["repo_name"])
         claimable_issues = state.get("claimable_issues", [])
 
-        import uuid
+        if not claimable_issues:
+            return state
+
+        # Ensure the serialized integration worker is running.
+        self._ensure_integration_worker()
+
+        # Track in-memory active Agent Runs so the planner knows about them
+        # during subsequent scheduling passes (e.g. in continuous mode).
         for issue_number in claimable_issues:
-            agent_run_id = f"run-{uuid.uuid4().hex[:8]}"
-            claim_result = self.claim_service.claim_issue(
+            self._active_agent_run_issue_numbers.add(issue_number)
+
+        futures = []
+        for issue_number in claimable_issues:
+            future = self._executor.submit(
+                self._run_agent_run,
+                repo_name=state["repo_name"],
                 repo_path=str(repo_config.repo_path),
                 worktree_root=str(repo_config.worktree_root),
-                issue_number=issue_number,
-                agent_run_id=agent_run_id,
-            )
-            if not claim_result.succeeded:
-                continue
-
-            exec_result = self.execution_service.execute_run(
-                repo_name=state["repo_name"],
                 issue_number=issue_number,
                 config=state["config"],
             )
-            if exec_result.status != "succeeded":
-                continue
+            futures.append(future)
 
-            self.integration_service.integrate_issue(
-                repo_path=str(repo_config.repo_path),
-                worktree_root=str(repo_config.worktree_root),
-                issue_number=issue_number,
-            )
+        # Wait for all Agent Runs (claim + execute) to complete.
+        # Integration runs in the background, serialized by the dedicated worker.
+        for future in futures:
+            future.result()
+
+        # Clear in-memory tracking now that all dispatched runs have finished
+        # execution. Agent Run Capacity is freed immediately — integration
+        # does not consume capacity.
+        for issue_number in claimable_issues:
+            self._active_agent_run_issue_numbers.discard(issue_number)
+
         return state
 
     def reconcile_end(self, state: OrchestrationState) -> OrchestrationState:
@@ -209,25 +429,81 @@ class Orchestrator:
         return workflow.compile()
 
     def run(self, repo_name: str, config: AppConfig, continuous: bool = False) -> None:
-        compiled_graph = self.build_workflow()
         if continuous:
-            while True:
-                initial_state: OrchestrationState = {
-                    "repo_name": repo_name,
-                    "config": config,
-                    "claimable_issues": [],
-                }
-                result_state = compiled_graph.invoke(initial_state)
-                if result_state.get("claimable_issues"):
-                    print("\n--- Continuous execution: claimable issues found. Looping to next planning pass... ---\n")
-                    continue
-                else:
-                    break
+            self._run_continuous(repo_name, config)
         else:
+            compiled_graph = self.build_workflow()
             initial_state: OrchestrationState = {
                 "repo_name": repo_name,
                 "config": config,
                 "claimable_issues": [],
             }
             compiled_graph.invoke(initial_state)
+            # Wait for all pending integrations to complete before returning.
+            self._drain_integration_queue()
+
+    def _run_continuous(self, repo_name: str, config: AppConfig) -> None:
+        """Continuous drain scheduling for dependency waves.
+
+        Reconciliation runs at orchestrator start, after meaningful
+        outcomes (integration drain), and at orchestrator end — without
+        requiring a full reconciliation before every slot check.
+
+        The loop drains integration completions *inside* the scheduling
+        loop so newly-unblocked Ready Implementation Issues become
+        claimable within the same orchestrator invocation.
+
+        Stop condition: no claimable issues AND no active Agent Runs
+        AND no pending integrations.
+        """
+        # Phase 1: Reconciliation at orchestrator start (once).
+        self.reconciliation_service.reconcile()
+
+        # Phase 2: PRD preparation (once — no need to re-prepare every pass).
+        state: OrchestrationState = {
+            "repo_name": repo_name,
+            "config": config,
+            "claimable_issues": [],
+        }
+        state = self.prepare_prds(state)
+
+        # Phase 3: Ensure the serialised integration worker is running.
+        self._ensure_integration_worker()
+
+        # Phase 4: Continuous scheduling loop.
+        while True:
+            # ---- Planning Pass ----
+            state = self.plan_actions(state)
+            claimable = state.get("claimable_issues", [])
+
+            # ---- Stop Condition ----
+            # Stop only when truly idle: nothing claimable, no active
+            # Agent Runs, and no integrations still in flight.
+            active_runs = bool(self._active_agent_run_issue_numbers)
+            pending_integrations = self._integration_queue.unfinished_tasks > 0
+            if not claimable and not active_runs and not pending_integrations:
+                break
+
+            if claimable:
+                # ---- Execute ----
+                # Dispatches claimable issues, waits for their execution
+                # to complete, and enqueues successful runs for integration.
+                state = self.execute_claims(state)
+
+            # ---- Drain Integrations ----
+            # Wait for all pending integrations to finish *before* the
+            # next planning pass.  This is the key to dependency-wave
+            # draining: integrated (closed) issues unblock dependents.
+            self._drain_integration_queue()
+
+            # ---- Meaningful-Outcome Reconciliation ----
+            # After integrations, issue states may have changed
+            # (issues closed, labels updated, etc.).
+            self.reconciliation_service.reconcile()
+
+        # Phase 5: Final reconciliation at orchestrator end.
+        self.reconciliation_service.reconcile()
+
+        # Drain any straggling integrations (should be none, but defensive).
+        self._drain_integration_queue()
 

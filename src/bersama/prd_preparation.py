@@ -45,8 +45,13 @@ class PrdPreparationResult:
 
 
 class GitWorkspaceGateway:
-    def __init__(self, runner: GitRunner = run_git) -> None:
+    def __init__(
+        self,
+        runner: GitRunner = run_git,
+        lock: "threading.Lock | None" = None,
+    ) -> None:
         self._runner = runner
+        self._lock = lock
 
     def ensure_remote_branch(
         self, *, repo_path: str, main_branch: str, branch_name: str
@@ -54,16 +59,22 @@ class GitWorkspaceGateway:
         if self.remote_branch_exists(repo_path=repo_path, branch_name=branch_name):
             return True
 
-        self._run(("git", "fetch", "origin", main_branch), cwd=repo_path)
-        self._run(
-            ("git", "branch", "--create-reflog", branch_name, f"origin/{main_branch}"),
-            cwd=repo_path,
-        )
+        if self._lock:
+            self._lock.acquire()
         try:
-            self._run(("git", "push", "origin", f"{branch_name}:{branch_name}"), cwd=repo_path)
-        except BranchPreparationError:
-            self._run(("git", "branch", "-D", branch_name), cwd=repo_path)
-            raise
+            self._run(("git", "fetch", "origin", main_branch), cwd=repo_path)
+            self._run(
+                ("git", "branch", "--create-reflog", branch_name, f"origin/{main_branch}"),
+                cwd=repo_path,
+            )
+            try:
+                self._run(("git", "push", "origin", f"{branch_name}:{branch_name}"), cwd=repo_path)
+            except BranchPreparationError:
+                self._run(("git", "branch", "-D", branch_name), cwd=repo_path)
+                raise
+        finally:
+            if self._lock:
+                self._lock.release()
         return False
 
     def remote_branch_exists(self, *, repo_path: str, branch_name: str) -> bool:
