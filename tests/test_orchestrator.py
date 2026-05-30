@@ -390,17 +390,24 @@ def test_per_issue_failure_events_include_rich_context() -> None:
 
     # Different per-issue outcomes
     orchestrator.claim_service = MagicMock()
-    orchestrator.claim_service.claim_issue.side_effect = [
-        ClaimResult(issue_number=3, agent_run_id="run-ccc", implementation_branch=None, worktree_path=None, failure_message="Not prepared"),
-        ClaimResult(issue_number=4, agent_run_id="run-ddd", implementation_branch="impl/1/4-exec-fails", worktree_path="/worktrees/demo/issue-4"),
-        ClaimResult(issue_number=5, agent_run_id="run-eee", implementation_branch="impl/2/5-integ-fails", worktree_path="/worktrees/demo/issue-5"),
-    ]
+    def claim_side_effect(*args, **kwargs):
+        issue_number = kwargs.get("issue_number")
+        if issue_number == 3:
+            return ClaimResult(issue_number=3, agent_run_id="run-ccc", implementation_branch=None, worktree_path=None, failure_message="Not prepared")
+        elif issue_number == 4:
+            return ClaimResult(issue_number=4, agent_run_id="run-ddd", implementation_branch="impl/1/4-exec-fails", worktree_path="/worktrees/demo/issue-4")
+        elif issue_number == 5:
+            return ClaimResult(issue_number=5, agent_run_id="run-eee", implementation_branch="impl/2/5-integ-fails", worktree_path="/worktrees/demo/issue-5")
+    orchestrator.claim_service.claim_issue.side_effect = claim_side_effect
 
     orchestrator.execution_service = MagicMock()
-    orchestrator.execution_service.execute_run.side_effect = [
-        ExecutionResult(issue_number=4, status="failed", exit_code=1, new_commits=False, failure_reason="build error"),
-        ExecutionResult(issue_number=5, status="succeeded", exit_code=0, new_commits=True),
-    ]
+    def execute_side_effect(*args, **kwargs):
+        issue_number = kwargs.get("issue_number")
+        if issue_number == 4:
+            return ExecutionResult(issue_number=4, status="failed", exit_code=1, new_commits=False, failure_reason="build error")
+        elif issue_number == 5:
+            return ExecutionResult(issue_number=5, status="succeeded", exit_code=0, new_commits=True)
+    orchestrator.execution_service.execute_run.side_effect = execute_side_effect
 
     orchestrator.integration_service = MagicMock()
     orchestrator.integration_service.create_integration_pr.return_value = IntegrationResult(
