@@ -100,7 +100,7 @@ class IntegrationWorkspaceGateway:
         if self._lock:
             self._lock.acquire()
         try:
-            self._run(("git", "fetch", "origin"), cwd=worktree_path)
+            self._run(("git", "fetch", "origin"), cwd=worktree_path, phase=CommandPhase.DISCOVERY)
 
             # 2. Attempt to merge origin/prd_branch into the current local branch
             try:
@@ -113,11 +113,16 @@ class IntegrationWorkspaceGateway:
                         f"Update implementation branch against latest {prd_branch}",
                     ),
                     cwd=worktree_path,
+                    phase=CommandPhase.LIFECYCLE_MUTATION,
                 )
             except IntegrationError as exc:
                 # Clean up the conflicted merge state if possible
                 try:
-                    self._run(("git", "merge", "--abort"), cwd=worktree_path)
+                    self._run(
+                        ("git", "merge", "--abort"),
+                        cwd=worktree_path,
+                        phase=CommandPhase.LIFECYCLE_MUTATION,
+                    )
                 except Exception:
                     pass
                 raise exc
@@ -129,7 +134,11 @@ class IntegrationWorkspaceGateway:
         if self._lock:
             self._lock.acquire()
         try:
-            self._run(("git", "push", "origin", branch_name), cwd=worktree_path)
+            self._run(
+                ("git", "push", "origin", branch_name),
+                cwd=worktree_path,
+                phase=CommandPhase.LIFECYCLE_MUTATION,
+            )
         finally:
             if self._lock:
                 self._lock.release()
@@ -163,7 +172,7 @@ class IntegrationWorkspaceGateway:
                 "--body",
                 body,
             )
-            result = self._run(cmd, cwd=worktree_path)
+            result = self._run(cmd, cwd=worktree_path, phase=CommandPhase.LIFECYCLE_MUTATION)
             url = result.strip()
             pr_number = url.split("/")[-1]
             return pr_number
@@ -193,7 +202,7 @@ class IntegrationWorkspaceGateway:
                 pr_number,
                 merge_option,
             )
-            result = self._run(cmd, cwd=worktree_path)
+            result = self._run(cmd, cwd=worktree_path, phase=CommandPhase.LIFECYCLE_MUTATION)
             return result.strip()
         finally:
             if self._lock:
@@ -216,7 +225,7 @@ class IntegrationWorkspaceGateway:
                 "--json",
                 "state,mergeable,closed,statusCheckRollup",
             )
-            result = self._run(cmd, cwd=worktree_path)
+            result = self._run(cmd, cwd=worktree_path, phase=CommandPhase.DISCOVERY)
             return json.loads(result)
         finally:
             if self._lock:
@@ -237,6 +246,7 @@ class IntegrationWorkspaceGateway:
             self._run(
                 ("git", "push", "origin", f"{implementation_branch}:{prd_branch}"),
                 cwd=worktree_path,
+                phase=CommandPhase.LIFECYCLE_MUTATION,
             )
         finally:
             if self._lock:

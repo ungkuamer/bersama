@@ -14,6 +14,30 @@ from bersama.integration import (
     PushError,
     UpdateError,
 )
+from bersama.command_executor import CommandPhase, CommandResult
+
+
+class RecordingCommandExecutor:
+    def __init__(self) -> None:
+        self.calls: list[tuple[tuple[str, ...], CommandPhase, str]] = []
+        self.results: dict[tuple[str, ...], CommandResult] = {}
+
+    def execute(self, command: tuple[str, ...], phase: CommandPhase, *, cwd: str) -> CommandResult:
+        self.calls.append((command, phase, cwd))
+        return self.results.get(
+            command,
+            CommandResult(
+                command=command,
+                phase=phase,
+                stdout="",
+                stderr="",
+                exit_code=0,
+                timed_out=False,
+                retries_attempted=0,
+                cwd=cwd,
+                diagnostics=None,
+            ),
+        )
 
 
 class FakeIssueGateway:
@@ -179,6 +203,105 @@ def test_integrate_issue_success_flow(tmp_path: Path) -> None:
         (("git", "push", "origin", "impl/1/8-child-impl"), str(worktree_path)),
         (expected_pr_create_cmd, str(worktree_path)),
         (expected_pr_merge_cmd, str(worktree_path)),
+    ]
+
+
+def test_integration_workspace_gateway_routes_commands_through_bounded_executor_with_expected_phases() -> None:
+    executor = RecordingCommandExecutor()
+    pr_create_cmd = (
+        "gh",
+        "pr",
+        "create",
+        "--head",
+        "impl/1/8-child-impl",
+        "--base",
+        "prd/1-parent-prd",
+        "--title",
+        "Integration: #8 into prd/1-parent-prd",
+        "--body",
+        "Automated integration.",
+    )
+    pr_view_cmd = (
+        "gh",
+        "pr",
+        "view",
+        "42",
+        "--json",
+        "state,mergeable,closed,statusCheckRollup",
+    )
+    executor.results[pr_create_cmd] = CommandResult(
+        command=pr_create_cmd,
+        phase=CommandPhase.LIFECYCLE_MUTATION,
+        stdout="https://github.com/owner/repo/pull/42\n",
+        stderr="",
+        exit_code=0,
+        timed_out=False,
+        retries_attempted=0,
+        cwd="/worktrees/demo/issue-8",
+        diagnostics=None,
+    )
+    executor.results[pr_view_cmd] = CommandResult(
+        command=pr_view_cmd,
+        phase=CommandPhase.DISCOVERY,
+        stdout='{"state":"OPEN","mergeable":"MERGEABLE","closed":false,"statusCheckRollup":[]}',
+        stderr="",
+        exit_code=0,
+        timed_out=False,
+        retries_attempted=0,
+        cwd="/worktrees/demo/issue-8",
+        diagnostics=None,
+    )
+
+    workspace = IntegrationWorkspaceGateway(command_executor=executor)
+
+    workspace.update_branch(
+        worktree_path="/worktrees/demo/issue-8",
+        implementation_branch="impl/1/8-child-impl",
+        prd_branch="prd/1-parent-prd",
+    )
+    workspace.push_branch(
+        worktree_path="/worktrees/demo/issue-8",
+        branch_name="impl/1/8-child-impl",
+    )
+    assert (
+        workspace.create_pr(
+            worktree_path="/worktrees/demo/issue-8",
+            implementation_branch="impl/1/8-child-impl",
+            prd_branch="prd/1-parent-prd",
+            title="Integration: #8 into prd/1-parent-prd",
+            body="Automated integration.",
+        )
+        == "42"
+    )
+    assert (
+        workspace.check_pr(
+            worktree_path="/worktrees/demo/issue-8",
+            pr_number="42",
+        )["mergeable"]
+        == "MERGEABLE"
+    )
+    workspace.merge_pr(
+        worktree_path="/worktrees/demo/issue-8",
+        pr_number="42",
+    )
+
+    assert executor.calls == [
+        (("git", "fetch", "origin"), CommandPhase.DISCOVERY, "/worktrees/demo/issue-8"),
+        (
+            (
+                "git",
+                "merge",
+                "origin/prd/1-parent-prd",
+                "-m",
+                "Update implementation branch against latest prd/1-parent-prd",
+            ),
+            CommandPhase.LIFECYCLE_MUTATION,
+            "/worktrees/demo/issue-8",
+        ),
+        (("git", "push", "origin", "impl/1/8-child-impl"), CommandPhase.LIFECYCLE_MUTATION, "/worktrees/demo/issue-8"),
+        (pr_create_cmd, CommandPhase.LIFECYCLE_MUTATION, "/worktrees/demo/issue-8"),
+        (pr_view_cmd, CommandPhase.DISCOVERY, "/worktrees/demo/issue-8"),
+        (("gh", "pr", "merge", "42", "--squash"), CommandPhase.LIFECYCLE_MUTATION, "/worktrees/demo/issue-8"),
     ]
 
 
