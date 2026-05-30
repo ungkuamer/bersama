@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import threading
+import time
 from concurrent.futures import Future
 from pathlib import Path
 from unittest.mock import MagicMock, patch, ANY
@@ -1080,4 +1082,423 @@ def test_continuous_mode_passes_active_runs_to_planner() -> None:
     # The second pass found no claimable issues (impl_2 is blocked, impl_3 still blocked)
     # Reconcile was called at start/end of each pass (2 passes = 4 calls)
     assert orchestrator.reconciliation_service.reconcile.call_count == 4
+
+
+class FakeDelayingExecutor:
+    """Fake executor that runs tasks in separate threads (not the main thread)
+to simulate real concurrent execution. Supports a barrier for synchronisation."""
+
+    def __init__(self) -> None:
+        self.submitted: list[tuple] = []
+        self._threads: list[threading.Thread] = []
+
+    def submit(self, fn, *args, **kwargs):
+        self.submitted.append((fn, args, kwargs))
+        result_container: list = []
+        exception_container: list[Exception | None] = [None]
+
+        def wrapper():
+            try:
+                result_container.append(fn(*args, **kwargs))
+            except Exception as exc:
+                exception_container[0] = exc
+
+        t = threading.Thread(target=wrapper, daemon=True)
+        self._threads.append(t)
+        t.start()
+
+        future: Future = Future()
+
+        def set_result_when_done():
+            t.join()
+            if exception_container[0] is not None:
+                future.set_exception(exception_container[0])
+            elif result_container:
+                future.set_result(result_container[0])
+            else:
+                future.set_result(None)
+
+        threading.Thread(target=set_result_when_done, daemon=True).start()
+        return future
+
+    def shutdown(self, wait: bool = True) -> None:
+        pass
+
+
+class BlockingIntegrationGateway:
+    """A FakeIssueGateway that can block inside integrate_issue until released.
+Used to test that integration is serialized and doesn't block Agent Runs."""
+
+    def __init__(self, underlying_service: MagicMock) -> None:
+        self._service = underlying_service
+        self._block_event = threading.Event()
+        self._release_event = threading.Event()
+        self._entered_count = 0
+        self._lock = threading.Lock()
+
+    @property
+    def integrate_issue(self):
+        original = self._service.integrate_issue
+
+        def blocking_integrate(*args, **kwargs):
+            with self._lock:
+                self._entered_count += 1
+                count = self._entered_count
+            self._block_event.set()  # signal that we've entered
+            self._release_event.wait()  # block until released
+            return original(*args, **kwargs)
+
+        return blocking_integrate
+
+
+def test_integration_is_serialized_when_multiple_agent_runs_finish_together() -> None:
+    """When two Agent Runs succeed at roughly the same time,
+    their integrations must execute one at a time (serialized)."""
+    issues_gateway = MagicMock()
+
+    prd_1 = GitHubIssueRecord(
+        number=1,
+        title="PRD 1",
+        body="## Problem Statement\n\nPlan work.\n\n## Orchestration\n- PRD Branch: prd/1-prd-1",
+        labels=("prd",),
+        state="open",
+    )
+    impl_2 = GitHubIssueRecord(
+        number=2,
+        title="Implementation A",
+        body="## Parent PRD\n#1\n\n## What to Build\nBuild it.\n\n## Acceptance Criteria\n- [ ] Done.\n\n## Blocked By\nNone",
+        labels=("implementation", "ready-for-agent"),
+        state="open",
+    )
+    impl_3 = GitHubIssueRecord(
+        number=3,
+        title="Implementation B",
+        body="## Parent PRD\n#1\n\n## What to Build\nBuild it too.\n\n## Acceptance Criteria\n- [ ] Done.\n\n## Blocked By\nNone",
+        labels=("implementation", "ready-for-agent"),
+        state="open",
+    )
+    issues_gateway.list_issues.return_value = (prd_1, impl_2, impl_3)
+
+    orchestrator = Orchestrator(
+        issues_gateway=issues_gateway,
+        now_provider=lambda: "2026-05-29T17:00:00Z",
+    )
+    orchestrator.reconciliation_service = MagicMock()
+    orchestrator.prd_preparation_service = MagicMock()
+
+    orchestrator.claim_service = MagicMock()
+    orchestrator.claim_service.claim_issue.side_effect = [
+        ClaimResult(
+            issue_number=2,
+            agent_run_id="run-aaa",
+            implementation_branch="impl/1/2-impl-a",
+            worktree_path="/worktrees/demo/issue-2",
+        ),
+        ClaimResult(
+            issue_number=3,
+            agent_run_id="run-bbb",
+            implementation_branch="impl/1/3-impl-b",
+            worktree_path="/worktrees/demo/issue-3",
+        ),
+    ]
+
+    orchestrator.execution_service = MagicMock()
+    orchestrator.execution_service.execute_run.side_effect = [
+        ExecutionResult(issue_number=2, status="succeeded", exit_code=0, new_commits=True),
+        ExecutionResult(issue_number=3, status="succeeded", exit_code=0, new_commits=True),
+    ]
+
+    # Track integration calls and their timing
+    integration_start_times: list[float] = []
+    integration_end_times: list[float] = []
+    integration_call_lock = threading.Lock()
+
+    real_integration = MagicMock()
+    real_integration.integrate_issue.side_effect = [
+        IntegrationResult(issue_number=2, status="succeeded", implementation_branch="impl/1/2-impl-a", prd_branch="prd/1-prd-1"),
+        IntegrationResult(issue_number=3, status="succeeded", implementation_branch="impl/1/3-impl-b", prd_branch="prd/1-prd-1"),
+    ]
+
+    def tracking_integrate(*args, **kwargs):
+        start = time.monotonic()
+        with integration_call_lock:
+            integration_start_times.append(start)
+        time.sleep(0.1)  # Simulate some integration work
+        result = real_integration.integrate_issue(*args, **kwargs)
+        end = time.monotonic()
+        with integration_call_lock:
+            integration_end_times.append(end)
+        return result
+
+    orchestrator.integration_service = MagicMock()
+    orchestrator.integration_service.integrate_issue = tracking_integrate
+
+    repos = {
+        "demo": RepoConfig(
+            name="demo",
+            repo_path=Path("/repos/demo"),
+            main_branch="main",
+            worktree_root=Path("/worktrees/demo"),
+            global_concurrency=2,
+            per_prd_concurrency=2,
+            default_harness="local",
+        )
+    }
+    config = AppConfig(repos=repos, harnesses={})
+
+    orchestrator.run("demo", config)
+
+    # Both integrations should have been called
+    assert len(integration_start_times) == 2
+    assert len(integration_end_times) == 2
+
+    # Integration calls must not overlap: the first must end before the second begins
+    # Since they are serialized, start[1] >= end[0]
+    assert integration_start_times[1] >= integration_end_times[0], (
+        f"Integration calls overlapped: start2={integration_start_times[1]}, end1={integration_end_times[0]}"
+    )
+
+
+def test_later_issue_integrates_before_earlier_still_running_issue_when_no_blocking_dependency() -> None:
+    """When issue #3 finishes execution before issue #2 (which is still running),
+    #3 should integrate before #2 if there is no blocking dependency between them."""
+    issues_gateway = MagicMock()
+
+    prd_1 = GitHubIssueRecord(
+        number=1,
+        title="PRD 1",
+        body="## Problem Statement\n\nPlan work.\n\n## Orchestration\n- PRD Branch: prd/1-prd-1",
+        labels=("prd",),
+        state="open",
+    )
+    impl_2 = GitHubIssueRecord(
+        number=2,
+        title="Implementation (slower)",
+        body="## Parent PRD\n#1\n\n## What to Build\nSlow build.\n\n## Acceptance Criteria\n- [ ] Done.\n\n## Blocked By\nNone",
+        labels=("implementation", "ready-for-agent"),
+        state="open",
+    )
+    impl_3 = GitHubIssueRecord(
+        number=3,
+        title="Implementation (faster)",
+        body="## Parent PRD\n#1\n\n## What to Build\nFast build.\n\n## Acceptance Criteria\n- [ ] Done.\n\n## Blocked By\nNone",
+        labels=("implementation", "ready-for-agent"),
+        state="open",
+    )
+    issues_gateway.list_issues.return_value = (prd_1, impl_2, impl_3)
+
+    # Use a real ThreadPoolExecutor so the two Agent Runs run concurrently.
+    # Execution for issue #3 returns immediately; execution for issue #2
+    # sleeps long enough that #3 finishes first, entering the integration
+    # queue before #2.
+    from concurrent.futures import ThreadPoolExecutor
+
+    orchestrator = Orchestrator(
+        issues_gateway=issues_gateway,
+        now_provider=lambda: "2026-05-29T17:00:00Z",
+        executor=ThreadPoolExecutor(max_workers=2),
+    )
+    orchestrator.reconciliation_service = MagicMock()
+    orchestrator.prd_preparation_service = MagicMock()
+
+    orchestrator.claim_service = MagicMock()
+    orchestrator.claim_service.claim_issue.side_effect = [
+        ClaimResult(issue_number=2, agent_run_id="run-aaa", implementation_branch="impl/1/2-slower", worktree_path="/worktrees/demo/issue-2"),
+        ClaimResult(issue_number=3, agent_run_id="run-bbb", implementation_branch="impl/1/3-faster", worktree_path="/worktrees/demo/issue-3"),
+    ]
+
+    # Execution returns immediately for #3, sleeps for #2.
+    fast_done = threading.Event()
+    slow_started = threading.Event()
+
+    def execute_run_side_effect(*, repo_name, issue_number, config):
+        if issue_number == 2:
+            slow_started.set()
+            fast_done.wait()  # Wait until #3 finishes before #2 finishes
+            return ExecutionResult(issue_number=2, status="succeeded", exit_code=0, new_commits=True)
+        else:
+            time.sleep(0.05)  # Small delay so #2's thread has time to start
+            fast_done.set()  # Signal that #3 is done
+            return ExecutionResult(issue_number=3, status="succeeded", exit_code=0, new_commits=True)
+
+    orchestrator.execution_service = MagicMock()
+    orchestrator.execution_service.execute_run.side_effect = execute_run_side_effect
+
+    # Record integration order
+    integration_order: list[int] = []
+    integration_lock = threading.Lock()
+
+    def integrate_side_effect(*, repo_path, worktree_root, issue_number):
+        with integration_lock:
+            integration_order.append(issue_number)
+        return IntegrationResult(issue_number=issue_number, status="succeeded")
+
+    orchestrator.integration_service = MagicMock()
+    orchestrator.integration_service.integrate_issue.side_effect = integrate_side_effect
+
+    repos = {
+        "demo": RepoConfig(
+            name="demo",
+            repo_path=Path("/repos/demo"),
+            main_branch="main",
+            worktree_root=Path("/worktrees/demo"),
+            global_concurrency=2,
+            per_prd_concurrency=2,
+            default_harness="local",
+        )
+    }
+    config = AppConfig(repos=repos, harnesses={})
+
+    orchestrator.run("demo", config)
+
+    # Both integrations should have been called
+    assert orchestrator.integration_service.integrate_issue.call_count == 2
+
+    # Issue #3 must integrate before issue #2 because it finished execution first
+    # and entered the integration queue first (no blocking dependencies).
+    assert integration_order == [3, 2], (
+        f"Expected integration order [3, 2] (later-issue first since it finished"
+        f" execution earlier), got {integration_order}"
+    )
+
+
+def test_agent_run_capacity_freed_after_execution_not_after_integration() -> None:
+    """Agent Run Capacity must be freed when execution completes, not when integration completes.
+    The active set is cleared after Agent Runs finish, even though integration may still be in progress."""
+    issues_gateway = MagicMock()
+
+    prd_1 = GitHubIssueRecord(
+        number=1,
+        title="PRD 1",
+        body="## Problem Statement\n\nPlan work.\n\n## Orchestration\n- PRD Branch: prd/1-prd-1",
+        labels=("prd",),
+        state="open",
+    )
+    impl_2 = GitHubIssueRecord(
+        number=2,
+        title="Implementation",
+        body="## Parent PRD\n#1\n\n## What to Build\nBuild it.\n\n## Acceptance Criteria\n- [ ] Done.\n\n## Blocked By\nNone",
+        labels=("implementation", "ready-for-agent"),
+        state="open",
+    )
+    issues_gateway.list_issues.return_value = (prd_1, impl_2)
+
+    orchestrator = Orchestrator(
+        issues_gateway=issues_gateway,
+        now_provider=lambda: "2026-05-29T17:00:00Z",
+    )
+    orchestrator.reconciliation_service = MagicMock()
+    orchestrator.prd_preparation_service = MagicMock()
+
+    orchestrator.claim_service = MagicMock()
+    orchestrator.claim_service.claim_issue.return_value = ClaimResult(
+        issue_number=2,
+        agent_run_id="run-aaa",
+        implementation_branch="impl/1/2-impl",
+        worktree_path="/worktrees/demo/issue-2",
+    )
+
+    orchestrator.execution_service = MagicMock()
+    orchestrator.execution_service.execute_run.return_value = ExecutionResult(
+        issue_number=2, status="succeeded", exit_code=0, new_commits=True,
+    )
+
+    orchestrator.integration_service = MagicMock()
+
+    repos = {
+        "demo": RepoConfig(
+            name="demo",
+            repo_path=Path("/repos/demo"),
+            main_branch="main",
+            worktree_root=Path("/worktrees/demo"),
+            global_concurrency=2,
+            per_prd_concurrency=1,
+            default_harness="local",
+        )
+    }
+    config = AppConfig(repos=repos, harnesses={})
+
+    # Before run, active set is empty
+    assert len(orchestrator._active_agent_run_issue_numbers) == 0
+
+    orchestrator.run("demo", config)
+
+    # After run returns, active set should be empty (capacity freed after execution)
+    # even though integration happens in the background
+    assert len(orchestrator._active_agent_run_issue_numbers) == 0
+
+
+def test_integration_failure_leaves_issue_for_human_review_in_orchestrator_context() -> None:
+    """When integration fails, the issue should get needs-triage label and not be retried.
+    The orchestrator should NOT attempt integration again for the same issue."""
+    issues_gateway = MagicMock()
+
+    prd_1 = GitHubIssueRecord(
+        number=1,
+        title="PRD 1",
+        body="## Problem Statement\n\nPlan work.\n\n## Orchestration\n- PRD Branch: prd/1-prd-1",
+        labels=("prd",),
+        state="open",
+    )
+    impl_2 = GitHubIssueRecord(
+        number=2,
+        title="Implementation",
+        body="## Parent PRD\n#1\n\n## What to Build\nBuild it.\n\n## Acceptance Criteria\n- [ ] Done.\n\n## Blocked By\nNone",
+        labels=("implementation", "ready-for-agent"),
+        state="open",
+    )
+    issues_gateway.list_issues.return_value = (prd_1, impl_2)
+
+    orchestrator = Orchestrator(
+        issues_gateway=issues_gateway,
+        now_provider=lambda: "2026-05-29T17:00:00Z",
+    )
+    orchestrator.reconciliation_service = MagicMock()
+    orchestrator.prd_preparation_service = MagicMock()
+
+    orchestrator.claim_service = MagicMock()
+    orchestrator.claim_service.claim_issue.return_value = ClaimResult(
+        issue_number=2,
+        agent_run_id="run-aaa",
+        implementation_branch="impl/1/2-impl",
+        worktree_path="/worktrees/demo/issue-2",
+    )
+
+    orchestrator.execution_service = MagicMock()
+    orchestrator.execution_service.execute_run.return_value = ExecutionResult(
+        issue_number=2, status="succeeded", exit_code=0, new_commits=True,
+    )
+
+    orchestrator.integration_service = MagicMock()
+    orchestrator.integration_service.integrate_issue.return_value = IntegrationResult(
+        issue_number=2,
+        status="failed",
+        failure_type="merge_conflict",
+        failure_message="CONFLICT in some-file.txt",
+    )
+
+    repos = {
+        "demo": RepoConfig(
+            name="demo",
+            repo_path=Path("/repos/demo"),
+            main_branch="main",
+            worktree_root=Path("/worktrees/demo"),
+            global_concurrency=2,
+            per_prd_concurrency=1,
+            default_harness="local",
+        )
+    }
+    config = AppConfig(repos=repos, harnesses={})
+
+    orchestrator.run("demo", config)
+
+    # Integration was attempted exactly once (no retry)
+    assert orchestrator.integration_service.integrate_issue.call_count == 1
+
+    # Integration was called with the correct issue
+    orchestrator.integration_service.integrate_issue.assert_called_once_with(
+        repo_path="/repos/demo",
+        worktree_root="/worktrees/demo",
+        issue_number=2,
+    )
 

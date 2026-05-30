@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import queue
+import threading
 from concurrent.futures import ThreadPoolExecutor, Executor
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -109,6 +111,15 @@ class Orchestrator:
             now_provider=self.now_provider,
         )
 
+        # ── Serialized Integration Lane ───────────────────────────────
+        # Successful Agent Runs enter this queue when execution completes.
+        # A dedicated daemon thread drains the queue one item at a time,
+        # serializing all PRD-branch mutations without consuming Agent Run
+        # Capacity.
+        self._integration_queue: queue.Queue[tuple[int, str, str]] = queue.Queue()
+        self._integration_lock = threading.Lock()
+        self._integration_worker_started = False
+
     def reconcile_start(self, state: OrchestrationState) -> OrchestrationState:
         self.reconciliation_service.reconcile()
         return state
@@ -161,7 +172,39 @@ class Orchestrator:
         state["claimable_issues"] = list(planner_result.claimable_issue_numbers)
         return state
 
-    def _run_issue_workflow(
+    def _ensure_integration_worker(self) -> None:
+        """Start the serialized integration worker thread if not already running."""
+        if not self._integration_worker_started:
+            self._integration_worker_started = True
+            worker = threading.Thread(target=self._run_integration_worker, daemon=True)
+            worker.start()
+
+    def _run_integration_worker(self) -> None:
+        """Continuously drain the integration queue, one issue at a time.
+        The lock ensures only one integration mutates any PRD branch at a time."""
+        while True:
+            item = self._integration_queue.get()
+            if item is None:  # sentinel
+                break
+            issue_number, repo_path, worktree_root = item
+            try:
+                with self._integration_lock:
+                    self.integration_service.integrate_issue(
+                        repo_path=repo_path,
+                        worktree_root=worktree_root,
+                        issue_number=issue_number,
+                    )
+            except Exception:
+                # Integrate_issue handles its own error reporting (labels, comments).
+                pass
+            finally:
+                self._integration_queue.task_done()
+
+    def _drain_integration_queue(self) -> None:
+        """Wait for all pending integrations to complete. Called before shutdown."""
+        self._integration_queue.join()
+
+    def _run_agent_run(
         self,
         *,
         repo_name: str,
@@ -170,6 +213,7 @@ class Orchestrator:
         issue_number: int,
         config: AppConfig,
     ) -> None:
+        """Claim + Execute only. Successful results enter the serialized integration lane."""
         import sys
         import uuid
         agent_run_id = f"run-{uuid.uuid4().hex[:8]}"
@@ -218,18 +262,10 @@ class Orchestrator:
             )
             return
 
-        # ── Phase 3: Integrate ──────────────────────────────────────
-        try:
-            self.integration_service.integrate_issue(
-                repo_path=repo_path,
-                worktree_root=worktree_root,
-                issue_number=issue_number,
-            )
-        except Exception as exc:
-            print(
-                f"[scheduler] integration error for #{issue_number}: {exc}",
-                file=sys.stderr,
-            )
+        # ── Phase 3: Enter Integration Lane ─────────────────────────
+        # Do NOT block Agent Run Capacity here — integration is
+        # serialized by a dedicated worker thread.
+        self._integration_queue.put((issue_number, repo_path, worktree_root))
 
     def execute_claims(self, state: OrchestrationState) -> OrchestrationState:
         repo_config = state["config"].repo(state["repo_name"])
@@ -237,6 +273,9 @@ class Orchestrator:
 
         if not claimable_issues:
             return state
+
+        # Ensure the serialized integration worker is running.
+        self._ensure_integration_worker()
 
         # Track in-memory active Agent Runs so the planner knows about them
         # during subsequent scheduling passes (e.g. in continuous mode).
@@ -246,7 +285,7 @@ class Orchestrator:
         futures = []
         for issue_number in claimable_issues:
             future = self._executor.submit(
-                self._run_issue_workflow,
+                self._run_agent_run,
                 repo_name=state["repo_name"],
                 repo_path=str(repo_config.repo_path),
                 worktree_root=str(repo_config.worktree_root),
@@ -255,10 +294,14 @@ class Orchestrator:
             )
             futures.append(future)
 
+        # Wait for all Agent Runs (claim + execute) to complete.
+        # Integration runs in the background, serialized by the dedicated worker.
         for future in futures:
             future.result()
 
-        # Clear in-memory tracking now that all dispatched runs have finished.
+        # Clear in-memory tracking now that all dispatched runs have finished
+        # execution. Agent Run Capacity is freed immediately — integration
+        # does not consume capacity.
         for issue_number in claimable_issues:
             self._active_agent_run_issue_numbers.discard(issue_number)
 
@@ -307,4 +350,9 @@ class Orchestrator:
                 "claimable_issues": [],
             }
             compiled_graph.invoke(initial_state)
+
+        # Wait for all pending integrations to complete before returning.
+        # In continuous mode this ensures clean shutdown; in single-pass mode
+        # it ensures the caller sees all integrations applied.
+        self._drain_integration_queue()
 
