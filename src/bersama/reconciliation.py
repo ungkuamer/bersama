@@ -5,11 +5,13 @@ from typing import Protocol
 
 from bersama.github_issues import GitHubIssueRecord
 from bersama.issues import (
+    ClaimStatus,
     DiagnosticKind,
     GitHubIssue,
     ImplementationIssue,
     IssueKind,
     PrdIssue,
+    parse_claim_status,
     parse_issue,
 )
 
@@ -104,24 +106,37 @@ class ReconciliationService:
             # C. Auto-clear orchestration metadata if user manually added ready-for-agent
             if "ready-for-agent" in record.labels:
                 if isinstance(parsed, ImplementationIssue) and (parsed.orchestration.agent_run_id or parsed.orchestration.claimed_at):
-                    from bersama.issues import upsert_section
-                    # Clear Orchestration section to allow a clean new claim
-                    cleared_body = upsert_section(record.body, "Orchestration", "")
-                    self._issues.update_body(record.number, cleared_body)
-                    self._issues.add_comment(
-                        record.number,
-                        f"Cleared previous claim metadata on issue #{record.number} because it was marked ready-for-agent."
-                    )
-                    # Re-parse this record with cleared body so that subsequent checks see it as clean!
-                    parsed_by_number[record.number] = parse_issue(
-                        GitHubIssue(
-                            number=record.number,
-                            title=record.title,
-                            body=cleared_body,
-                            labels=record.labels,
+                    claim_status = parse_claim_status(parsed.orchestration.claim_status)
+                    if claim_status is ClaimStatus.FAILED:
+                        # Failed claim with ready-for-agent is contradictory.
+                        # Move to needs-triage instead of auto-clearing.
+                        if "needs-triage" not in record.labels:
+                            self._issues.remove_labels(record.number, "ready-for-agent")
+                            self._issues.add_labels(record.number, "needs-triage")
+                            self._issues.add_comment(
+                                record.number,
+                                f"Issue #{record.number} has a failed claim but is marked ready-for-agent. "
+                                "This is a contradictory state that requires human review."
+                            )
+                    else:
+                        from bersama.issues import upsert_section
+                        # Clear Orchestration section to allow a clean new claim
+                        cleared_body = upsert_section(record.body, "Orchestration", "")
+                        self._issues.update_body(record.number, cleared_body)
+                        self._issues.add_comment(
+                            record.number,
+                            f"Cleared previous claim metadata on issue #{record.number} because it was marked ready-for-agent."
                         )
-                    )
-                    parsed = parsed_by_number[record.number]
+                        # Re-parse this record with cleared body so that subsequent checks see it as clean!
+                        parsed_by_number[record.number] = parse_issue(
+                            GitHubIssue(
+                                number=record.number,
+                                title=record.title,
+                                body=cleared_body,
+                                labels=record.labels,
+                            )
+                        )
+                        parsed = parsed_by_number[record.number]
 
             # A. Check for Malformed / Invalid Issues
             if parsed.diagnostics:
