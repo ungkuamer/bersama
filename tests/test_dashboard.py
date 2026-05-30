@@ -761,8 +761,21 @@ def test_get_issues_endpoint_returns_hierarchical_issues() -> None:
         def __init__(self, *issues: GitHubIssueRecord) -> None:
             self.issues = {issue.number: issue for issue in issues}
 
-        def list_issues(self, *, state: str = "open", label: str | None = None) -> list[GitHubIssueRecord]:
-            return list(self.issues.values())
+        def list_issues(
+            self,
+            *,
+            state: str = "open",
+            label: str | None = None,
+            labels: tuple[str, ...] | None = None,
+            updated_since: str | None = None,
+        ) -> list[GitHubIssueRecord]:
+            result = list(self.issues.values())
+            if labels is not None:
+                label_set = set(labels)
+                result = [r for r in result if set(r.labels) & label_set]
+            if state != "all":
+                result = [r for r in result if r.state == state]
+            return result
 
         def view_issue(self, number: int) -> GitHubIssueRecord:
             return self.issues[number]
@@ -796,8 +809,21 @@ def test_get_issues_endpoint_does_not_falsely_mark_unclaimed_issue_as_claimed() 
         def __init__(self, *issues: GitHubIssueRecord) -> None:
             self.issues = {issue.number: issue for issue in issues}
 
-        def list_issues(self, *, state: str = "open", label: str | None = None) -> list[GitHubIssueRecord]:
-            return list(self.issues.values())
+        def list_issues(
+            self,
+            *,
+            state: str = "open",
+            label: str | None = None,
+            labels: tuple[str, ...] | None = None,
+            updated_since: str | None = None,
+        ) -> list[GitHubIssueRecord]:
+            result = list(self.issues.values())
+            if labels is not None:
+                label_set = set(labels)
+                result = [r for r in result if set(r.labels) & label_set]
+            if state != "all":
+                result = [r for r in result if r.state == state]
+            return result
 
         def view_issue(self, number: int) -> GitHubIssueRecord:
             return self.issues[number]

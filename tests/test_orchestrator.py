@@ -32,6 +32,46 @@ class FakeExecutor:
         self._shutdown_called = True
 
 
+class PassBasedListIssuesMock:
+    """A mock list_issues side effect that tracks continuous mode loop passes
+    and correctly filters open/closed issues within each pass."""
+
+    def __init__(self, states_sequence) -> None:
+        self.states = states_sequence
+        self.current_pass = 0
+        self.last_was_closed = False
+
+    def __call__(
+        self,
+        *,
+        state: str = "open",
+        label: str | None = None,
+        labels: tuple[str, ...] | None = None,
+        updated_since: str | None = None,
+    ) -> tuple[GitHubIssueRecord, ...]:
+        if state == "closed":
+            self.last_was_closed = True
+        elif self.last_was_closed:
+            self.current_pass = min(self.current_pass + 1, len(self.states) - 1)
+            self.last_was_closed = False
+
+        idx = min(self.current_pass, len(self.states) - 1)
+        records = self.states[idx]
+
+        filtered = list(records)
+        if state != "all":
+            filtered = [r for r in filtered if r.state == state]
+        if labels is not None:
+            label_set = set(labels)
+            filtered = [r for r in filtered if set(r.labels) & label_set]
+        elif label is not None:
+            filtered = [r for r in filtered if label in r.labels]
+        return tuple(filtered)
+
+
+
+
+
 def test_scheduler_emits_claim_attempt_events() -> None:
     """The scheduler emits claim.succeeded and claim.failed events with issue/run context."""
     issues_gateway = MagicMock()
@@ -646,13 +686,11 @@ def test_continuous_loop_execution_workflow() -> None:
         state="open",
     )
     
-    # First plan/list has a ready issue; second plan/list has none (simulating issue being claimed/closed)
-    issues_gateway.list_issues.side_effect = [
-        (prd_record, impl_record),  # start reconciliation
-        (prd_record, impl_record),  # plan actions
-        (prd_record,),              # second loop start reconciliation
-        (prd_record,),              # second loop plan actions
-    ]
+    issues_gateway.list_issues.side_effect = PassBasedListIssuesMock([
+        (prd_record, impl_record),
+        (prd_record,),
+    ])
+
 
     orchestrator = Orchestrator(
         issues_gateway=issues_gateway,
@@ -1415,12 +1453,11 @@ def test_continuous_mode_passes_active_runs_to_planner() -> None:
         state="open",
     )
 
-    issues_gateway.list_issues.side_effect = [
-        (prd_1, impl_2, impl_3),   # first pass: start reconciliation
-        (prd_1, impl_2, impl_3),   # first pass: plan actions (impl_2 claimable)
-        (prd_1, claimed_2, impl_3),  # second pass: start reconciliation
-        (prd_1, claimed_2, impl_3),  # second pass: plan actions (impl_3 still blocked, no more work)
-    ]
+    issues_gateway.list_issues.side_effect = PassBasedListIssuesMock([
+        (prd_1, impl_2, impl_3),
+        (prd_1, claimed_2, impl_3),
+    ])
+
 
     fake_executor = FakeExecutor()
 
@@ -1956,17 +1993,12 @@ def test_continuous_mode_drains_dependency_waves() -> None:
         state="closed",
     )
 
-    # list_issues call sequence:
-    #   call 1: prepare_prds (state="open")        → prd_1, impl_2, impl_3
-    #   call 2: plan_actions (state="all") pass 1  → #2 claimable, #3 blocked
-    #   call 3: plan_actions (state="all") pass 2  → #2 closed, #3 now claimable
-    #   call 4: plan_actions (state="all") pass 3  → no claimable (both done)
-    issues_gateway.list_issues.side_effect = [
-        (prd_1, impl_2, impl_3),   # prepare_prds
-        (prd_1, impl_2, impl_3),   # plan pass 1
-        (prd_1, impl_2_closed, impl_3),  # plan pass 2 (after #2 integration)
-        (prd_1, impl_2_closed, impl_3_closed),  # plan pass 3
-    ]
+    issues_gateway.list_issues.side_effect = PassBasedListIssuesMock([
+        (prd_1, impl_2, impl_3),
+        (prd_1, impl_2_closed, impl_3),
+        (prd_1, impl_2_closed, impl_3_closed),
+    ])
+
 
     orchestrator = Orchestrator(
         issues_gateway=issues_gateway,
@@ -2036,9 +2068,11 @@ def test_continuous_mode_stops_when_truly_idle() -> None:
         state="open",
     )
 
+    # prepare_prds + plan_actions (2 calls per plan: open + closed)
     issues_gateway.list_issues.side_effect = [
-        (prd_1, impl_2),  # prepare_prds
-        (prd_1, impl_2),  # plan_actions
+        (prd_1, impl_2),          # prepare_prds
+        (prd_1, impl_2),          # plan pass 1: open
+        (prd_1, impl_2),          # plan pass 1: closed
     ]
 
     orchestrator = Orchestrator(
@@ -2116,11 +2150,15 @@ def test_continuous_mode_does_not_exit_early_while_integrations_pending() -> Non
         state="closed",
     )
 
+    # plan_actions now fetches open + closed separately (2 calls per pass)
     issues_gateway.list_issues.side_effect = [
         (prd_1, impl_2, impl_3),          # prepare_prds
-        (prd_1, impl_2, impl_3),          # plan pass 1: #2 claimable, #3 blocked
-        (prd_1, impl_2_closed, impl_3),   # plan pass 2: after drain, #2 closed, #3 claimable
-        (prd_1, impl_2_closed, impl_3_closed),  # plan pass 3: no claimable
+        (prd_1, impl_2, impl_3),          # plan pass 1: open
+        (prd_1, impl_2, impl_3),          # plan pass 1: closed
+        (prd_1, impl_2_closed, impl_3),   # plan pass 2: open
+        (prd_1, impl_2_closed, impl_3),   # plan pass 2: closed
+        (prd_1, impl_2_closed, impl_3_closed),  # plan pass 3: open
+        (prd_1, impl_2_closed, impl_3_closed),  # plan pass 3: closed
     ]
 
     orchestrator = Orchestrator(
@@ -2171,4 +2209,240 @@ def test_continuous_mode_does_not_exit_early_while_integrations_pending() -> Non
         for call in orchestrator.claim_service.claim_issue.call_args_list
     ]
     assert claim_numbers == [2, 3], f"Expected claims for [2, 3], got {claim_numbers}"
+
+
+# ── Issue #52: Sliding time-window fallback tests ────────────────────────────
+
+
+def test_plan_actions_resolves_missing_blocker_via_view_issue_when_closed() -> None:
+    """When an implementation issue is blocked by another issue that falls
+    outside the 24h sliding window cache, the orchestrator resolves it via
+    view_issue(). If the blocker is closed, the issue is unblocked."""
+    issues_gateway = MagicMock()
+
+    prd_1 = GitHubIssueRecord(
+        number=1,
+        title="PRD",
+        body="## Problem Statement\n\nPlan.\n\n## Orchestration\n- PRD Branch: prd/1-prd",
+        labels=("prd",),
+        state="open",
+    )
+    impl_3 = GitHubIssueRecord(
+        number=3,
+        title="Impl blocked by old-closed #2",
+        body="## Parent PRD\n#1\n\n## What to Build\nDo it.\n\n## Acceptance Criteria\n- [ ] Done.\n\n## Blocked By\n#2",
+        labels=("implementation", "ready-for-agent"),
+        state="open",
+    )
+    # #2 is NOT in list_issues (simulating it fell out of the 24h cache)
+    issues_gateway.list_issues.return_value = (prd_1, impl_3)
+
+    # view_issue resolves #2 as a closed implementation issue
+    impl_2_closed = GitHubIssueRecord(
+        number=2,
+        title="Old closed blocker",
+        body="## Parent PRD\n#1\n\n## What to Build\nOld.\n\n## Acceptance Criteria\n- [ ] Done.\n\n## Blocked By\nNone",
+        labels=("implementation",),
+        state="closed",
+    )
+    issues_gateway.view_issue.return_value = impl_2_closed
+
+    orchestrator = Orchestrator(
+        issues_gateway=issues_gateway,
+        now_provider=lambda: "2026-05-29T17:00:00Z",
+    )
+    orchestrator.reconciliation_service = MagicMock()
+    orchestrator.prd_preparation_service = MagicMock()
+    orchestrator.claim_service = MagicMock()
+    orchestrator.claim_service.claim_issue.return_value = ClaimResult(
+        issue_number=3, agent_run_id="run-ccc",
+        implementation_branch="impl/1/3-impl", worktree_path="/worktrees/demo/issue-3",
+    )
+    orchestrator.execution_service = MagicMock()
+    orchestrator.execution_service.execute_run.return_value = ExecutionResult(
+        issue_number=3, status="succeeded", exit_code=0, new_commits=True,
+    )
+    orchestrator.integration_service = MagicMock()
+    orchestrator.integration_service.integrate_issue.return_value = IntegrationResult(
+        issue_number=3, status="succeeded",
+        implementation_branch="impl/1/3-impl", prd_branch="prd/1-prd",
+    )
+
+    repos = {
+        "demo": RepoConfig(
+            name="demo", repo_path=Path("/repos/demo"), main_branch="main",
+            worktree_root=Path("/worktrees/demo"), global_concurrency=2,
+            per_prd_concurrency=2, default_harness="local",
+        )
+    }
+    config = AppConfig(repos=repos, harnesses={})
+
+    orchestrator.run("demo", config)
+
+    # view_issue should have been called for the missing blocker #2
+    issues_gateway.view_issue.assert_called_once_with(2)
+    # #3 should have been claimed (unblocked since #2 is closed)
+    orchestrator.claim_service.claim_issue.assert_called_once()
+    assert orchestrator.claim_service.claim_issue.call_args.kwargs["issue_number"] == 3
+
+
+def test_plan_actions_resolves_missing_blocker_via_view_issue_when_open() -> None:
+    """When a missing blocker is resolved via view_issue() and is still open,
+    the dependent issue remains blocked and is not claimed."""
+    issues_gateway = MagicMock()
+
+    prd_1 = GitHubIssueRecord(
+        number=1,
+        title="PRD",
+        body="## Problem Statement\n\nPlan.\n\n## Orchestration\n- PRD Branch: prd/1-prd",
+        labels=("prd",),
+        state="open",
+    )
+    impl_3 = GitHubIssueRecord(
+        number=3,
+        title="Impl blocked by old-open #2",
+        body="## Parent PRD\n#1\n\n## What to Build\nDo it.\n\n## Acceptance Criteria\n- [ ] Done.\n\n## Blocked By\n#2",
+        labels=("implementation", "ready-for-agent"),
+        state="open",
+    )
+    # #2 is NOT in list_issues
+    issues_gateway.list_issues.return_value = (prd_1, impl_3)
+
+    # view_issue resolves #2 as an open implementation issue
+    impl_2_open = GitHubIssueRecord(
+        number=2,
+        title="Old open blocker",
+        body="## Parent PRD\n#1\n\n## What to Build\nOld.\n\n## Acceptance Criteria\n- [ ] Done.\n\n## Blocked By\nNone",
+        labels=("implementation",),
+        state="open",
+    )
+    issues_gateway.view_issue.return_value = impl_2_open
+
+    orchestrator = Orchestrator(
+        issues_gateway=issues_gateway,
+        now_provider=lambda: "2026-05-29T17:00:00Z",
+    )
+    orchestrator.reconciliation_service = MagicMock()
+    orchestrator.prd_preparation_service = MagicMock()
+    orchestrator.claim_service = MagicMock()
+    orchestrator.execution_service = MagicMock()
+    orchestrator.integration_service = MagicMock()
+
+    repos = {
+        "demo": RepoConfig(
+            name="demo", repo_path=Path("/repos/demo"), main_branch="main",
+            worktree_root=Path("/worktrees/demo"), global_concurrency=2,
+            per_prd_concurrency=2, default_harness="local",
+        )
+    }
+    config = AppConfig(repos=repos, harnesses={})
+
+    orchestrator.run("demo", config)
+
+    # view_issue should have been called for the missing blocker #2
+    issues_gateway.view_issue.assert_called_once_with(2)
+    # #3 should NOT have been claimed (still blocked since #2 is open)
+    orchestrator.claim_service.claim_issue.assert_not_called()
+
+
+def test_plan_actions_view_issue_failure_still_produces_diagnostic() -> None:
+    """When view_issue() fails for a missing blocker (e.g. deleted issue),
+    the planner still produces a diagnostic rather than crashing."""
+    issues_gateway = MagicMock()
+
+    prd_1 = GitHubIssueRecord(
+        number=1,
+        title="PRD",
+        body="## Problem Statement\n\nPlan.\n\n## Orchestration\n- PRD Branch: prd/1-prd",
+        labels=("prd",),
+        state="open",
+    )
+    impl_3 = GitHubIssueRecord(
+        number=3,
+        title="Impl blocked by deleted #99",
+        body="## Parent PRD\n#1\n\n## What to Build\nDo it.\n\n## Acceptance Criteria\n- [ ] Done.\n\n## Blocked By\n#99",
+        labels=("implementation", "ready-for-agent"),
+        state="open",
+    )
+    # #99 is NOT in list_issues
+    issues_gateway.list_issues.return_value = (prd_1, impl_3)
+    # view_issue fails for #99
+    issues_gateway.view_issue.side_effect = RuntimeError("Issue not found")
+
+    orchestrator = Orchestrator(
+        issues_gateway=issues_gateway,
+        now_provider=lambda: "2026-05-29T17:00:00Z",
+    )
+    orchestrator.reconciliation_service = MagicMock()
+    orchestrator.prd_preparation_service = MagicMock()
+    orchestrator.claim_service = MagicMock()
+    orchestrator.execution_service = MagicMock()
+    orchestrator.integration_service = MagicMock()
+
+    repos = {
+        "demo": RepoConfig(
+            name="demo", repo_path=Path("/repos/demo"), main_branch="main",
+            worktree_root=Path("/worktrees/demo"), global_concurrency=2,
+            per_prd_concurrency=2, default_harness="local",
+        )
+    }
+    config = AppConfig(repos=repos, harnesses={})
+
+    # Should not crash
+    orchestrator.run("demo", config)
+
+    # view_issue was attempted for the missing blocker
+    issues_gateway.view_issue.assert_called_once_with(99)
+    # #3 should NOT be claimed (blocker unresolvable → needs-triage diagnostic)
+    orchestrator.claim_service.claim_issue.assert_not_called()
+
+
+def test_plan_actions_with_sliding_window_passes_labels_and_updated_since() -> None:
+    """The orchestrator fetches open issues without a time window
+    and closed issues with a 24h updated_since for the planning pass."""
+    issues_gateway = MagicMock()
+    issues_gateway.list_issues.return_value = ()
+
+    orchestrator = Orchestrator(
+        issues_gateway=issues_gateway,
+        now_provider=lambda: "2026-05-29T17:00:00Z",
+    )
+    orchestrator.reconciliation_service = MagicMock()
+    orchestrator.prd_preparation_service = MagicMock()
+    orchestrator.claim_service = MagicMock()
+    orchestrator.execution_service = MagicMock()
+    orchestrator.integration_service = MagicMock()
+
+    repos = {
+        "demo": RepoConfig(
+            name="demo", repo_path=Path("/repos/demo"), main_branch="main",
+            worktree_root=Path("/worktrees/demo"), global_concurrency=2,
+            per_prd_concurrency=2, default_harness="local",
+        )
+    }
+    config = AppConfig(repos=repos, harnesses={})
+
+    orchestrator.run("demo", config)
+
+    # Verify the open-issue fetch (from plan_actions, not prepare_prds)
+    # has labels=(prd, implementation) but no updated_since
+    open_calls = [
+        call for call in issues_gateway.list_issues.call_args_list
+        if call.kwargs.get("state") == "open"
+        and call.kwargs.get("labels") == ("prd", "implementation")
+    ]
+    assert len(open_calls) >= 1
+    open_call = open_calls[0]
+    assert open_call.kwargs["labels"] == ("prd", "implementation")
+    assert open_call.kwargs.get("updated_since") is None
+
+    # Verify the closed-issue fetch has labels AND updated_since
+    closed_calls = [
+        call for call in issues_gateway.list_issues.call_args_list
+        if call.kwargs.get("state") == "closed"
+    ]
+    assert len(closed_calls) >= 1
+    closed_call = closed_calls[0]
+    assert closed_call.kwargs["labels"] == ("prd", "implementation")
+    assert closed_call.kwargs["updated_since"] == "2026-05-28"
 

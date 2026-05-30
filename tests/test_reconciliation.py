@@ -13,8 +13,21 @@ class FakeIssueGateway:
         self.removed_labels = []
         self.comments = []
 
-    def list_issues(self, *, state: str = "open", label: str | None = None) -> tuple[GitHubIssueRecord, ...]:
-        return tuple(self._records.values())
+    def list_issues(
+        self,
+        *,
+        state: str = "open",
+        label: str | None = None,
+        labels: tuple[str, ...] | None = None,
+        updated_since: str | None = None,
+    ) -> tuple[GitHubIssueRecord, ...]:
+        result = list(self._records.values())
+        if labels is not None:
+            label_set = set(labels)
+            result = [r for r in result if set(r.labels) & label_set]
+        if state != "all":
+            result = [r for r in result if r.state == state]
+        return tuple(result)
 
     def view_issue(self, number: int) -> GitHubIssueRecord:
         return self._records[number]

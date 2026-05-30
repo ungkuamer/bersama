@@ -175,7 +175,7 @@ class Orchestrator:
 
     def prepare_prds(self, state: OrchestrationState) -> OrchestrationState:
         repo_config = state["config"].repo(state["repo_name"])
-        records = self.issues.list_issues(state="open")
+        records = self.issues.list_issues(state="open", labels=("prd",))
         for record in records:
             from bersama.issues import parse_issue, GitHubIssue, PrdIssue
             parsed = parse_issue(
@@ -196,7 +196,6 @@ class Orchestrator:
 
     def plan_actions(self, state: OrchestrationState) -> OrchestrationState:
         repo_config = state["config"].repo(state["repo_name"])
-        records = self.issues.list_issues(state="all")
 
         from datetime import UTC, datetime, timedelta
         now_str = self.now_provider()
@@ -209,9 +208,61 @@ class Orchestrator:
         else:
             now_dt = now_dt.astimezone(UTC)
 
+        # Fetch open issues without time window (must see all open
+        # issues for correct scheduling).
+        open_records = list(
+            self.issues.list_issues(
+                state="open",
+                labels=("prd", "implementation"),
+            )
+        )
+        # Fetch closed issues with a 24h sliding window to keep the
+        # dataset manageable.
+        updated_since = (now_dt - timedelta(hours=24)).strftime("%Y-%m-%d")
+        closed_records = list(
+            self.issues.list_issues(
+                state="closed",
+                labels=("prd", "implementation"),
+                updated_since=updated_since,
+            )
+        )
+        # Deduplicate by number (open and closed fetches may overlap).
+        records_by_number: dict[int, GitHubIssueRecord] = {}
+        for rec in open_records + closed_records:
+            records_by_number[rec.number] = rec
+        records = list(records_by_number.values())
+
+        # Resolve blocking dependencies that fell out of the sliding
+        # window cache via single-issue lookups (gh issue view <num>).
+        from bersama.issues import parse_issue, GitHubIssue, ImplementationIssue
+        records_by_number = {r.number: r for r in records}
+        missing_blockers: set[int] = set()
+        for record in records:
+            parsed = parse_issue(
+                GitHubIssue(
+                    number=record.number,
+                    title=record.title,
+                    body=record.body,
+                    labels=record.labels,
+                )
+            )
+            if isinstance(parsed, ImplementationIssue):
+                for blocker_number in parsed.blocked_by:
+                    if blocker_number not in records_by_number:
+                        missing_blockers.add(blocker_number)
+
+        for blocker_number in sorted(missing_blockers):
+            try:
+                blocker_record = self.issues.view_issue(blocker_number)
+                records.append(blocker_record)
+            except Exception:
+                # If the blocker lookup fails (e.g. issue was deleted),
+                # the planner will generate a diagnostic for it.
+                pass
+
         from bersama.planner import plan_issue_actions
         planner_result = plan_issue_actions(
-            records,
+            tuple(records),
             global_concurrency=repo_config.global_concurrency,
             per_prd_concurrency=repo_config.per_prd_concurrency,
             stale_claim_timeout=timedelta(hours=2),

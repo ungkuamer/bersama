@@ -20,6 +20,8 @@ class IssueGateway(Protocol):
         *,
         state: str = "open",
         label: str | None = None,
+        labels: tuple[str, ...] | None = None,
+        updated_since: str | None = None,
     ) -> tuple[GitHubIssueRecord, ...]: ...
     def view_issue(self, number: int) -> GitHubIssueRecord: ...
     def add_comment(self, number: int, body: str) -> None: ...
@@ -45,10 +47,43 @@ class ReconciliationService:
         self._now_provider = now_provider or _utc_now
 
     def reconcile(self) -> None:
-        # 1. Fetch all issues (both open and closed)
-        records = self._issues.list_issues(state="all")
+        # 1. Fetch issues filtered to prd + implementation labels,
+        #    with a 24h sliding window on closed issues to limit
+        #    the dataset size.
+        now_str = self._now_provider()
+        normalized = now_str.strip()
+        if normalized.endswith("Z"):
+            normalized = normalized[:-1] + "+00:00"
+        now_dt = datetime.fromisoformat(normalized)
+        if now_dt.tzinfo is None:
+            now_dt = now_dt.replace(tzinfo=UTC)
+        else:
+            now_dt = now_dt.astimezone(UTC)
 
-        # Parse all issues
+        updated_since = (now_dt - timedelta(hours=24)).strftime("%Y-%m-%d")
+        # Fetch open issues without time window (must see all open issues
+        # for stale-claim and malformed-issue detection).
+        open_records = list(
+            self._issues.list_issues(
+                state="open",
+                labels=("prd", "implementation"),
+            )
+        )
+        # Fetch closed issues with a 24h sliding window to limit dataset size.
+        closed_records = list(
+            self._issues.list_issues(
+                state="closed",
+                labels=("prd", "implementation"),
+                updated_since=updated_since,
+            )
+        )
+        # Deduplicate by number (open and closed fetches may overlap).
+        records_by_number: dict[int, GitHubIssueRecord] = {}
+        for rec in open_records + closed_records:
+            records_by_number[rec.number] = rec
+        records = list(records_by_number.values())
+
+        # Parse all fetched issues
         parsed_by_number = {}
         for record in records:
             parsed_by_number[record.number] = parse_issue(
@@ -59,16 +94,6 @@ class ReconciliationService:
                     labels=record.labels,
                 )
             )
-
-        now_str = self._now_provider()
-        normalized = now_str.strip()
-        if normalized.endswith("Z"):
-            normalized = normalized[:-1] + "+00:00"
-        now_dt = datetime.fromisoformat(normalized)
-        if now_dt.tzinfo is None:
-            now_dt = now_dt.replace(tzinfo=UTC)
-        else:
-            now_dt = now_dt.astimezone(UTC)
 
         for record in records:
             if record.state != "open":
