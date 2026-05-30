@@ -13,7 +13,7 @@ from bersama.issues import GitHubIssue, ImplementationIssue, PrdIssue, parse_iss
 if TYPE_CHECKING:
     from bersama.command_executor import CommandExecutor
 
-from bersama.command_executor import CommandPhase
+from bersama.command_executor import CommandError, CommandPhase
 
 
 SLUG_RE = re.compile(r"[^a-z0-9]+")
@@ -207,8 +207,6 @@ class ImplementationClaimService:
             issue_record.title,
         )
         claimed_at = self._now_provider()
-
-        # Write provisional Claim Setup metadata before repository setup.
         provisional_body = upsert_claim_metadata(
             issue_record.body,
             agent_run_id=agent_run_id,
@@ -216,8 +214,21 @@ class ImplementationClaimService:
             implementation_branch=implementation_branch,
             claim_status="setting up",
         )
-        self._issues.remove_labels(issue_number, "ready-for-agent")
-        self._issues.update_body(issue_number, provisional_body)
+
+        # Write provisional Claim Setup metadata before repository setup.
+        try:
+            self._issues.remove_labels(issue_number, "ready-for-agent")
+            self._issues.update_body(issue_number, provisional_body)
+        except Exception as exc:
+            return self._finalize_failed_claim_setup(
+                issue_number=issue_number,
+                issue_body=issue_record.body,
+                agent_run_id=agent_run_id,
+                claimed_at=claimed_at,
+                implementation_branch=implementation_branch,
+                detail="Claim Setup could not complete because a Lifecycle Mutation failed before repository setup.",
+                diagnostics=_describe_exception(exc),
+            )
 
         # Re-read the issue to verify this Agent Run still owns the Claim Setup.
         re_read_record = self._issues.view_issue(issue_number)
@@ -233,11 +244,14 @@ class ImplementationClaimService:
             not isinstance(re_read_parsed, ImplementationIssue)
             or re_read_parsed.orchestration.agent_run_id != agent_run_id
         ):
-            return self._fail(
-                issue_number,
-                "Ownership mismatch after writing provisional claim metadata.",
-                agent_run_id,
-                implementation_branch,
+            return self._finalize_failed_claim_setup(
+                issue_number=issue_number,
+                issue_body=issue_record.body,
+                agent_run_id=agent_run_id,
+                claimed_at=claimed_at,
+                implementation_branch=implementation_branch,
+                detail="Claim Setup ownership verification became ambiguous after provisional lifecycle mutations.",
+                diagnostics="Ownership mismatch after writing provisional claim metadata.",
             )
 
         # Attempt branch and worktree setup.
@@ -254,21 +268,15 @@ class ImplementationClaimService:
                 issue_number=issue_number,
             )
         except ClaimError as exc:
-            # Record Failed Claim Setup diagnostics.
-            failed_body = upsert_claim_metadata(
-                issue_record.body,
+            return self._finalize_failed_claim_setup(
+                issue_number=issue_number,
+                issue_body=issue_record.body,
                 agent_run_id=agent_run_id,
                 claimed_at=claimed_at,
                 implementation_branch=implementation_branch,
-                claim_status="failed claim",
+                detail="Failed Claim Setup during branch or worktree creation.",
+                diagnostics=str(exc),
             )
-            self._issues.update_body(issue_number, failed_body)
-            self._issues.add_labels(issue_number, "needs-triage")
-            self._issues.add_comment(
-                issue_number,
-                f"Failed Claim Setup during branch or worktree creation.\n\n**Diagnostics:**\n{exc}"
-            )
-            return self._fail(issue_number, str(exc), agent_run_id, implementation_branch)
 
         # Promote to Active Claim.
         active_body = upsert_claim_metadata(
@@ -278,8 +286,19 @@ class ImplementationClaimService:
             implementation_branch=implementation_branch,
             claim_status="active",
         )
-        self._issues.add_labels(issue_number, "claimed")
-        self._issues.update_body(issue_number, active_body)
+        try:
+            self._issues.add_labels(issue_number, "claimed")
+            self._issues.update_body(issue_number, active_body)
+        except Exception as exc:
+            return self._finalize_failed_claim_setup(
+                issue_number=issue_number,
+                issue_body=issue_record.body,
+                agent_run_id=agent_run_id,
+                claimed_at=claimed_at,
+                implementation_branch=implementation_branch,
+                detail="Claim Setup could not become an Active Claim because a Lifecycle Mutation failed after repository setup.",
+                diagnostics=_describe_exception(exc),
+            )
 
         return ClaimResult(
             issue_number=issue_number,
@@ -287,6 +306,41 @@ class ImplementationClaimService:
             implementation_branch=implementation_branch,
             worktree_path=worktree_path,
         )
+
+    def _finalize_failed_claim_setup(
+        self,
+        *,
+        issue_number: int,
+        issue_body: str,
+        agent_run_id: str,
+        claimed_at: str,
+        implementation_branch: str,
+        detail: str,
+        diagnostics: str,
+    ) -> ClaimResult:
+        failed_body = upsert_claim_metadata(
+            issue_body,
+            agent_run_id=agent_run_id,
+            claimed_at=claimed_at,
+            implementation_branch=implementation_branch,
+            claim_status="failed claim",
+        )
+        try:
+            self._issues.update_body(issue_number, failed_body)
+        except Exception:
+            pass
+        try:
+            self._issues.add_labels(issue_number, "needs-triage")
+        except Exception:
+            pass
+        try:
+            self._issues.add_comment(
+                issue_number,
+                f"Failed Claim Setup. {detail}\n\n**Diagnostics:**\n{diagnostics}",
+            )
+        except Exception:
+            pass
+        return self._fail(issue_number, diagnostics, agent_run_id, implementation_branch)
 
     def _fail(
         self,
@@ -332,3 +386,9 @@ def upsert_claim_metadata(
 
 def _utc_now() -> str:
     return datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+
+def _describe_exception(exc: Exception) -> str:
+    if isinstance(exc, CommandError):
+        return exc.result.diagnostics or str(exc)
+    return str(exc)

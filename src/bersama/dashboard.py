@@ -26,6 +26,29 @@ IssueGatewayFactory = Callable[[], GitHubIssueGateway]
 BackgroundTaskScheduler = Callable[..., object]
 
 
+def _serialize_diagnostics(parsed_issue: object) -> list[dict[str, str]]:
+    diagnostics = getattr(parsed_issue, "diagnostics", ())
+    return [
+        {
+            "code": diagnostic.code,
+            "kind": diagnostic.kind.value,
+            "message": diagnostic.message,
+        }
+        for diagnostic in diagnostics
+    ]
+
+
+def _issue_number_from_worktree(worktree_path: Path) -> int | None:
+    prefix = "issue-"
+    if not worktree_path.name.startswith(prefix):
+        return None
+    suffix = worktree_path.name[len(prefix) :]
+    try:
+        return int(suffix)
+    except ValueError:
+        return None
+
+
 class ClaimImplementationIssueRequest(BaseModel):
     agent_run_id: str
 
@@ -372,17 +395,14 @@ def create_dashboard_app(
         records_by_number = {record.number: record for record in issue_records}
         parsed_by_number = {}
         for record in issue_records:
-            try:
-                parsed_by_number[record.number] = parse_issue(
-                    GitHubIssue(
-                        number=record.number,
-                        title=record.title,
-                        body=record.body,
-                        labels=record.labels,
-                    )
+            parsed_by_number[record.number] = parse_issue(
+                GitHubIssue(
+                    number=record.number,
+                    title=record.title,
+                    body=record.body,
+                    labels=record.labels,
                 )
-            except Exception:
-                pass
+            )
 
         issue_dicts = {}
         for record in issue_records:
@@ -397,6 +417,9 @@ def create_dashboard_app(
                 "state": record.state,
                 "kind": parsed.kind.value,
             }
+            diagnostics = _serialize_diagnostics(parsed)
+            if diagnostics:
+                res["diagnostics"] = diagnostics
 
             if parsed.kind.value == "prd":
                 res["prd_branch"] = parsed.orchestration.prd_branch
@@ -415,12 +438,14 @@ def create_dashboard_app(
                         active_blockers.append(blocker_num)
                 res["active_blockers"] = active_blockers
 
-                status = "unknown"
+                status = "degraded" if diagnostics else "unknown"
                 started_at = None
                 finished_at = None
                 failure_reason = None
 
-                if record.state == "closed":
+                if diagnostics:
+                    pass
+                elif record.state == "closed":
                     status = "succeeded"
                 else:
                     worktree_path = Path(repo_cfg.worktree_root) / f"issue-{record.number}"
@@ -449,6 +474,8 @@ def create_dashboard_app(
                 res["started_at"] = started_at
                 res["finished_at"] = finished_at
                 res["failure_reason"] = failure_reason
+            elif diagnostics:
+                res["status"] = "degraded"
 
             issue_dicts[record.number] = res
 
@@ -480,8 +507,38 @@ def create_dashboard_app(
                         try:
                             run_state_data = json.loads(run_state_path.read_text(encoding="utf-8"))
                             runs_list.append(run_state_data)
-                        except Exception:
-                            pass
+                        except json.JSONDecodeError:
+                            issue_number = _issue_number_from_worktree(child)
+                            degraded_run = {
+                                "status": "degraded",
+                                "run_state_path": str(run_state_path),
+                                "diagnostics": [
+                                    {
+                                        "code": "invalid-run-state-json",
+                                        "kind": "invalid-state",
+                                        "message": "Run state file is not valid JSON.",
+                                    }
+                                ],
+                            }
+                            if issue_number is not None:
+                                degraded_run["issue_number"] = issue_number
+                            runs_list.append(degraded_run)
+                        except OSError:
+                            issue_number = _issue_number_from_worktree(child)
+                            degraded_run = {
+                                "status": "degraded",
+                                "run_state_path": str(run_state_path),
+                                "diagnostics": [
+                                    {
+                                        "code": "unreadable-run-state",
+                                        "kind": "read-error",
+                                        "message": "Run state file could not be read.",
+                                    }
+                                ],
+                            }
+                            if issue_number is not None:
+                                degraded_run["issue_number"] = issue_number
+                            runs_list.append(degraded_run)
 
         runs_list.sort(key=lambda r: r.get("issue_number", 0))
         return runs_list
@@ -509,9 +566,16 @@ def create_dashboard_app(
                 "lines_returned": len(tail_lines),
                 "content": content,
             }
-        except Exception as exc:
+        except OSError as exc:
             raise HTTPException(
-                status_code=500, detail=f"Failed to read log file: {exc}"
+                status_code=500,
+                detail={
+                    "code": "unreadable-run-log",
+                    "kind": "read-error",
+                    "message": "Run log file could not be read.",
+                    "issue_number": issue_number,
+                    "log_path": str(log_path),
+                },
             ) from exc
 
     dist_dir = Path("dashboard/dist")

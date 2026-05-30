@@ -1020,6 +1020,151 @@ def test_get_issues_endpoint_does_not_falsely_mark_unclaimed_issue_as_claimed() 
     assert child["claimed_at"] is None
 
 
+def test_get_issues_endpoint_returns_malformed_implementation_issue_with_diagnostics() -> None:
+    class CustomFakeIssueGateway:
+        def __init__(self, *issues: GitHubIssueRecord) -> None:
+            self.issues = {issue.number: issue for issue in issues}
+
+        def list_issues(
+            self,
+            *,
+            state: str = "open",
+            label: str | None = None,
+            labels: tuple[str, ...] | None = None,
+            updated_since: str | None = None,
+        ) -> list[GitHubIssueRecord]:
+            result = list(self.issues.values())
+            if labels is not None:
+                label_set = set(labels)
+                result = [r for r in result if set(r.labels) & label_set]
+            if state != "all":
+                result = [r for r in result if r.state == state]
+            return result
+
+    prd_issue = GitHubIssueRecord(
+        number=15,
+        title="PRD Title",
+        body="Some PRD.",
+        labels=("prd",),
+        state="open",
+    )
+    malformed_impl_issue = GitHubIssueRecord(
+        number=18,
+        title="Malformed implementation child",
+        body=(
+            "## Parent PRD\n"
+            "#15\n\n"
+            "## What to Build\n"
+            "Build it.\n"
+        ),
+        labels=("implementation",),
+        state="open",
+    )
+    app = create_dashboard_app(
+        config=build_config(),
+        issue_gateway_factory=lambda: CustomFakeIssueGateway(prd_issue, malformed_impl_issue),
+    )
+
+    response = TestClient(app).get("/api/issues?repo=demo")
+
+    assert response.status_code == 200
+    child = response.json()[0]["children"][0]
+    assert child["number"] == 18
+    assert child["status"] == "degraded"
+    assert child["diagnostics"] == [
+        {
+            "code": "missing-acceptance-criteria",
+            "kind": "missing-info",
+            "message": "Missing Acceptance Criteria section.",
+        },
+        {
+            "code": "missing-blocked-by",
+            "kind": "missing-info",
+            "message": "Missing Blocked By section.",
+        },
+    ]
+
+
+def test_get_issues_endpoint_returns_malformed_prd_issue_with_diagnostics() -> None:
+    class CustomFakeIssueGateway:
+        def __init__(self, *issues: GitHubIssueRecord) -> None:
+            self.issues = {issue.number: issue for issue in issues}
+
+        def list_issues(
+            self,
+            *,
+            state: str = "open",
+            label: str | None = None,
+            labels: tuple[str, ...] | None = None,
+            updated_since: str | None = None,
+        ) -> list[GitHubIssueRecord]:
+            result = list(self.issues.values())
+            if labels is not None:
+                label_set = set(labels)
+                result = [r for r in result if set(r.labels) & label_set]
+            if state != "all":
+                result = [r for r in result if r.state == state]
+            return result
+
+    malformed_prd_issue = GitHubIssueRecord(
+        number=15,
+        title="Malformed PRD Title",
+        body="",
+        labels=("prd", "implementation"),
+        state="open",
+    )
+    app = create_dashboard_app(
+        config=build_config(),
+        issue_gateway_factory=lambda: CustomFakeIssueGateway(malformed_prd_issue),
+    )
+
+    response = TestClient(app).get("/api/issues?repo=demo")
+
+    assert response.status_code == 200
+    assert response.json() == [
+        {
+            "number": 15,
+            "title": "Malformed PRD Title",
+            "labels": ["prd", "implementation"],
+            "state": "open",
+            "kind": "unknown",
+            "status": "degraded",
+            "diagnostics": [
+                {
+                    "code": "ambiguous-issue-kind",
+                    "kind": "invalid-state",
+                    "message": "Issue cannot be both a PRD Issue and an Implementation Issue.",
+                }
+            ],
+        }
+    ]
+
+
+def test_get_issues_endpoint_returns_server_error_for_listing_failure() -> None:
+    class FailingIssueGateway:
+        def list_issues(
+            self,
+            *,
+            state: str = "open",
+            label: str | None = None,
+            labels: tuple[str, ...] | None = None,
+            updated_since: str | None = None,
+        ) -> list[GitHubIssueRecord]:
+            raise RuntimeError("GitHub issue access failed")
+
+    app = create_dashboard_app(
+        config=build_config(),
+        issue_gateway_factory=lambda: FailingIssueGateway(),
+    )
+
+    response = TestClient(app).get("/api/issues?repo=demo")
+
+    assert response.status_code == 500
+    assert response.json() == {
+        "detail": "Failed to list GitHub issues: GitHub issue access failed"
+    }
+
+
 def test_get_runs_endpoint_scans_worktree(tmp_path: Path) -> None:
     import json
     from dataclasses import replace
@@ -1052,3 +1197,125 @@ def test_get_runs_endpoint_scans_worktree(tmp_path: Path) -> None:
     log_data = log_response.json()
     assert log_data["issue_number"] == 18
     assert log_data["content"] == "Harness execution logtail output"
+
+
+def test_get_runs_endpoint_returns_degraded_entries_for_corrupt_run_state(
+    tmp_path: Path,
+) -> None:
+    import json
+    from dataclasses import replace
+
+    config = build_config()
+    config.repos["demo"] = replace(config.repos["demo"], worktree_root=tmp_path)
+
+    valid_issue_dir = tmp_path / "issue-18"
+    valid_issue_dir.mkdir(parents=True)
+    (valid_issue_dir / "run-state.json").write_text(
+        json.dumps(
+            {
+                "status": "running",
+                "issue_number": 18,
+                "prd_branch": "prd/15",
+                "implementation_branch": "impl/18",
+                "started_at": "2026-05-29T20:00:00Z",
+            }
+        )
+    )
+
+    corrupt_issue_dir = tmp_path / "issue-19"
+    corrupt_issue_dir.mkdir(parents=True)
+    (corrupt_issue_dir / "run-state.json").write_text("{not valid json")
+
+    app = create_dashboard_app(config=config)
+
+    response = TestClient(app).get("/api/runs?repo=demo")
+
+    assert response.status_code == 200
+    assert response.json() == [
+        {
+            "status": "running",
+            "issue_number": 18,
+            "prd_branch": "prd/15",
+            "implementation_branch": "impl/18",
+            "started_at": "2026-05-29T20:00:00Z",
+        },
+        {
+            "issue_number": 19,
+            "status": "degraded",
+            "run_state_path": str(corrupt_issue_dir / "run-state.json"),
+            "diagnostics": [
+                {
+                    "code": "invalid-run-state-json",
+                    "kind": "invalid-state",
+                    "message": "Run state file is not valid JSON.",
+                }
+            ],
+        },
+    ]
+
+
+def test_get_runs_endpoint_returns_degraded_entries_for_unreadable_run_state(
+    tmp_path: Path,
+) -> None:
+    from dataclasses import replace
+    from unittest.mock import patch
+
+    config = build_config()
+    config.repos["demo"] = replace(config.repos["demo"], worktree_root=tmp_path)
+
+    issue_dir = tmp_path / "issue-22"
+    issue_dir.mkdir(parents=True)
+    run_state_path = issue_dir / "run-state.json"
+    run_state_path.write_text('{"status":"running"}')
+
+    app = create_dashboard_app(config=config)
+
+    with patch("pathlib.Path.read_text", side_effect=OSError("permission denied")):
+        response = TestClient(app).get("/api/runs?repo=demo")
+
+    assert response.status_code == 200
+    assert response.json() == [
+        {
+            "issue_number": 22,
+            "status": "degraded",
+            "run_state_path": str(run_state_path),
+            "diagnostics": [
+                {
+                    "code": "unreadable-run-state",
+                    "kind": "read-error",
+                    "message": "Run state file could not be read.",
+                }
+            ],
+        }
+    ]
+
+
+def test_get_run_log_endpoint_returns_actionable_diagnostics_for_read_failure(
+    tmp_path: Path,
+) -> None:
+    from dataclasses import replace
+    from unittest.mock import patch
+
+    config = build_config()
+    config.repos["demo"] = replace(config.repos["demo"], worktree_root=tmp_path)
+
+    issue_dir = tmp_path / "issue-18"
+    issue_dir.mkdir(parents=True)
+    log_path = issue_dir / "harness.log"
+    log_path.write_text("Harness execution logtail output")
+
+    app = create_dashboard_app(config=config)
+
+    with patch("pathlib.Path.read_text", side_effect=OSError("permission denied")):
+        response = TestClient(app).get("/api/runs/18/log?repo=demo&limit=10")
+
+    assert response.status_code == 500
+    assert response.json() == {
+        "detail": {
+            "code": "unreadable-run-log",
+            "kind": "read-error",
+            "message": "Run log file could not be read.",
+            "issue_number": 18,
+            "log_path": str(log_path),
+        }
+    }

@@ -32,6 +32,23 @@ class FakeExecutor:
         self._shutdown_called = True
 
 
+class RaisingFutureExecutor:
+    """Executor that reports a raised future after dispatch."""
+
+    def __init__(self, exception: Exception) -> None:
+        self.exception = exception
+        self.submitted: list[tuple] = []
+
+    def submit(self, fn, *args, **kwargs):
+        self.submitted.append((fn, args, kwargs))
+        future: Future = Future()
+        future.set_exception(self.exception)
+        return future
+
+    def shutdown(self, wait: bool = True) -> None:
+        pass
+
+
 class PassBasedListIssuesMock:
     """A mock list_issues side effect that tracks continuous mode loop passes
     and correctly filters open/closed issues within each pass."""
@@ -918,6 +935,45 @@ def test_poll_pending_integrations_emits_event_when_polling_raises() -> None:
     ]
 
 
+def test_poll_pending_integrations_emits_event_when_issue_listing_raises() -> None:
+    issues_gateway = MagicMock()
+    issues_gateway.list_issues.side_effect = RuntimeError("gh issue list failed")
+
+    events: list[SchedulerEvent] = []
+    orchestrator = Orchestrator(
+        issues_gateway=issues_gateway,
+        now_provider=lambda: "2026-05-29T17:00:00Z",
+        event_emitter=events.append,
+    )
+    orchestrator.integration_service = MagicMock()
+
+    repos = {
+        "demo": RepoConfig(
+            name="demo",
+            repo_path=Path("/repos/demo"),
+            main_branch="main",
+            worktree_root=Path("/worktrees/demo"),
+            global_concurrency=1,
+            per_prd_concurrency=1,
+            default_harness="local",
+        )
+    }
+    config = AppConfig(repos=repos, harnesses={})
+    state = {"repo_name": "demo", "config": config, "claimable_issues": []}
+
+    orchestrator._poll_pending_integrations(state)
+
+    assert events == [
+        SchedulerEvent(
+            event="scheduler.diagnostic",
+            issue_number=0,
+            agent_run_id=None,
+            status="recoverable",
+            detail="Integration Pull Request polling issue listing failed: gh issue list failed",
+        )
+    ]
+
+
 def test_failed_agent_run_does_not_block_other_concurrent_issues() -> None:
     issues_gateway = MagicMock()
 
@@ -1475,6 +1531,57 @@ def test_execute_claims_tracks_active_agent_runs_in_memory() -> None:
 
     # Both issues were dispatched
     assert len(fake_executor.submitted) == 2
+
+
+def test_execute_claims_clears_in_memory_active_runs_after_raised_future() -> None:
+    """Unexpected raised futures must not leak in-memory Agent Run Capacity."""
+    issues_gateway = MagicMock()
+    issues_gateway.update_body = MagicMock()
+    issues_gateway.add_comment = MagicMock()
+    issues_gateway.add_labels = MagicMock()
+    issues_gateway.remove_labels = MagicMock()
+
+    orchestrator = Orchestrator(
+        issues_gateway=issues_gateway,
+        now_provider=lambda: "2026-05-29T17:00:00Z",
+        executor=RaisingFutureExecutor(RuntimeError("executor future failed")),
+    )
+
+    repos = {
+        "demo": RepoConfig(
+            name="demo",
+            repo_path=Path("/repos/demo"),
+            main_branch="main",
+            worktree_root=Path("/worktrees/demo"),
+            global_concurrency=2,
+            per_prd_concurrency=2,
+            default_harness="local",
+        )
+    }
+    config = AppConfig(repos=repos, harnesses={})
+    state = {
+        "repo_name": "demo",
+        "config": config,
+        "claimable_issues": [2, 3],
+    }
+
+    assert len(orchestrator._active_agent_run_issue_numbers) == 0
+
+    with patch.object(orchestrator, "_run_agent_run") as run_agent_run:
+        try:
+            orchestrator.execute_claims(state)
+        except RuntimeError as exc:
+            assert str(exc) == "executor future failed"
+        else:
+            raise AssertionError("Expected execute_claims to propagate the raised future exception.")
+
+        assert run_agent_run.call_count == 0
+
+    assert len(orchestrator._active_agent_run_issue_numbers) == 0
+    issues_gateway.update_body.assert_not_called()
+    issues_gateway.add_comment.assert_not_called()
+    issues_gateway.add_labels.assert_not_called()
+    issues_gateway.remove_labels.assert_not_called()
 
 
 def test_continuous_mode_passes_active_runs_to_planner() -> None:
@@ -2457,6 +2564,71 @@ def test_plan_actions_view_issue_failure_still_produces_diagnostic() -> None:
     issues_gateway.view_issue.assert_called_once_with(99)
     # #3 should NOT be claimed (blocker unresolvable → needs-triage diagnostic)
     orchestrator.claim_service.claim_issue.assert_not_called()
+
+
+def test_plan_actions_emits_event_when_missing_blocker_lookup_fails() -> None:
+    """Missing Blocking Dependency lookup failures emit scheduler diagnostics
+    without mutating issue lifecycle state."""
+    issues_gateway = MagicMock()
+    issues_gateway.add_comment = MagicMock()
+    issues_gateway.add_labels = MagicMock()
+    issues_gateway.remove_labels = MagicMock()
+    issues_gateway.update_body = MagicMock()
+
+    prd_1 = GitHubIssueRecord(
+        number=1,
+        title="PRD",
+        body="## Problem Statement\n\nPlan.\n\n## Orchestration\n- PRD Branch: prd/1-prd",
+        labels=("prd",),
+        state="open",
+    )
+    impl_3 = GitHubIssueRecord(
+        number=3,
+        title="Impl blocked by deleted #99",
+        body="## Parent PRD\n#1\n\n## What to Build\nDo it.\n\n## Acceptance Criteria\n- [ ] Done.\n\n## Blocked By\n#99",
+        labels=("implementation", "ready-for-agent"),
+        state="open",
+    )
+    issues_gateway.list_issues.return_value = (prd_1, impl_3)
+    issues_gateway.view_issue.side_effect = RuntimeError("Issue not found")
+
+    events: list[SchedulerEvent] = []
+    orchestrator = Orchestrator(
+        issues_gateway=issues_gateway,
+        now_provider=lambda: "2026-05-29T17:00:00Z",
+        event_emitter=events.append,
+    )
+    orchestrator.reconciliation_service = MagicMock()
+    orchestrator.prd_preparation_service = MagicMock()
+    orchestrator.claim_service = MagicMock()
+    orchestrator.execution_service = MagicMock()
+    orchestrator.integration_service = MagicMock()
+
+    repos = {
+        "demo": RepoConfig(
+            name="demo", repo_path=Path("/repos/demo"), main_branch="main",
+            worktree_root=Path("/worktrees/demo"), global_concurrency=2,
+            per_prd_concurrency=2, default_harness="local",
+        )
+    }
+    config = AppConfig(repos=repos, harnesses={})
+
+    orchestrator.run("demo", config)
+
+    assert events == [
+        SchedulerEvent(
+            event="scheduler.diagnostic",
+            issue_number=3,
+            agent_run_id=None,
+            status="recoverable",
+            detail="Blocking dependency #99 lookup failed: Issue not found",
+        )
+    ]
+    orchestrator.claim_service.claim_issue.assert_not_called()
+    issues_gateway.add_comment.assert_not_called()
+    issues_gateway.add_labels.assert_not_called()
+    issues_gateway.remove_labels.assert_not_called()
+    issues_gateway.update_body.assert_not_called()
 
 
 def test_plan_actions_with_sliding_window_passes_labels_and_updated_since() -> None:
