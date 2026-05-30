@@ -3,10 +3,15 @@ from __future__ import annotations
 from dataclasses import dataclass
 import re
 import subprocess
-from typing import Protocol
+from typing import Protocol, TYPE_CHECKING
 
 from bersama.github_issues import GitHubIssueGateway
 from bersama.issues import GitHubIssue, PrdIssue, parse_issue, upsert_section
+
+if TYPE_CHECKING:
+    from bersama.command_executor import CommandExecutor
+
+from bersama.command_executor import CommandPhase
 
 
 SLUG_RE = re.compile(r"[^a-z0-9]+")
@@ -49,9 +54,12 @@ class GitWorkspaceGateway:
         self,
         runner: GitRunner = run_git,
         lock: "object | None" = None,
+        *,
+        command_executor: CommandExecutor | None = None,
     ) -> None:
         self._runner = runner
         self._lock = lock
+        self._command_executor = command_executor
 
     def ensure_remote_branch(
         self, *, repo_path: str, main_branch: str, branch_name: str
@@ -62,15 +70,16 @@ class GitWorkspaceGateway:
         if self._lock:
             self._lock.acquire()
         try:
-            self._run(("git", "fetch", "origin", main_branch), cwd=repo_path)
+            self._run(("git", "fetch", "origin", main_branch), cwd=repo_path, phase=CommandPhase.DISCOVERY)
             self._run(
                 ("git", "branch", "--create-reflog", branch_name, f"origin/{main_branch}"),
                 cwd=repo_path,
+                phase=CommandPhase.LIFECYCLE_MUTATION,
             )
             try:
-                self._run(("git", "push", "origin", f"{branch_name}:{branch_name}"), cwd=repo_path)
+                self._run(("git", "push", "origin", f"{branch_name}:{branch_name}"), cwd=repo_path, phase=CommandPhase.LIFECYCLE_MUTATION)
             except BranchPreparationError:
-                self._run(("git", "branch", "-D", branch_name), cwd=repo_path)
+                self._run(("git", "branch", "-D", branch_name), cwd=repo_path, phase=CommandPhase.LIFECYCLE_MUTATION)
                 raise
         finally:
             if self._lock:
@@ -81,10 +90,17 @@ class GitWorkspaceGateway:
         output = self._run(
             ("git", "ls-remote", "--heads", "origin", branch_name),
             cwd=repo_path,
+            phase=CommandPhase.DISCOVERY,
         )
         return bool(output.strip())
 
-    def _run(self, command: tuple[str, ...], *, cwd: str) -> str:
+    def _run(self, command: tuple[str, ...], *, cwd: str, phase: CommandPhase | None = None) -> str:
+        if self._command_executor is not None and phase is not None:
+            from bersama.command_executor import CommandError
+            result = self._command_executor.execute(command, phase, cwd=cwd)
+            if not result.succeeded:
+                raise CommandError(result)
+            return result.stdout
         try:
             return self._runner(command, cwd=cwd)
         except subprocess.CalledProcessError as exc:

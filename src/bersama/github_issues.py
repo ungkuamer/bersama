@@ -3,7 +3,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 import json
 import subprocess
-from typing import Protocol
+from typing import Protocol, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from bersama.command_executor import CommandExecutor
+
+from bersama.command_executor import CommandPhase
 
 
 @dataclass(frozen=True)
@@ -36,11 +41,24 @@ class GitHubIssueGateway:
         runner: CommandRunner = run_subprocess,
         *,
         cwd: str | Path | None = None,
+        command_executor: CommandExecutor | None = None,
     ) -> None:
         self._runner = runner
         self._cwd = cwd
+        self._command_executor = command_executor
 
-    def _run(self, command: tuple[str, ...]) -> str:
+    def _run(
+        self,
+        command: tuple[str, ...],
+        *,
+        phase: CommandPhase | None = None,
+    ) -> str:
+        if self._command_executor is not None and phase is not None:
+            from bersama.command_executor import CommandError
+            result = self._command_executor.execute(command, phase, cwd=str(self._cwd) if self._cwd else None)
+            if not result.succeeded:
+                raise CommandError(result)
+            return result.stdout
         if self._cwd is not None:
             try:
                 return self._runner(command, cwd=self._cwd)
@@ -82,7 +100,7 @@ class GitHubIssueGateway:
         if label is not None:
             command.extend(["--label", label])
 
-        output = self._run(tuple(command))
+        output = self._run(tuple(command), phase=CommandPhase.DISCOVERY)
         return self._parse_issue_records(output)
 
     def view_issue(self, number: int) -> GitHubIssueRecord:
@@ -94,7 +112,8 @@ class GitHubIssueGateway:
                 str(number),
                 "--json",
                 "number,title,body,labels,state",
-            )
+            ),
+            phase=CommandPhase.DISCOVERY,
         )
         return self._parse_issue_record(json.loads(output))
 
@@ -111,14 +130,15 @@ class GitHubIssueGateway:
                     str(number),
                     "--add-label",
                     ",".join(labels),
-                )
+                ),
+                phase=CommandPhase.LIFECYCLE_MUTATION,
             )
         except Exception as exc:
             import sys
             # Attempt to create any missing labels, then retry
             for label in labels:
                 try:
-                    self._run(("gh", "label", "create", label, "--color", "ededed"))
+                    self._run(("gh", "label", "create", label, "--color", "ededed"), phase=CommandPhase.LIFECYCLE_MUTATION)
                 except Exception:
                     pass
             try:
@@ -130,7 +150,8 @@ class GitHubIssueGateway:
                         str(number),
                         "--add-label",
                         ",".join(labels),
-                    )
+                    ),
+                    phase=CommandPhase.LIFECYCLE_MUTATION,
                 )
             except Exception as retry_exc:
                 print(f"Warning: Failed to add labels {labels} to issue #{number}: {retry_exc}", file=sys.stderr)
@@ -148,7 +169,8 @@ class GitHubIssueGateway:
                     str(number),
                     "--remove-label",
                     ",".join(labels),
-                )
+                ),
+                phase=CommandPhase.LIFECYCLE_MUTATION,
             )
         except Exception as exc:
             import sys
@@ -163,7 +185,8 @@ class GitHubIssueGateway:
                 str(number),
                 "--body",
                 body,
-            )
+            ),
+            phase=CommandPhase.LIFECYCLE_MUTATION,
         )
 
     def add_comment(self, number: int, body: str) -> None:
@@ -175,11 +198,12 @@ class GitHubIssueGateway:
                 str(number),
                 "--body",
                 body,
-            )
+            ),
+            phase=CommandPhase.LIFECYCLE_MUTATION,
         )
 
     def close_issue(self, number: int) -> None:
-        self._run(("gh", "issue", "close", str(number)))
+        self._run(("gh", "issue", "close", str(number)), phase=CommandPhase.LIFECYCLE_MUTATION)
 
     def _parse_issue_records(self, output: str) -> tuple[GitHubIssueRecord, ...]:
         payload = json.loads(output)
