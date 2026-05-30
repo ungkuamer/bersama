@@ -4,6 +4,7 @@ import argparse
 import sys
 
 from bersama.claiming import ClaimWorkspaceGateway, ImplementationClaimService
+from bersama.command_executor import CommandExecutor
 from bersama.config import ConfigError, load_config
 from bersama.github_issues import create_bounded_issue_gateway
 from bersama.execution import HarnessExecutionService
@@ -11,6 +12,10 @@ from bersama.orchestrator import build_run_plan
 from bersama.prd_preparation import GitWorkspaceGateway, PrdPreparationService
 from bersama.integration import IntegrationService, IntegrationWorkspaceGateway
 from bersama.reconciliation import ReconciliationService
+
+
+def _build_command_executor() -> CommandExecutor:
+    return CommandExecutor()
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -174,7 +179,7 @@ def _prepare_prd_command(args: argparse.Namespace) -> int:
 
     service = PrdPreparationService(
         issues=create_bounded_issue_gateway(cwd=repo.repo_path),
-        workspace=GitWorkspaceGateway(),
+        workspace=GitWorkspaceGateway(command_executor=_build_command_executor()),
     )
     result = service.prepare_issue(
         repo_path=str(repo.repo_path),
@@ -203,7 +208,7 @@ def _claim_issue_command(args: argparse.Namespace) -> int:
 
     service = ImplementationClaimService(
         issues=create_bounded_issue_gateway(cwd=repo.repo_path),
-        workspace=ClaimWorkspaceGateway(),
+        workspace=ClaimWorkspaceGateway(command_executor=_build_command_executor()),
     )
     result = service.claim_issue(
         repo_path=str(repo.repo_path),
@@ -267,7 +272,7 @@ def _integrate_run_command(args: argparse.Namespace) -> int:
 
     service = IntegrationService(
         issues=create_bounded_issue_gateway(cwd=repo.repo_path),
-        workspace=IntegrationWorkspaceGateway(),
+        workspace=IntegrationWorkspaceGateway(command_executor=_build_command_executor()),
     )
     result = service.integrate_issue(
         repo_path=str(repo.repo_path),
