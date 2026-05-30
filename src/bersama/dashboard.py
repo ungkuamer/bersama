@@ -26,6 +26,18 @@ IssueGatewayFactory = Callable[[], GitHubIssueGateway]
 BackgroundTaskScheduler = Callable[..., object]
 
 
+def _serialize_diagnostics(parsed_issue: object) -> list[dict[str, str]]:
+    diagnostics = getattr(parsed_issue, "diagnostics", ())
+    return [
+        {
+            "code": diagnostic.code,
+            "kind": diagnostic.kind.value,
+            "message": diagnostic.message,
+        }
+        for diagnostic in diagnostics
+    ]
+
+
 class ClaimImplementationIssueRequest(BaseModel):
     agent_run_id: str
 
@@ -372,17 +384,14 @@ def create_dashboard_app(
         records_by_number = {record.number: record for record in issue_records}
         parsed_by_number = {}
         for record in issue_records:
-            try:
-                parsed_by_number[record.number] = parse_issue(
-                    GitHubIssue(
-                        number=record.number,
-                        title=record.title,
-                        body=record.body,
-                        labels=record.labels,
-                    )
+            parsed_by_number[record.number] = parse_issue(
+                GitHubIssue(
+                    number=record.number,
+                    title=record.title,
+                    body=record.body,
+                    labels=record.labels,
                 )
-            except Exception:
-                pass
+            )
 
         issue_dicts = {}
         for record in issue_records:
@@ -397,6 +406,9 @@ def create_dashboard_app(
                 "state": record.state,
                 "kind": parsed.kind.value,
             }
+            diagnostics = _serialize_diagnostics(parsed)
+            if diagnostics:
+                res["diagnostics"] = diagnostics
 
             if parsed.kind.value == "prd":
                 res["prd_branch"] = parsed.orchestration.prd_branch
@@ -415,12 +427,14 @@ def create_dashboard_app(
                         active_blockers.append(blocker_num)
                 res["active_blockers"] = active_blockers
 
-                status = "unknown"
+                status = "degraded" if diagnostics else "unknown"
                 started_at = None
                 finished_at = None
                 failure_reason = None
 
-                if record.state == "closed":
+                if diagnostics:
+                    pass
+                elif record.state == "closed":
                     status = "succeeded"
                 else:
                     worktree_path = Path(repo_cfg.worktree_root) / f"issue-{record.number}"
@@ -449,6 +463,8 @@ def create_dashboard_app(
                 res["started_at"] = started_at
                 res["finished_at"] = finished_at
                 res["failure_reason"] = failure_reason
+            elif diagnostics:
+                res["status"] = "degraded"
 
             issue_dicts[record.number] = res
 

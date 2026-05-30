@@ -1020,6 +1020,151 @@ def test_get_issues_endpoint_does_not_falsely_mark_unclaimed_issue_as_claimed() 
     assert child["claimed_at"] is None
 
 
+def test_get_issues_endpoint_returns_malformed_implementation_issue_with_diagnostics() -> None:
+    class CustomFakeIssueGateway:
+        def __init__(self, *issues: GitHubIssueRecord) -> None:
+            self.issues = {issue.number: issue for issue in issues}
+
+        def list_issues(
+            self,
+            *,
+            state: str = "open",
+            label: str | None = None,
+            labels: tuple[str, ...] | None = None,
+            updated_since: str | None = None,
+        ) -> list[GitHubIssueRecord]:
+            result = list(self.issues.values())
+            if labels is not None:
+                label_set = set(labels)
+                result = [r for r in result if set(r.labels) & label_set]
+            if state != "all":
+                result = [r for r in result if r.state == state]
+            return result
+
+    prd_issue = GitHubIssueRecord(
+        number=15,
+        title="PRD Title",
+        body="Some PRD.",
+        labels=("prd",),
+        state="open",
+    )
+    malformed_impl_issue = GitHubIssueRecord(
+        number=18,
+        title="Malformed implementation child",
+        body=(
+            "## Parent PRD\n"
+            "#15\n\n"
+            "## What to Build\n"
+            "Build it.\n"
+        ),
+        labels=("implementation",),
+        state="open",
+    )
+    app = create_dashboard_app(
+        config=build_config(),
+        issue_gateway_factory=lambda: CustomFakeIssueGateway(prd_issue, malformed_impl_issue),
+    )
+
+    response = TestClient(app).get("/api/issues?repo=demo")
+
+    assert response.status_code == 200
+    child = response.json()[0]["children"][0]
+    assert child["number"] == 18
+    assert child["status"] == "degraded"
+    assert child["diagnostics"] == [
+        {
+            "code": "missing-acceptance-criteria",
+            "kind": "missing-info",
+            "message": "Missing Acceptance Criteria section.",
+        },
+        {
+            "code": "missing-blocked-by",
+            "kind": "missing-info",
+            "message": "Missing Blocked By section.",
+        },
+    ]
+
+
+def test_get_issues_endpoint_returns_malformed_prd_issue_with_diagnostics() -> None:
+    class CustomFakeIssueGateway:
+        def __init__(self, *issues: GitHubIssueRecord) -> None:
+            self.issues = {issue.number: issue for issue in issues}
+
+        def list_issues(
+            self,
+            *,
+            state: str = "open",
+            label: str | None = None,
+            labels: tuple[str, ...] | None = None,
+            updated_since: str | None = None,
+        ) -> list[GitHubIssueRecord]:
+            result = list(self.issues.values())
+            if labels is not None:
+                label_set = set(labels)
+                result = [r for r in result if set(r.labels) & label_set]
+            if state != "all":
+                result = [r for r in result if r.state == state]
+            return result
+
+    malformed_prd_issue = GitHubIssueRecord(
+        number=15,
+        title="Malformed PRD Title",
+        body="",
+        labels=("prd", "implementation"),
+        state="open",
+    )
+    app = create_dashboard_app(
+        config=build_config(),
+        issue_gateway_factory=lambda: CustomFakeIssueGateway(malformed_prd_issue),
+    )
+
+    response = TestClient(app).get("/api/issues?repo=demo")
+
+    assert response.status_code == 200
+    assert response.json() == [
+        {
+            "number": 15,
+            "title": "Malformed PRD Title",
+            "labels": ["prd", "implementation"],
+            "state": "open",
+            "kind": "unknown",
+            "status": "degraded",
+            "diagnostics": [
+                {
+                    "code": "ambiguous-issue-kind",
+                    "kind": "invalid-state",
+                    "message": "Issue cannot be both a PRD Issue and an Implementation Issue.",
+                }
+            ],
+        }
+    ]
+
+
+def test_get_issues_endpoint_returns_server_error_for_listing_failure() -> None:
+    class FailingIssueGateway:
+        def list_issues(
+            self,
+            *,
+            state: str = "open",
+            label: str | None = None,
+            labels: tuple[str, ...] | None = None,
+            updated_since: str | None = None,
+        ) -> list[GitHubIssueRecord]:
+            raise RuntimeError("GitHub issue access failed")
+
+    app = create_dashboard_app(
+        config=build_config(),
+        issue_gateway_factory=lambda: FailingIssueGateway(),
+    )
+
+    response = TestClient(app).get("/api/issues?repo=demo")
+
+    assert response.status_code == 500
+    assert response.json() == {
+        "detail": "Failed to list GitHub issues: GitHub issue access failed"
+    }
+
+
 def test_get_runs_endpoint_scans_worktree(tmp_path: Path) -> None:
     import json
     from dataclasses import replace
