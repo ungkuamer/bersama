@@ -6,6 +6,7 @@ from enum import Enum
 
 from bersama.github_issues import GitHubIssueRecord
 from bersama.issues import (
+    ClaimStatus,
     Diagnostic,
     DiagnosticKind,
     GitHubIssue,
@@ -13,6 +14,7 @@ from bersama.issues import (
     IssueKind,
     ParsedIssue,
     PrdIssue,
+    parse_claim_status,
     parse_issue,
 )
 
@@ -177,6 +179,20 @@ def _base_decision_for_issue(
                 ),
             )
 
+        # Failed Claim Setup is not a healthy Claimed Implementation Issue.
+        if parse_claim_status(parsed.orchestration.claim_status) is ClaimStatus.FAILED:
+            return PlannerIssueDecision(
+                issue_number=record.number,
+                kind=PlannerDecisionKind.NEEDS_TRIAGE,
+                diagnostics=(
+                    Diagnostic(
+                        code="failed-claim-setup",
+                        kind=DiagnosticKind.INVALID_STATE,
+                        message="Claim Setup failed; the implementation issue requires human review.",
+                    ),
+                ),
+            )
+
         if _is_stale_claim(parsed, stale_claim_timeout=stale_claim_timeout, now=now):
             return PlannerIssueDecision(
                 issue_number=record.number,
@@ -258,6 +274,9 @@ def _count_active_claims_by_prd(
         if parsed.parent_prd_number is None or not _has_claim_metadata(parsed):
             continue
         if _is_stale_claim(parsed, stale_claim_timeout=stale_claim_timeout, now=now):
+            continue
+        # Failed Claim Setup does not consume Agent Run Capacity.
+        if parse_claim_status(parsed.orchestration.claim_status) is ClaimStatus.FAILED:
             continue
         counts[parsed.parent_prd_number] = counts.get(parsed.parent_prd_number, 0) + 1
         counted_issue_numbers.add(parsed.issue.number)
