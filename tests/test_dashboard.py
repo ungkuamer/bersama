@@ -1197,3 +1197,125 @@ def test_get_runs_endpoint_scans_worktree(tmp_path: Path) -> None:
     log_data = log_response.json()
     assert log_data["issue_number"] == 18
     assert log_data["content"] == "Harness execution logtail output"
+
+
+def test_get_runs_endpoint_returns_degraded_entries_for_corrupt_run_state(
+    tmp_path: Path,
+) -> None:
+    import json
+    from dataclasses import replace
+
+    config = build_config()
+    config.repos["demo"] = replace(config.repos["demo"], worktree_root=tmp_path)
+
+    valid_issue_dir = tmp_path / "issue-18"
+    valid_issue_dir.mkdir(parents=True)
+    (valid_issue_dir / "run-state.json").write_text(
+        json.dumps(
+            {
+                "status": "running",
+                "issue_number": 18,
+                "prd_branch": "prd/15",
+                "implementation_branch": "impl/18",
+                "started_at": "2026-05-29T20:00:00Z",
+            }
+        )
+    )
+
+    corrupt_issue_dir = tmp_path / "issue-19"
+    corrupt_issue_dir.mkdir(parents=True)
+    (corrupt_issue_dir / "run-state.json").write_text("{not valid json")
+
+    app = create_dashboard_app(config=config)
+
+    response = TestClient(app).get("/api/runs?repo=demo")
+
+    assert response.status_code == 200
+    assert response.json() == [
+        {
+            "status": "running",
+            "issue_number": 18,
+            "prd_branch": "prd/15",
+            "implementation_branch": "impl/18",
+            "started_at": "2026-05-29T20:00:00Z",
+        },
+        {
+            "issue_number": 19,
+            "status": "degraded",
+            "run_state_path": str(corrupt_issue_dir / "run-state.json"),
+            "diagnostics": [
+                {
+                    "code": "invalid-run-state-json",
+                    "kind": "invalid-state",
+                    "message": "Run state file is not valid JSON.",
+                }
+            ],
+        },
+    ]
+
+
+def test_get_runs_endpoint_returns_degraded_entries_for_unreadable_run_state(
+    tmp_path: Path,
+) -> None:
+    from dataclasses import replace
+    from unittest.mock import patch
+
+    config = build_config()
+    config.repos["demo"] = replace(config.repos["demo"], worktree_root=tmp_path)
+
+    issue_dir = tmp_path / "issue-22"
+    issue_dir.mkdir(parents=True)
+    run_state_path = issue_dir / "run-state.json"
+    run_state_path.write_text('{"status":"running"}')
+
+    app = create_dashboard_app(config=config)
+
+    with patch("pathlib.Path.read_text", side_effect=OSError("permission denied")):
+        response = TestClient(app).get("/api/runs?repo=demo")
+
+    assert response.status_code == 200
+    assert response.json() == [
+        {
+            "issue_number": 22,
+            "status": "degraded",
+            "run_state_path": str(run_state_path),
+            "diagnostics": [
+                {
+                    "code": "unreadable-run-state",
+                    "kind": "read-error",
+                    "message": "Run state file could not be read.",
+                }
+            ],
+        }
+    ]
+
+
+def test_get_run_log_endpoint_returns_actionable_diagnostics_for_read_failure(
+    tmp_path: Path,
+) -> None:
+    from dataclasses import replace
+    from unittest.mock import patch
+
+    config = build_config()
+    config.repos["demo"] = replace(config.repos["demo"], worktree_root=tmp_path)
+
+    issue_dir = tmp_path / "issue-18"
+    issue_dir.mkdir(parents=True)
+    log_path = issue_dir / "harness.log"
+    log_path.write_text("Harness execution logtail output")
+
+    app = create_dashboard_app(config=config)
+
+    with patch("pathlib.Path.read_text", side_effect=OSError("permission denied")):
+        response = TestClient(app).get("/api/runs/18/log?repo=demo&limit=10")
+
+    assert response.status_code == 500
+    assert response.json() == {
+        "detail": {
+            "code": "unreadable-run-log",
+            "kind": "read-error",
+            "message": "Run log file could not be read.",
+            "issue_number": 18,
+            "log_path": str(log_path),
+        }
+    }
