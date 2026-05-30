@@ -190,16 +190,41 @@ class ImplementationClaimService:
             issue_record.title,
         )
         claimed_at = self._now_provider()
-        updated_body = upsert_claim_metadata(
+
+        # Write provisional Claim Setup metadata before repository setup.
+        provisional_body = upsert_claim_metadata(
             issue_record.body,
             agent_run_id=agent_run_id,
             claimed_at=claimed_at,
             implementation_branch=implementation_branch,
+            claim_status="setting up",
         )
+        self._issues.remove_labels(issue_number, "ready-for-agent")
+        self._issues.update_body(issue_number, provisional_body)
 
+        # Re-read the issue to verify this Agent Run still owns the Claim Setup.
+        re_read_record = self._issues.view_issue(issue_number)
+        re_read_parsed = parse_issue(
+            GitHubIssue(
+                number=re_read_record.number,
+                title=re_read_record.title,
+                body=re_read_record.body,
+                labels=re_read_record.labels,
+            )
+        )
+        if (
+            not isinstance(re_read_parsed, ImplementationIssue)
+            or re_read_parsed.orchestration.agent_run_id != agent_run_id
+        ):
+            return self._fail(
+                issue_number,
+                "Ownership mismatch after writing provisional claim metadata.",
+                agent_run_id,
+                implementation_branch,
+            )
+
+        # Attempt branch and worktree setup.
         try:
-            self._issues.remove_labels(issue_number, "ready-for-agent")
-            self._issues.update_body(issue_number, updated_body)
             self._workspace.ensure_remote_branch_from_base(
                 repo_path=repo_path,
                 base_branch=prd_branch,
@@ -212,12 +237,32 @@ class ImplementationClaimService:
                 issue_number=issue_number,
             )
         except ClaimError as exc:
+            # Record Failed Claim Setup diagnostics.
+            failed_body = upsert_claim_metadata(
+                issue_record.body,
+                agent_run_id=agent_run_id,
+                claimed_at=claimed_at,
+                implementation_branch=implementation_branch,
+                claim_status="failed claim",
+            )
+            self._issues.update_body(issue_number, failed_body)
             self._issues.add_labels(issue_number, "needs-triage")
             self._issues.add_comment(
                 issue_number,
-                f"Branch setup failed during claim.\n\n**Diagnostics:**\n{exc}"
+                f"Failed Claim Setup during branch or worktree creation.\n\n**Diagnostics:**\n{exc}"
             )
             return self._fail(issue_number, str(exc), agent_run_id, implementation_branch)
+
+        # Promote to Active Claim.
+        active_body = upsert_claim_metadata(
+            issue_record.body,
+            agent_run_id=agent_run_id,
+            claimed_at=claimed_at,
+            implementation_branch=implementation_branch,
+            claim_status="active",
+        )
+        self._issues.add_labels(issue_number, "claimed")
+        self._issues.update_body(issue_number, active_body)
 
         return ClaimResult(
             issue_number=issue_number,
@@ -252,14 +297,20 @@ def build_implementation_branch_name(
 
 
 def upsert_claim_metadata(
-    body: str, *, agent_run_id: str, claimed_at: str, implementation_branch: str
+    body: str,
+    *,
+    agent_run_id: str,
+    claimed_at: str,
+    implementation_branch: str,
+    claim_status: str | None = None,
 ) -> str:
     lines = [
         f"- Agent Run: {agent_run_id}",
         f"- Claimed At: {claimed_at}",
+        f"- Claim Status: {claim_status}" if claim_status else None,
         f"- Implementation Branch: {implementation_branch}",
     ]
-    return upsert_section(body, "Orchestration", "\n".join(lines))
+    return upsert_section(body, "Orchestration", "\n".join(line for line in lines if line is not None))
 
 
 def _utc_now() -> str:
