@@ -1,4 +1,5 @@
 from pathlib import Path
+from unittest.mock import patch
 
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
@@ -7,7 +8,7 @@ from bersama.claiming import ClaimResult
 from bersama.config import AppConfig, HarnessConfig, RepoConfig
 from bersama.dashboard import create_dashboard_app
 from bersama.execution import ExecutionResult
-from bersama.github_issues import GitHubIssueRecord
+from bersama.github_issues import GitHubIssueGateway, GitHubIssueRecord
 from bersama.integration import IntegrationResult
 from bersama.prd_preparation import PrdPreparationResult
 
@@ -210,6 +211,25 @@ def test_reconcile_endpoint_returns_server_error_for_reconciliation_failure() ->
     assert response.json() == {
         "detail": "Reconciliation failed for repo 'demo': GitHub issue access failed"
     }
+
+
+def test_default_dashboard_service_factory_builds_bounded_issue_gateway() -> None:
+    created_gateways: list[GitHubIssueGateway] = []
+
+    def fake_gateway_factory(*, cwd=None) -> GitHubIssueGateway:
+        gateway = GitHubIssueGateway(cwd=cwd)
+        created_gateways.append(gateway)
+        return gateway
+
+    with patch("bersama.dashboard.create_bounded_issue_gateway", side_effect=fake_gateway_factory), patch(
+        "bersama.dashboard.ReconciliationService.reconcile", return_value=None
+    ):
+        client = TestClient(create_dashboard_app(config=build_config()))
+        response = client.post("/dashboard/repos/demo/reconcile")
+
+    assert response.status_code == 200
+    assert len(created_gateways) == 1
+    assert created_gateways[0]._cwd == Path("/repos/demo")
 
 
 def test_prepare_prd_endpoint_returns_branch_metadata_on_success() -> None:

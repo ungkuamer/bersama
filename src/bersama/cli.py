@@ -5,7 +5,7 @@ import sys
 
 from bersama.claiming import ClaimWorkspaceGateway, ImplementationClaimService
 from bersama.config import ConfigError, load_config
-from bersama.github_issues import GitHubIssueGateway
+from bersama.github_issues import create_bounded_issue_gateway
 from bersama.execution import HarnessExecutionService
 from bersama.orchestrator import build_run_plan
 from bersama.prd_preparation import GitWorkspaceGateway, PrdPreparationService
@@ -151,7 +151,7 @@ def _run_command(args: argparse.Namespace) -> int:
     print("Command: " + " ".join(plan.command))
 
     repo = config.repo(args.repo_name)
-    issues_gateway = GitHubIssueGateway(cwd=repo.repo_path)
+    issues_gateway = create_bounded_issue_gateway(cwd=repo.repo_path)
 
     from bersama.orchestrator import Orchestrator
     orchestrator = Orchestrator(issues_gateway=issues_gateway)
@@ -162,7 +162,7 @@ def _run_command(args: argparse.Namespace) -> int:
 def _reconcile_safe(repo_name: str, config: AppConfig) -> None:
     try:
         repo = config.repo(repo_name)
-        service = ReconciliationService(issues=GitHubIssueGateway(cwd=repo.repo_path))
+        service = ReconciliationService(issues=create_bounded_issue_gateway(cwd=repo.repo_path))
         service.reconcile()
     except Exception as exc:
         print(f"Warning: Issue state reconciliation failed: {exc}", file=sys.stderr)
@@ -173,7 +173,7 @@ def _prepare_prd_command(args: argparse.Namespace) -> int:
     repo = config.repo(args.repo_name)
 
     service = PrdPreparationService(
-        issues=GitHubIssueGateway(cwd=repo.repo_path),
+        issues=create_bounded_issue_gateway(cwd=repo.repo_path),
         workspace=GitWorkspaceGateway(),
     )
     result = service.prepare_issue(
@@ -202,7 +202,7 @@ def _claim_issue_command(args: argparse.Namespace) -> int:
     repo = config.repo(args.repo_name)
 
     service = ImplementationClaimService(
-        issues=GitHubIssueGateway(cwd=repo.repo_path),
+        issues=create_bounded_issue_gateway(cwd=repo.repo_path),
         workspace=ClaimWorkspaceGateway(),
     )
     result = service.claim_issue(
@@ -233,7 +233,7 @@ def _execute_run_command(args: argparse.Namespace) -> int:
     repo = config.repo(args.repo_name)
 
     service = HarnessExecutionService(
-        issues=GitHubIssueGateway(cwd=repo.repo_path),
+        issues=create_bounded_issue_gateway(cwd=repo.repo_path),
     )
     try:
         result = service.execute_run(
@@ -266,7 +266,7 @@ def _integrate_run_command(args: argparse.Namespace) -> int:
     repo = config.repo(args.repo_name)
 
     service = IntegrationService(
-        issues=GitHubIssueGateway(cwd=repo.repo_path),
+        issues=create_bounded_issue_gateway(cwd=repo.repo_path),
         workspace=IntegrationWorkspaceGateway(),
     )
     result = service.integrate_issue(
@@ -290,7 +290,7 @@ def _integrate_run_command(args: argparse.Namespace) -> int:
 def _reconcile_command(args: argparse.Namespace) -> int:
     config = load_config(args.config)
     repo = config.repo(args.repo_name)
-    service = ReconciliationService(issues=GitHubIssueGateway(cwd=repo.repo_path))
+    service = ReconciliationService(issues=create_bounded_issue_gateway(cwd=repo.repo_path))
     service.reconcile()
     print(f"Successfully reconciled issue states for repo: {args.repo_name}")
     return 0

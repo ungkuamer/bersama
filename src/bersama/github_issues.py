@@ -8,7 +8,8 @@ from typing import Protocol, TYPE_CHECKING
 if TYPE_CHECKING:
     from bersama.command_executor import CommandExecutor
 
-from bersama.command_executor import CommandPhase
+from bersama.command_executor import CommandError, CommandPhase, CommandResult
+from bersama.command_executor import CommandExecutor
 
 
 @dataclass(frozen=True)
@@ -66,6 +67,43 @@ class GitHubIssueGateway:
                 return self._runner(command)
         return self._runner(command)
 
+    def _execute_mutation_with_read_back(
+        self,
+        command: tuple[str, ...],
+        *,
+        verifier: callable | None = None,
+    ) -> str:
+        if self._command_executor is None:
+            return self._run(command, phase=CommandPhase.LIFECYCLE_MUTATION)
+
+        result = self._command_executor.execute(
+            command,
+            CommandPhase.LIFECYCLE_MUTATION,
+            cwd=str(self._cwd) if self._cwd else None,
+        )
+        if result.succeeded:
+            return result.stdout
+
+        if result.timed_out and verifier is not None:
+            try:
+                if verifier():
+                    return result.stdout
+            except CommandError as read_back_exc:
+                diagnostics = _combine_diagnostics(
+                    result,
+                    "Mutation outcome is ambiguous: read-back check failed after timeout.",
+                    read_back_exc.result.diagnostics,
+                )
+                raise CommandError(_replace_diagnostics(result, diagnostics)) from read_back_exc
+
+            diagnostics = _combine_diagnostics(
+                result,
+                "Mutation outcome is ambiguous: read-back check did not confirm whether the change applied.",
+            )
+            raise CommandError(_replace_diagnostics(result, diagnostics))
+
+        raise CommandError(result)
+
     def list_issues(
         self,
         *,
@@ -121,63 +159,36 @@ class GitHubIssueGateway:
         if not labels:
             return
 
-        try:
-            self._run(
-                (
-                    "gh",
-                    "issue",
-                    "edit",
-                    str(number),
-                    "--add-label",
-                    ",".join(labels),
-                ),
-                phase=CommandPhase.LIFECYCLE_MUTATION,
-            )
-        except Exception as exc:
-            import sys
-            # Attempt to create any missing labels, then retry
-            for label in labels:
-                try:
-                    self._run(("gh", "label", "create", label, "--color", "ededed"), phase=CommandPhase.LIFECYCLE_MUTATION)
-                except Exception:
-                    pass
-            try:
-                self._run(
-                    (
-                        "gh",
-                        "issue",
-                        "edit",
-                        str(number),
-                        "--add-label",
-                        ",".join(labels),
-                    ),
-                    phase=CommandPhase.LIFECYCLE_MUTATION,
-                )
-            except Exception as retry_exc:
-                print(f"Warning: Failed to add labels {labels} to issue #{number}: {retry_exc}", file=sys.stderr)
+        self._execute_mutation_with_read_back(
+            (
+                "gh",
+                "issue",
+                "edit",
+                str(number),
+                "--add-label",
+                ",".join(labels),
+            ),
+            verifier=lambda: all(label in self.view_issue(number).labels for label in labels),
+        )
 
     def remove_labels(self, number: int, *labels: str) -> None:
         if not labels:
             return
 
-        try:
-            self._run(
-                (
-                    "gh",
-                    "issue",
-                    "edit",
-                    str(number),
-                    "--remove-label",
-                    ",".join(labels),
-                ),
-                phase=CommandPhase.LIFECYCLE_MUTATION,
-            )
-        except Exception as exc:
-            import sys
-            print(f"Warning: Failed to remove labels {labels} from issue #{number}: {exc}", file=sys.stderr)
+        self._execute_mutation_with_read_back(
+            (
+                "gh",
+                "issue",
+                "edit",
+                str(number),
+                "--remove-label",
+                ",".join(labels),
+            ),
+            verifier=lambda: all(label not in self.view_issue(number).labels for label in labels),
+        )
 
     def update_body(self, number: int, body: str) -> None:
-        self._run(
+        self._execute_mutation_with_read_back(
             (
                 "gh",
                 "issue",
@@ -186,11 +197,11 @@ class GitHubIssueGateway:
                 "--body",
                 body,
             ),
-            phase=CommandPhase.LIFECYCLE_MUTATION,
+            verifier=lambda: self.view_issue(number).body == body,
         )
 
     def add_comment(self, number: int, body: str) -> None:
-        self._run(
+        self._execute_mutation_with_read_back(
             (
                 "gh",
                 "issue",
@@ -199,11 +210,33 @@ class GitHubIssueGateway:
                 "--body",
                 body,
             ),
-            phase=CommandPhase.LIFECYCLE_MUTATION,
+            verifier=lambda: self._comment_exists(number, body),
         )
 
     def close_issue(self, number: int) -> None:
-        self._run(("gh", "issue", "close", str(number)), phase=CommandPhase.LIFECYCLE_MUTATION)
+        self._execute_mutation_with_read_back(
+            ("gh", "issue", "close", str(number)),
+            verifier=lambda: self.view_issue(number).state == "closed",
+        )
+
+    def _comment_exists(self, number: int, body: str) -> bool:
+        output = self._run(
+            (
+                "gh",
+                "issue",
+                "view",
+                str(number),
+                "--json",
+                "comments",
+            ),
+            phase=CommandPhase.DISCOVERY,
+        )
+        payload = json.loads(output)
+        comments_payload = payload.get("comments", [])
+        return any(
+            isinstance(comment, dict) and str(comment.get("body", "")) == body
+            for comment in comments_payload
+        )
 
     def _parse_issue_records(self, output: str) -> tuple[GitHubIssueRecord, ...]:
         payload = json.loads(output)
@@ -223,3 +256,37 @@ class GitHubIssueGateway:
             labels=labels,
             state=str(payload["state"]).lower(),
         )
+
+
+def create_bounded_issue_gateway(*, cwd: str | Path | None = None) -> GitHubIssueGateway:
+    return GitHubIssueGateway(
+        cwd=cwd,
+        command_executor=CommandExecutor(),
+    )
+
+
+def _replace_diagnostics(result: CommandResult, diagnostics: str) -> CommandResult:
+    return CommandResult(
+        command=result.command,
+        phase=result.phase,
+        stdout=result.stdout,
+        stderr=result.stderr,
+        exit_code=result.exit_code,
+        timed_out=result.timed_out,
+        retries_attempted=result.retries_attempted,
+        cwd=result.cwd,
+        diagnostics=diagnostics,
+    )
+
+
+def _combine_diagnostics(
+    result: CommandResult,
+    message: str,
+    extra: str | None = None,
+) -> str:
+    parts = [message]
+    if result.diagnostics:
+        parts.append(result.diagnostics)
+    if extra:
+        parts.append(f"read-back: {extra}")
+    return " ".join(parts)
