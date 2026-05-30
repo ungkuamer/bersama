@@ -137,10 +137,6 @@ def test_integrate_issue_success_flow(tmp_path: Path) -> None:
         "Integration: #8 into prd/1-parent-prd",
         "--body",
         "Automated integration of implementation branch `impl/1/8-child-impl` into PRD branch `prd/1-parent-prd`.",
-        "--json",
-        "number",
-        "--jq",
-        ".number",
     )
     expected_pr_merge_cmd = (
         "gh",
@@ -149,7 +145,7 @@ def test_integrate_issue_success_flow(tmp_path: Path) -> None:
         "42",
         "--squash",
     )
-    runner.outputs[expected_pr_create_cmd] = "42\n"
+    runner.outputs[expected_pr_create_cmd] = "https://github.com/owner/repo/pull/42\n"
 
     workspace = IntegrationWorkspaceGateway(runner=runner)
     service = IntegrationService(issues=issues, workspace=workspace)
@@ -310,8 +306,6 @@ def test_integrate_issue_pr_creation_failure(tmp_path: Path) -> None:
         "--base", "prd/1-parent-prd",
         "--title", "Integration: #8 into prd/1-parent-prd",
         "--body", "Automated integration of implementation branch `impl/1/8-child-impl` into PRD branch `prd/1-parent-prd`.",
-        "--json", "number",
-        "--jq", ".number",
     )
     runner.fail(pr_create_cmd, "gh: pull request create failed")
 
@@ -342,17 +336,14 @@ def test_integrate_issue_pr_merge_failure(tmp_path: Path) -> None:
     issues = get_mock_issues()
     runner = FakeGitRunner()
 
-    # gh pr create succeeds, returns PR number 42
     pr_create_cmd = (
         "gh", "pr", "create",
         "--head", "impl/1/8-child-impl",
         "--base", "prd/1-parent-prd",
         "--title", "Integration: #8 into prd/1-parent-prd",
         "--body", "Automated integration of implementation branch `impl/1/8-child-impl` into PRD branch `prd/1-parent-prd`.",
-        "--json", "number",
-        "--jq", ".number",
     )
-    runner.outputs[pr_create_cmd] = "42\n"
+    runner.outputs[pr_create_cmd] = "https://github.com/owner/repo/pull/42\n"
 
     # gh pr merge fails
     pr_merge_cmd = ("gh", "pr", "merge", "42", "--squash")
@@ -655,10 +646,8 @@ def test_create_integration_pr_success(tmp_path: Path) -> None:
         "--base", "prd/1-parent-prd",
         "--title", "Integration: #8 into prd/1-parent-prd",
         "--body", "Automated integration of implementation branch `impl/1/8-child-impl` into PRD branch `prd/1-parent-prd`.",
-        "--json", "number",
-        "--jq", ".number",
     )
-    runner.outputs[pr_create_cmd] = "42\n"
+    runner.outputs[pr_create_cmd] = "https://github.com/owner/repo/pull/42\n"
 
     workspace = IntegrationWorkspaceGateway(runner=runner)
     service = IntegrationService(issues=issues, workspace=workspace)

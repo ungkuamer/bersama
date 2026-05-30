@@ -154,13 +154,11 @@ class IntegrationWorkspaceGateway:
                 title,
                 "--body",
                 body,
-                "--json",
-                "number",
-                "--jq",
-                ".number",
             )
             result = self._run(cmd, cwd=worktree_path)
-            return result.strip()
+            url = result.strip()
+            pr_number = url.split("/")[-1]
+            return pr_number
         finally:
             if self._lock:
                 self._lock.release()
