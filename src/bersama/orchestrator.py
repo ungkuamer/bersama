@@ -429,30 +429,81 @@ class Orchestrator:
         return workflow.compile()
 
     def run(self, repo_name: str, config: AppConfig, continuous: bool = False) -> None:
-        compiled_graph = self.build_workflow()
         if continuous:
-            while True:
-                initial_state: OrchestrationState = {
-                    "repo_name": repo_name,
-                    "config": config,
-                    "claimable_issues": [],
-                }
-                result_state = compiled_graph.invoke(initial_state)
-                if result_state.get("claimable_issues"):
-                    print("\n--- Continuous execution: claimable issues found. Looping to next planning pass... ---\n")
-                    continue
-                else:
-                    break
+            self._run_continuous(repo_name, config)
         else:
+            compiled_graph = self.build_workflow()
             initial_state: OrchestrationState = {
                 "repo_name": repo_name,
                 "config": config,
                 "claimable_issues": [],
             }
             compiled_graph.invoke(initial_state)
+            # Wait for all pending integrations to complete before returning.
+            self._drain_integration_queue()
 
-        # Wait for all pending integrations to complete before returning.
-        # In continuous mode this ensures clean shutdown; in single-pass mode
-        # it ensures the caller sees all integrations applied.
+    def _run_continuous(self, repo_name: str, config: AppConfig) -> None:
+        """Continuous drain scheduling for dependency waves.
+
+        Reconciliation runs at orchestrator start, after meaningful
+        outcomes (integration drain), and at orchestrator end — without
+        requiring a full reconciliation before every slot check.
+
+        The loop drains integration completions *inside* the scheduling
+        loop so newly-unblocked Ready Implementation Issues become
+        claimable within the same orchestrator invocation.
+
+        Stop condition: no claimable issues AND no active Agent Runs
+        AND no pending integrations.
+        """
+        # Phase 1: Reconciliation at orchestrator start (once).
+        self.reconciliation_service.reconcile()
+
+        # Phase 2: PRD preparation (once — no need to re-prepare every pass).
+        state: OrchestrationState = {
+            "repo_name": repo_name,
+            "config": config,
+            "claimable_issues": [],
+        }
+        state = self.prepare_prds(state)
+
+        # Phase 3: Ensure the serialised integration worker is running.
+        self._ensure_integration_worker()
+
+        # Phase 4: Continuous scheduling loop.
+        while True:
+            # ---- Planning Pass ----
+            state = self.plan_actions(state)
+            claimable = state.get("claimable_issues", [])
+
+            # ---- Stop Condition ----
+            # Stop only when truly idle: nothing claimable, no active
+            # Agent Runs, and no integrations still in flight.
+            active_runs = bool(self._active_agent_run_issue_numbers)
+            pending_integrations = self._integration_queue.unfinished_tasks > 0
+            if not claimable and not active_runs and not pending_integrations:
+                break
+
+            if claimable:
+                # ---- Execute ----
+                # Dispatches claimable issues, waits for their execution
+                # to complete, and enqueues successful runs for integration.
+                state = self.execute_claims(state)
+
+            # ---- Drain Integrations ----
+            # Wait for all pending integrations to finish *before* the
+            # next planning pass.  This is the key to dependency-wave
+            # draining: integrated (closed) issues unblock dependents.
+            self._drain_integration_queue()
+
+            # ---- Meaningful-Outcome Reconciliation ----
+            # After integrations, issue states may have changed
+            # (issues closed, labels updated, etc.).
+            self.reconciliation_service.reconcile()
+
+        # Phase 5: Final reconciliation at orchestrator end.
+        self.reconciliation_service.reconcile()
+
+        # Drain any straggling integrations (should be none, but defensive).
         self._drain_integration_queue()
 

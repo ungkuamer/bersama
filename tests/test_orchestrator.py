@@ -708,8 +708,8 @@ def test_continuous_loop_execution_workflow() -> None:
     orchestrator.execution_service.execute_run.assert_called_once()
     orchestrator.integration_service.integrate_issue.assert_called_once()
 
-    # Reconcile should have run: start and end of loop 1, plus start and end of loop 2 -> 4 times total!
-    assert orchestrator.reconciliation_service.reconcile.call_count == 4
+    # Reconcile runs: orchestrator start, after drain (meaningful outcome), orchestrator end.
+    assert orchestrator.reconciliation_service.reconcile.call_count == 3
 
 
 def test_bounded_concurrent_scheduling_pass_dispatches_multiple_issues() -> None:
@@ -1474,8 +1474,8 @@ def test_continuous_mode_passes_active_runs_to_planner() -> None:
     # In the first pass, impl_2 was claimable and dispatched
     assert orchestrator.claim_service.claim_issue.call_count == 1
     # The second pass found no claimable issues (impl_2 is blocked, impl_3 still blocked)
-    # Reconcile was called at start/end of each pass (2 passes = 4 calls)
-    assert orchestrator.reconciliation_service.reconcile.call_count == 4
+    # Reconcile runs: orchestrator start, after drain (meaningful outcome), orchestrator end.
+    assert orchestrator.reconciliation_service.reconcile.call_count == 3
 
 
 class FakeDelayingExecutor:
@@ -1904,4 +1904,271 @@ def test_integration_failure_leaves_issue_for_human_review_in_orchestrator_conte
         worktree_root="/worktrees/demo",
         issue_number=2,
     )
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Issue #40: Continuous drain scheduling for dependency waves
+# ──────────────────────────────────────────────────────────────────────────────
+
+
+def test_continuous_mode_drains_dependency_waves() -> None:
+    """When an issue integrates and closes, a previously-blocked dependent
+    issue should become claimable and get dispatched in the *same* continuous
+    orchestrator invocation."""
+    issues_gateway = MagicMock()
+
+    prd_1 = GitHubIssueRecord(
+        number=1,
+        title="PRD",
+        body="## Problem Statement\n\nPlan.\n\n## Orchestration\n- PRD Branch: prd/1-prd",
+        labels=("prd",),
+        state="open",
+    )
+    impl_2 = GitHubIssueRecord(
+        number=2,
+        title="Impl A (blocker)",
+        body="## Parent PRD\n#1\n\n## What to Build\nA.\n\n## Acceptance Criteria\n- [ ] Done.\n\n## Blocked By\nNone",
+        labels=("implementation", "ready-for-agent"),
+        state="open",
+    )
+    impl_3 = GitHubIssueRecord(
+        number=3,
+        title="Impl B (blocked by A)",
+        body="## Parent PRD\n#1\n\n## What to Build\nB.\n\n## Acceptance Criteria\n- [ ] Done.\n\n## Blocked By\n#2",
+        labels=("implementation", "ready-for-agent"),
+        state="open",
+    )
+
+    # After #2 integrates successfully, it becomes closed.
+    impl_2_closed = GitHubIssueRecord(
+        number=2,
+        title="Impl A (blocker)",
+        body=impl_2.body,
+        labels=("implementation",),
+        state="closed",
+    )
+    # After #3 is dispatched and integrated, it becomes closed.
+    impl_3_closed = GitHubIssueRecord(
+        number=3,
+        title="Impl B (blocked by A)",
+        body=impl_3.body,
+        labels=("implementation",),
+        state="closed",
+    )
+
+    # list_issues call sequence:
+    #   call 1: prepare_prds (state="open")        → prd_1, impl_2, impl_3
+    #   call 2: plan_actions (state="all") pass 1  → #2 claimable, #3 blocked
+    #   call 3: plan_actions (state="all") pass 2  → #2 closed, #3 now claimable
+    #   call 4: plan_actions (state="all") pass 3  → no claimable (both done)
+    issues_gateway.list_issues.side_effect = [
+        (prd_1, impl_2, impl_3),   # prepare_prds
+        (prd_1, impl_2, impl_3),   # plan pass 1
+        (prd_1, impl_2_closed, impl_3),  # plan pass 2 (after #2 integration)
+        (prd_1, impl_2_closed, impl_3_closed),  # plan pass 3
+    ]
+
+    orchestrator = Orchestrator(
+        issues_gateway=issues_gateway,
+        now_provider=lambda: "2026-05-29T17:00:00Z",
+    )
+    orchestrator.reconciliation_service = MagicMock()
+    orchestrator.prd_preparation_service = MagicMock()
+
+    orchestrator.claim_service = MagicMock()
+    orchestrator.claim_service.claim_issue.side_effect = [
+        ClaimResult(issue_number=2, agent_run_id="run-aaa", implementation_branch="impl/1/2-impl-a", worktree_path="/worktrees/demo/issue-2"),
+        ClaimResult(issue_number=3, agent_run_id="run-bbb", implementation_branch="impl/1/3-impl-b", worktree_path="/worktrees/demo/issue-3"),
+    ]
+
+    orchestrator.execution_service = MagicMock()
+    orchestrator.execution_service.execute_run.side_effect = [
+        ExecutionResult(issue_number=2, status="succeeded", exit_code=0, new_commits=True),
+        ExecutionResult(issue_number=3, status="succeeded", exit_code=0, new_commits=True),
+    ]
+
+    orchestrator.integration_service = MagicMock()
+    orchestrator.integration_service.integrate_issue.side_effect = [
+        IntegrationResult(issue_number=2, status="succeeded", implementation_branch="impl/1/2-impl-a", prd_branch="prd/1-prd"),
+        IntegrationResult(issue_number=3, status="succeeded", implementation_branch="impl/1/3-impl-b", prd_branch="prd/1-prd"),
+    ]
+
+    repos = {
+        "demo": RepoConfig(
+            name="demo", repo_path=Path("/repos/demo"), main_branch="main",
+            worktree_root=Path("/worktrees/demo"), global_concurrency=2, per_prd_concurrency=2,
+            default_harness="local",
+        )
+    }
+    config = AppConfig(repos=repos, harnesses={})
+
+    orchestrator.run("demo", config, continuous=True)
+
+    # Both issues should have been dispatched across scheduling passes
+    assert orchestrator.claim_service.claim_issue.call_count == 2
+    assert orchestrator.execution_service.execute_run.call_count == 2
+    assert orchestrator.integration_service.integrate_issue.call_count == 2
+
+    # Integration calls happen in order: #2 first (dispatched first), #3 second
+    integrate_calls = orchestrator.integration_service.integrate_issue.call_args_list
+    assert integrate_calls[0].kwargs["issue_number"] == 2
+    assert integrate_calls[1].kwargs["issue_number"] == 3
+
+
+def test_continuous_mode_stops_when_truly_idle() -> None:
+    """Continuous mode stops when no claimable issues, no active Agent Runs,
+    and no pending integrations remain."""
+    issues_gateway = MagicMock()
+
+    prd_1 = GitHubIssueRecord(
+        number=1,
+        title="PRD",
+        body="## Problem Statement\n\nPlan.\n\n## Orchestration\n- PRD Branch: prd/1-prd",
+        labels=("prd",),
+        state="open",
+    )
+    # No ready-for-agent implementation issues
+    impl_2 = GitHubIssueRecord(
+        number=2,
+        title="Impl (not ready)",
+        body="## Parent PRD\n#1\n\n## What to Build\nA.\n\n## Acceptance Criteria\n- [ ] Done.\n\n## Blocked By\nNone",
+        labels=("implementation",),  # no ready-for-agent
+        state="open",
+    )
+
+    issues_gateway.list_issues.side_effect = [
+        (prd_1, impl_2),  # prepare_prds
+        (prd_1, impl_2),  # plan_actions
+    ]
+
+    orchestrator = Orchestrator(
+        issues_gateway=issues_gateway,
+        now_provider=lambda: "2026-05-29T17:00:00Z",
+    )
+    orchestrator.reconciliation_service = MagicMock()
+    orchestrator.prd_preparation_service = MagicMock()
+    orchestrator.claim_service = MagicMock()
+    orchestrator.execution_service = MagicMock()
+    orchestrator.integration_service = MagicMock()
+
+    repos = {
+        "demo": RepoConfig(
+            name="demo", repo_path=Path("/repos/demo"), main_branch="main",
+            worktree_root=Path("/worktrees/demo"), global_concurrency=2, per_prd_concurrency=1,
+            default_harness="local",
+        )
+    }
+    config = AppConfig(repos=repos, harnesses={})
+
+    orchestrator.run("demo", config, continuous=True)
+
+    # Nothing claimable → nothing dispatched
+    orchestrator.claim_service.claim_issue.assert_not_called()
+    orchestrator.execution_service.execute_run.assert_not_called()
+    orchestrator.integration_service.integrate_issue.assert_not_called()
+
+
+def test_continuous_mode_does_not_exit_early_while_integrations_pending() -> None:
+    """Continuous mode must not exit while integrations are still pending,
+    because those integrations may unblock currently-blocked Ready Issues.
+    
+    Simulates: #2 was dispatched and succeeded in a prior pass, but its
+    integration hasn't completed yet.  #3 is blocked by #2.  The loop must
+    drain the pending integration, find #2 closed, and then claim #3."""
+    issues_gateway = MagicMock()
+
+    prd_1 = GitHubIssueRecord(
+        number=1,
+        title="PRD",
+        body="## Problem Statement\n\nPlan.\n\n## Orchestration\n- PRD Branch: prd/1-prd",
+        labels=("prd",),
+        state="open",
+    )
+    impl_2 = GitHubIssueRecord(
+        number=2,
+        title="Impl A",
+        body="## Parent PRD\n#1\n\n## What to Build\nA.\n\n## Acceptance Criteria\n- [ ] Done.\n\n## Blocked By\nNone",
+        labels=("implementation", "ready-for-agent"),
+        state="open",
+    )
+    impl_3 = GitHubIssueRecord(
+        number=3,
+        title="Impl B (blocked by A)",
+        body="## Parent PRD\n#1\n\n## What to Build\nB.\n\n## Acceptance Criteria\n- [ ] Done.\n\n## Blocked By\n#2",
+        labels=("implementation", "ready-for-agent"),
+        state="open",
+    )
+
+    # After integration closes #2, #3 becomes unblocked
+    impl_2_closed = GitHubIssueRecord(
+        number=2,
+        title="Impl A",
+        body=impl_2.body,
+        labels=("implementation",),
+        state="closed",
+    )
+    # After #3 is dispatched and integrated, it becomes closed.
+    impl_3_closed = GitHubIssueRecord(
+        number=3,
+        title="Impl B (blocked by A)",
+        body=impl_3.body,
+        labels=("implementation",),
+        state="closed",
+    )
+
+    issues_gateway.list_issues.side_effect = [
+        (prd_1, impl_2, impl_3),          # prepare_prds
+        (prd_1, impl_2, impl_3),          # plan pass 1: #2 claimable, #3 blocked
+        (prd_1, impl_2_closed, impl_3),   # plan pass 2: after drain, #2 closed, #3 claimable
+        (prd_1, impl_2_closed, impl_3_closed),  # plan pass 3: no claimable
+    ]
+
+    orchestrator = Orchestrator(
+        issues_gateway=issues_gateway,
+        now_provider=lambda: "2026-05-29T17:00:00Z",
+    )
+    orchestrator.reconciliation_service = MagicMock()
+    orchestrator.prd_preparation_service = MagicMock()
+
+    orchestrator.claim_service = MagicMock()
+    orchestrator.claim_service.claim_issue.side_effect = [
+        ClaimResult(issue_number=2, agent_run_id="run-aaa", implementation_branch="impl/1/2-impl-a", worktree_path="/worktrees/demo/issue-2"),
+        ClaimResult(issue_number=3, agent_run_id="run-bbb", implementation_branch="impl/1/3-impl-b", worktree_path="/worktrees/demo/issue-3"),
+    ]
+
+    orchestrator.execution_service = MagicMock()
+    orchestrator.execution_service.execute_run.side_effect = [
+        ExecutionResult(issue_number=2, status="succeeded", exit_code=0, new_commits=True),
+        ExecutionResult(issue_number=3, status="succeeded", exit_code=0, new_commits=True),
+    ]
+
+    orchestrator.integration_service = MagicMock()
+    orchestrator.integration_service.integrate_issue.side_effect = [
+        IntegrationResult(issue_number=2, status="succeeded", implementation_branch="impl/1/2-impl-a", prd_branch="prd/1-prd"),
+        IntegrationResult(issue_number=3, status="succeeded", implementation_branch="impl/1/3-impl-b", prd_branch="prd/1-prd"),
+    ]
+
+    repos = {
+        "demo": RepoConfig(
+            name="demo", repo_path=Path("/repos/demo"), main_branch="main",
+            worktree_root=Path("/worktrees/demo"), global_concurrency=2, per_prd_concurrency=2,
+            default_harness="local",
+        )
+    }
+    config = AppConfig(repos=repos, harnesses={})
+
+    orchestrator.run("demo", config, continuous=True)
+
+    # The loop must NOT exit early — it must drain integration, re-plan,
+    # find #3 now unblocked, and dispatch it.
+    assert orchestrator.claim_service.claim_issue.call_count == 2
+    assert orchestrator.execution_service.execute_run.call_count == 2
+    assert orchestrator.integration_service.integrate_issue.call_count == 2
+
+    # Verify #3 was dispatched (not lost to premature exit)
+    claim_numbers = [
+        call.kwargs["issue_number"]
+        for call in orchestrator.claim_service.claim_issue.call_args_list
+    ]
+    assert claim_numbers == [2, 3], f"Expected claims for [2, 3], got {claim_numbers}"
 
