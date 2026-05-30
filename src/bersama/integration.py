@@ -4,7 +4,7 @@ from dataclasses import dataclass
 import json
 from pathlib import Path
 import subprocess
-from typing import Protocol
+from typing import Protocol, TYPE_CHECKING
 
 from bersama.github_issues import GitHubIssueGateway, GitHubIssueRecord
 from bersama.issues import (
@@ -14,6 +14,11 @@ from bersama.issues import (
     parse_issue,
     upsert_section,
 )
+
+if TYPE_CHECKING:
+    from bersama.command_executor import CommandExecutor
+
+from bersama.command_executor import CommandPhase
 
 
 class IntegrationError(RuntimeError):
@@ -81,9 +86,12 @@ class IntegrationWorkspaceGateway:
         self,
         runner: GitRunner = run_git,
         lock: "object | None" = None,
+        *,
+        command_executor: CommandExecutor | None = None,
     ) -> None:
         self._runner = runner
         self._lock = lock
+        self._command_executor = command_executor
 
     def update_branch(
         self, *, worktree_path: str, implementation_branch: str, prd_branch: str
@@ -92,7 +100,7 @@ class IntegrationWorkspaceGateway:
         if self._lock:
             self._lock.acquire()
         try:
-            self._run(("git", "fetch", "origin"), cwd=worktree_path)
+            self._run(("git", "fetch", "origin"), cwd=worktree_path, phase=CommandPhase.DISCOVERY)
 
             # 2. Attempt to merge origin/prd_branch into the current local branch
             try:
@@ -105,11 +113,16 @@ class IntegrationWorkspaceGateway:
                         f"Update implementation branch against latest {prd_branch}",
                     ),
                     cwd=worktree_path,
+                    phase=CommandPhase.LIFECYCLE_MUTATION,
                 )
             except IntegrationError as exc:
                 # Clean up the conflicted merge state if possible
                 try:
-                    self._run(("git", "merge", "--abort"), cwd=worktree_path)
+                    self._run(
+                        ("git", "merge", "--abort"),
+                        cwd=worktree_path,
+                        phase=CommandPhase.LIFECYCLE_MUTATION,
+                    )
                 except Exception:
                     pass
                 raise exc
@@ -121,7 +134,11 @@ class IntegrationWorkspaceGateway:
         if self._lock:
             self._lock.acquire()
         try:
-            self._run(("git", "push", "origin", branch_name), cwd=worktree_path)
+            self._run(
+                ("git", "push", "origin", branch_name),
+                cwd=worktree_path,
+                phase=CommandPhase.LIFECYCLE_MUTATION,
+            )
         finally:
             if self._lock:
                 self._lock.release()
@@ -155,7 +172,7 @@ class IntegrationWorkspaceGateway:
                 "--body",
                 body,
             )
-            result = self._run(cmd, cwd=worktree_path)
+            result = self._run(cmd, cwd=worktree_path, phase=CommandPhase.LIFECYCLE_MUTATION)
             url = result.strip()
             pr_number = url.split("/")[-1]
             return pr_number
@@ -185,7 +202,7 @@ class IntegrationWorkspaceGateway:
                 pr_number,
                 merge_option,
             )
-            result = self._run(cmd, cwd=worktree_path)
+            result = self._run(cmd, cwd=worktree_path, phase=CommandPhase.LIFECYCLE_MUTATION)
             return result.strip()
         finally:
             if self._lock:
@@ -208,7 +225,7 @@ class IntegrationWorkspaceGateway:
                 "--json",
                 "state,mergeable,closed,statusCheckRollup",
             )
-            result = self._run(cmd, cwd=worktree_path)
+            result = self._run(cmd, cwd=worktree_path, phase=CommandPhase.DISCOVERY)
             return json.loads(result)
         finally:
             if self._lock:
@@ -229,12 +246,32 @@ class IntegrationWorkspaceGateway:
             self._run(
                 ("git", "push", "origin", f"{implementation_branch}:{prd_branch}"),
                 cwd=worktree_path,
+                phase=CommandPhase.LIFECYCLE_MUTATION,
             )
         finally:
             if self._lock:
                 self._lock.release()
 
-    def _run(self, command: tuple[str, ...], *, cwd: str) -> str:
+    def _run(self, command: tuple[str, ...], *, cwd: str, phase: CommandPhase | None = None) -> str:
+        if self._command_executor is not None and phase is not None:
+            from bersama.command_executor import CommandError
+            result = self._command_executor.execute(command, phase, cwd=cwd)
+            if not result.succeeded:
+                # Map CommandError back to domain-specific errors
+                detail = result.diagnostics or result.stderr or "command failed"
+                cmd_str = " ".join(command)
+                if "git merge" in cmd_str:
+                    if "conflict" in detail.lower() or "merge failed" in detail.lower():
+                        raise MergeConflictError(detail)
+                    raise UpdateError(detail)
+                elif "git push" in cmd_str:
+                    raise PushError(detail)
+                elif "gh pr create" in cmd_str:
+                    raise PrCreationError(detail)
+                elif "gh pr merge" in cmd_str:
+                    raise PrMergeError(detail)
+                raise IntegrationError(detail)
+            return result.stdout
         try:
             return self._runner(command, cwd=cwd)
         except subprocess.CalledProcessError as exc:

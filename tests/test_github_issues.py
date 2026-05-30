@@ -1,5 +1,8 @@
 import json
 
+import pytest
+
+from bersama.command_executor import CommandError, CommandPhase, CommandResult
 from bersama.github_issues import GitHubIssueGateway, GitHubIssueRecord
 
 
@@ -13,6 +16,53 @@ class FakeRunner:
         if not self._outputs:
             return ""
         return self._outputs.pop(0)
+
+
+class StubExecutor:
+    def __init__(self, *results: CommandResult) -> None:
+        self._results = list(results)
+        self.calls: list[tuple[tuple[str, ...], CommandPhase]] = []
+
+    def execute(
+        self,
+        command: tuple[str, ...],
+        phase: CommandPhase,
+        *,
+        cwd: str | None = None,
+        timeout: float | None = None,
+        retries: int | None = None,
+        retry_safety_check=None,
+    ) -> CommandResult:
+        del cwd, timeout, retries
+        self.calls.append((command, phase))
+        result = self._results.pop(0)
+        if retry_safety_check is not None and not result.succeeded:
+            retry_safety_check(result)
+        return result
+
+
+def _command_result(
+    *,
+    command: tuple[str, ...],
+    phase: CommandPhase,
+    stdout: str = "",
+    stderr: str = "",
+    exit_code: int = 0,
+    timed_out: bool = False,
+    retries_attempted: int = 0,
+    diagnostics: str | None = None,
+) -> CommandResult:
+    return CommandResult(
+        command=command,
+        phase=phase,
+        stdout=stdout,
+        stderr=stderr,
+        exit_code=exit_code,
+        timed_out=timed_out,
+        retries_attempted=retries_attempted,
+        diagnostics=diagnostics,
+        cwd=None,
+    )
 
 
 def test_list_issues_returns_open_and_closed_issue_records() -> None:
@@ -315,3 +365,138 @@ def test_list_issues_labels_and_single_label_are_mutually_exclusive() -> None:
         raised = True
 
     assert raised, "Expected ValueError when both label and labels are provided"
+
+
+def test_discovery_timeout_raises_without_mutation_fallback() -> None:
+    command = (
+        "gh",
+        "issue",
+        "list",
+        "--state",
+        "open",
+        "--json",
+        "number,title,body,labels,state",
+    )
+    executor = StubExecutor(
+        _command_result(
+            command=command,
+            phase=CommandPhase.DISCOVERY,
+            timed_out=True,
+            exit_code=-1,
+            diagnostics="Command timed out after 30s",
+        )
+    )
+    gateway = GitHubIssueGateway(command_executor=executor)
+
+    with pytest.raises(CommandError):
+        gateway.list_issues()
+
+    assert executor.calls == [(command, CommandPhase.DISCOVERY)]
+
+
+def test_mutation_timeout_with_read_back_success_treats_add_labels_as_succeeded() -> None:
+    mutation_command = ("gh", "issue", "edit", "4", "--add-label", "ready-for-agent")
+    read_back_command = (
+        "gh",
+        "issue",
+        "view",
+        "4",
+        "--json",
+        "number,title,body,labels,state",
+    )
+    executor = StubExecutor(
+        _command_result(
+            command=mutation_command,
+            phase=CommandPhase.LIFECYCLE_MUTATION,
+            timed_out=True,
+            exit_code=-1,
+            diagnostics="Command timed out after 120s",
+        ),
+        _command_result(
+            command=read_back_command,
+            phase=CommandPhase.DISCOVERY,
+            stdout=json.dumps(
+                {
+                    "number": 4,
+                    "title": "Implementation",
+                    "body": "Ship code",
+                    "labels": [{"name": "ready-for-agent"}],
+                    "state": "OPEN",
+                }
+            ),
+        ),
+    )
+    gateway = GitHubIssueGateway(command_executor=executor)
+
+    gateway.add_labels(4, "ready-for-agent")
+
+    assert executor.calls == [
+        (mutation_command, CommandPhase.LIFECYCLE_MUTATION),
+        (read_back_command, CommandPhase.DISCOVERY),
+    ]
+
+
+def test_mutation_timeout_with_read_back_failure_surfaces_ambiguity_diagnostics() -> None:
+    mutation_command = (
+        "gh",
+        "issue",
+        "edit",
+        "4",
+        "--body",
+        "## Orchestration\n- Agent Run: run-123",
+    )
+    read_back_command = (
+        "gh",
+        "issue",
+        "view",
+        "4",
+        "--json",
+        "number,title,body,labels,state",
+    )
+    executor = StubExecutor(
+        _command_result(
+            command=mutation_command,
+            phase=CommandPhase.LIFECYCLE_MUTATION,
+            timed_out=True,
+            exit_code=-1,
+            diagnostics="Command timed out after 120s",
+        ),
+        _command_result(
+            command=read_back_command,
+            phase=CommandPhase.DISCOVERY,
+            timed_out=True,
+            exit_code=-1,
+            diagnostics="Command timed out after 30s",
+        ),
+    )
+    gateway = GitHubIssueGateway(command_executor=executor)
+
+    with pytest.raises(CommandError) as excinfo:
+        gateway.update_body(4, "## Orchestration\n- Agent Run: run-123")
+
+    assert "ambiguous" in str(excinfo.value).lower()
+    assert "read-back" in str(excinfo.value).lower()
+    assert executor.calls == [
+        (mutation_command, CommandPhase.LIFECYCLE_MUTATION),
+        (read_back_command, CommandPhase.DISCOVERY),
+    ]
+
+
+def test_non_retryable_mutation_failure_raises_without_read_back() -> None:
+    command = ("gh", "issue", "close", "4")
+    executor = StubExecutor(
+        _command_result(
+            command=command,
+            phase=CommandPhase.LIFECYCLE_MUTATION,
+            exit_code=1,
+            stderr="permission denied",
+            diagnostics="Command exited with code 1; stderr: permission denied",
+        )
+    )
+    gateway = GitHubIssueGateway(command_executor=executor)
+
+    with pytest.raises(CommandError) as excinfo:
+        gateway.close_issue(4)
+
+    assert "exit_code=1" in str(excinfo.value)
+    assert executor.calls == [(command, CommandPhase.LIFECYCLE_MUTATION)]

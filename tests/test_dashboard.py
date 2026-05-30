@@ -1,15 +1,18 @@
 from pathlib import Path
+from unittest.mock import patch
 
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
 from bersama.claiming import ClaimResult
+from bersama.command_executor import CommandExecutor
 from bersama.config import AppConfig, HarnessConfig, RepoConfig
 from bersama.dashboard import create_dashboard_app
 from bersama.execution import ExecutionResult
-from bersama.github_issues import GitHubIssueRecord
+from bersama.github_issues import GitHubIssueGateway, GitHubIssueRecord
 from bersama.integration import IntegrationResult
 from bersama.prd_preparation import PrdPreparationResult
+from bersama.repo_lock import RepoLock
 
 
 class FakeReconciliationService:
@@ -210,6 +213,172 @@ def test_reconcile_endpoint_returns_server_error_for_reconciliation_failure() ->
     assert response.json() == {
         "detail": "Reconciliation failed for repo 'demo': GitHub issue access failed"
     }
+
+
+def test_default_dashboard_service_factory_builds_bounded_issue_gateway() -> None:
+    created_gateways: list[GitHubIssueGateway] = []
+
+    def fake_gateway_factory(*, cwd=None) -> GitHubIssueGateway:
+        gateway = GitHubIssueGateway(cwd=cwd)
+        created_gateways.append(gateway)
+        return gateway
+
+    with patch("bersama.dashboard.create_bounded_issue_gateway", side_effect=fake_gateway_factory), patch(
+        "bersama.dashboard.ReconciliationService.reconcile", return_value=None
+    ):
+        client = TestClient(create_dashboard_app(config=build_config()))
+        response = client.post("/dashboard/repos/demo/reconcile")
+
+    assert response.status_code == 200
+    assert len(created_gateways) == 1
+    assert created_gateways[0]._cwd == Path("/repos/demo")
+
+
+def test_default_dashboard_service_factories_bind_repo_lock_to_internal_workspaces() -> None:
+    captured_workspaces: dict[str, object] = {}
+
+    class RecordingPrdPreparationService:
+        def __init__(self, *, issues: object, workspace: object) -> None:
+            del issues
+            captured_workspaces["prd"] = workspace
+
+        def prepare_issue(
+            self, *, repo_path: str, main_branch: str, issue_number: int
+        ) -> PrdPreparationResult:
+            del repo_path, main_branch, issue_number
+            return PrdPreparationResult(
+                issue_number=15,
+                prd_branch="prd/15-demo",
+                reused_existing_branch=False,
+                updated_issue_body=True,
+            )
+
+    class RecordingClaimService:
+        def __init__(self, *, issues: object, workspace: object, now_provider: object = None) -> None:
+            del issues, now_provider
+            captured_workspaces["claim"] = workspace
+
+        def claim_issue(
+            self,
+            *,
+            repo_path: str,
+            worktree_root: str,
+            issue_number: int,
+            agent_run_id: str,
+        ) -> ClaimResult:
+            del repo_path, worktree_root, issue_number, agent_run_id
+            return ClaimResult(
+                issue_number=18,
+                agent_run_id="run-123",
+                implementation_branch="impl/15/18-demo",
+                worktree_path="/worktrees/demo/issue-18",
+            )
+
+    class RecordingIntegrationService:
+        def __init__(self, *, issues: object, workspace: object) -> None:
+            del issues
+            captured_workspaces["integration"] = workspace
+
+        def integrate_issue(
+            self, *, repo_path: str, worktree_root: str, issue_number: int
+        ) -> IntegrationResult:
+            del repo_path, worktree_root, issue_number
+            return IntegrationResult(
+                issue_number=18,
+                status="succeeded",
+                implementation_branch="impl/15/18-demo",
+                prd_branch="prd/15-demo",
+            )
+
+    with patch("bersama.dashboard.PrdPreparationService", RecordingPrdPreparationService), patch(
+        "bersama.dashboard.ImplementationClaimService", RecordingClaimService
+    ), patch("bersama.dashboard.IntegrationService", RecordingIntegrationService):
+        client = TestClient(create_dashboard_app(config=build_config()))
+        assert client.post("/dashboard/repos/demo/prd-issues/15/prepare").status_code == 200
+        assert client.post(
+            "/dashboard/repos/demo/implementation-issues/18/claim",
+            json={"agent_run_id": "run-123"},
+        ).status_code == 200
+        assert client.post(
+            "/dashboard/repos/demo/implementation-issues/18/integrate"
+        ).status_code == 200
+
+    for key in ("prd", "claim", "integration"):
+        workspace = captured_workspaces[key]
+        assert isinstance(workspace._lock, RepoLock)
+        assert workspace._lock._repo_path == "/repos/demo"
+
+
+def test_default_dashboard_service_factories_inject_command_executor_into_workspace_gateways() -> None:
+    captured_workspaces: dict[str, object] = {}
+
+    class RecordingPrdPreparationService:
+        def __init__(self, *, issues: object, workspace: object) -> None:
+            del issues
+            captured_workspaces["prd"] = workspace
+
+        def prepare_issue(
+            self, *, repo_path: str, main_branch: str, issue_number: int
+        ) -> PrdPreparationResult:
+            del repo_path, main_branch, issue_number
+            return PrdPreparationResult(
+                issue_number=15,
+                prd_branch="prd/15-demo",
+                reused_existing_branch=False,
+                updated_issue_body=True,
+            )
+
+    class RecordingClaimService:
+        def __init__(self, *, issues: object, workspace: object, now_provider: object = None) -> None:
+            del issues, now_provider
+            captured_workspaces["claim"] = workspace
+
+        def claim_issue(
+            self,
+            *,
+            repo_path: str,
+            worktree_root: str,
+            issue_number: int,
+            agent_run_id: str,
+        ) -> ClaimResult:
+            del repo_path, worktree_root, issue_number, agent_run_id
+            return ClaimResult(
+                issue_number=18,
+                agent_run_id="run-123",
+                implementation_branch="impl/15/18-demo",
+                worktree_path="/worktrees/demo/issue-18",
+            )
+
+    class RecordingIntegrationService:
+        def __init__(self, *, issues: object, workspace: object) -> None:
+            del issues
+            captured_workspaces["integration"] = workspace
+
+        def integrate_issue(
+            self, *, repo_path: str, worktree_root: str, issue_number: int
+        ) -> IntegrationResult:
+            del repo_path, worktree_root, issue_number
+            return IntegrationResult(
+                issue_number=18,
+                status="succeeded",
+                implementation_branch="impl/15/18-demo",
+                prd_branch="prd/15-demo",
+            )
+
+    with patch("bersama.dashboard.PrdPreparationService", RecordingPrdPreparationService), patch(
+        "bersama.dashboard.ImplementationClaimService", RecordingClaimService
+    ), patch("bersama.dashboard.IntegrationService", RecordingIntegrationService):
+        client = TestClient(create_dashboard_app(config=build_config()))
+        client.post("/dashboard/repos/demo/prd-issues/15/prepare")
+        client.post(
+            "/dashboard/repos/demo/implementation-issues/18/claim",
+            json={"agent_run_id": "run-123"},
+        )
+        client.post("/dashboard/repos/demo/implementation-issues/18/integrate")
+
+    for key in ("prd", "claim", "integration"):
+        workspace = captured_workspaces[key]
+        assert isinstance(workspace._command_executor, CommandExecutor)
 
 
 def test_prepare_prd_endpoint_returns_branch_metadata_on_success() -> None:

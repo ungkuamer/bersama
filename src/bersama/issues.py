@@ -11,6 +11,43 @@ CHECKLIST_ITEM_RE = re.compile(r"^\s*-\s*\[[ xX]\]\s+(?P<text>.+?)\s*$", re.MULT
 ORCHESTRATION_ITEM_RE = re.compile(r"^\s*-\s*(?P<key>[^:]+):\s*(?P<value>.+?)\s*$", re.MULTILINE)
 
 
+class ClaimStatus(Enum):
+    SETTING_UP = "setting up"
+    ACTIVE = "active"
+    FAILED = "failed claim"
+
+
+def parse_claim_status(value: str | None) -> ClaimStatus | None:
+    """Parse a raw claim status string into a ClaimStatus enum value.
+
+    Returns None when the value is None, empty, or unrecognised.
+    Callers must decide whether unrecognised values should be treated as
+    diagnostics.
+    """
+    if value is None:
+        return None
+    normalised = value.strip().lower()
+    if not normalised:
+        return None
+    if normalised == "setting up":
+        return ClaimStatus.SETTING_UP
+    if normalised == "active":
+        return ClaimStatus.ACTIVE
+    if normalised in ("failed claim", "failed"):
+        return ClaimStatus.FAILED
+    return None
+
+
+def _claim_status_is_recognised(value: str | None) -> bool:
+    """Return True when the claim-status value is absent or recognised."""
+    if value is None:
+        return True
+    normalised = value.strip().lower()
+    if not normalised:
+        return True
+    return parse_claim_status(value) is not None
+
+
 class IssueKind(Enum):
     PRD = "prd"
     IMPLEMENTATION = "implementation"
@@ -41,6 +78,7 @@ class GitHubIssue:
 class OrchestrationMetadata:
     agent_run_id: str | None = None
     claimed_at: str | None = None
+    claim_status: str | None = None
     prd_branch: str | None = None
     implementation_branch: str | None = None
     integration_pr: str | None = None
@@ -157,6 +195,18 @@ def _parse_implementation_issue(issue: GitHubIssue) -> ImplementationIssue:
 
     orchestration = _parse_orchestration(get_section(["Orchestration"]))
 
+    # Diagnose unrecognised Claim Status values.
+    if orchestration.claim_status is not None and not _claim_status_is_recognised(
+        orchestration.claim_status
+    ):
+        diagnostics.append(
+            Diagnostic(
+                code="unrecognised-claim-status",
+                kind=DiagnosticKind.INVALID_STATE,
+                message=f"Unrecognised Claim Status value: '{orchestration.claim_status}'.",
+            )
+        )
+
     return ImplementationIssue(
         issue=issue,
         kind=IssueKind.IMPLEMENTATION,
@@ -232,6 +282,7 @@ def _parse_orchestration(body: str | None) -> OrchestrationMetadata:
     return OrchestrationMetadata(
         agent_run_id=values.get("agent run"),
         claimed_at=values.get("claimed at"),
+        claim_status=values.get("claim status"),
         prd_branch=values.get("prd branch"),
         implementation_branch=values.get("implementation branch"),
         integration_pr=_strip_hash_prefix(values.get("integration pr")),

@@ -5,10 +5,15 @@ from datetime import UTC, datetime
 from pathlib import Path
 import re
 import subprocess
-from typing import Protocol
+from typing import Protocol, TYPE_CHECKING
 
 from bersama.github_issues import GitHubIssueGateway
 from bersama.issues import GitHubIssue, ImplementationIssue, PrdIssue, parse_issue, upsert_section
+
+if TYPE_CHECKING:
+    from bersama.command_executor import CommandExecutor
+
+from bersama.command_executor import CommandPhase
 
 
 SLUG_RE = re.compile(r"[^a-z0-9]+")
@@ -51,9 +56,12 @@ class ClaimWorkspaceGateway:
         self,
         runner: GitRunner = run_git,
         lock: "object | None" = None,
+        *,
+        command_executor: CommandExecutor | None = None,
     ) -> None:
         self._runner = runner
         self._lock = lock
+        self._command_executor = command_executor
 
     def ensure_remote_branch_from_base(
         self, *, repo_path: str, base_branch: str, branch_name: str
@@ -64,15 +72,16 @@ class ClaimWorkspaceGateway:
         if self._lock:
             self._lock.acquire()
         try:
-            self._run(("git", "fetch", "origin", base_branch), cwd=repo_path)
+            self._run(("git", "fetch", "origin", base_branch), cwd=repo_path, phase=CommandPhase.DISCOVERY)
             self._run(
                 ("git", "branch", "--create-reflog", branch_name, f"origin/{base_branch}"),
                 cwd=repo_path,
+                phase=CommandPhase.LIFECYCLE_MUTATION,
             )
             try:
-                self._run(("git", "push", "origin", f"{branch_name}:{branch_name}"), cwd=repo_path)
+                self._run(("git", "push", "origin", f"{branch_name}:{branch_name}"), cwd=repo_path, phase=CommandPhase.LIFECYCLE_MUTATION)
             except ClaimError:
-                self._run(("git", "branch", "-D", branch_name), cwd=repo_path)
+                self._run(("git", "branch", "-D", branch_name), cwd=repo_path, phase=CommandPhase.LIFECYCLE_MUTATION)
                 raise
         finally:
             if self._lock:
@@ -83,7 +92,7 @@ class ClaimWorkspaceGateway:
         self, *, repo_path: str, worktree_root: str, branch_name: str, issue_number: int
     ) -> str:
         worktree_path = str(Path(worktree_root) / f"issue-{issue_number}")
-        self._run(("mkdir", "-p", worktree_root), cwd=repo_path)
+        self._run(("mkdir", "-p", worktree_root), cwd=repo_path, phase=CommandPhase.LIFECYCLE_MUTATION)
 
         if self._lock:
             self._lock.acquire()
@@ -91,7 +100,7 @@ class ClaimWorkspaceGateway:
             # Robustly clean up any stale worktree at this path
             if Path(worktree_path).exists():
                 try:
-                    self._run(("git", "worktree", "remove", "--force", worktree_path), cwd=repo_path)
+                    self._run(("git", "worktree", "remove", "--force", worktree_path), cwd=repo_path, phase=CommandPhase.LIFECYCLE_MUTATION)
                 except Exception:
                     import shutil
                     try:
@@ -99,14 +108,15 @@ class ClaimWorkspaceGateway:
                     except Exception:
                         pass
                 try:
-                    self._run(("git", "worktree", "prune"), cwd=repo_path)
+                    self._run(("git", "worktree", "prune"), cwd=repo_path, phase=CommandPhase.LIFECYCLE_MUTATION)
                 except Exception:
                     pass
 
-            self._run(("git", "fetch", "origin", branch_name), cwd=repo_path)
+            self._run(("git", "fetch", "origin", branch_name), cwd=repo_path, phase=CommandPhase.DISCOVERY)
             self._run(
                 ("git", "worktree", "add", worktree_path, branch_name),
                 cwd=repo_path,
+                phase=CommandPhase.LIFECYCLE_MUTATION,
             )
         finally:
             if self._lock:
@@ -117,10 +127,17 @@ class ClaimWorkspaceGateway:
         output = self._run(
             ("git", "ls-remote", "--heads", "origin", branch_name),
             cwd=repo_path,
+            phase=CommandPhase.DISCOVERY,
         )
         return bool(output.strip())
 
-    def _run(self, command: tuple[str, ...], *, cwd: str) -> str:
+    def _run(self, command: tuple[str, ...], *, cwd: str, phase: CommandPhase | None = None) -> str:
+        if self._command_executor is not None and phase is not None:
+            from bersama.command_executor import CommandError
+            result = self._command_executor.execute(command, phase, cwd=cwd)
+            if not result.succeeded:
+                raise CommandError(result)
+            return result.stdout
         try:
             return self._runner(command, cwd=cwd)
         except subprocess.CalledProcessError as exc:
@@ -190,16 +207,41 @@ class ImplementationClaimService:
             issue_record.title,
         )
         claimed_at = self._now_provider()
-        updated_body = upsert_claim_metadata(
+
+        # Write provisional Claim Setup metadata before repository setup.
+        provisional_body = upsert_claim_metadata(
             issue_record.body,
             agent_run_id=agent_run_id,
             claimed_at=claimed_at,
             implementation_branch=implementation_branch,
+            claim_status="setting up",
         )
+        self._issues.remove_labels(issue_number, "ready-for-agent")
+        self._issues.update_body(issue_number, provisional_body)
 
+        # Re-read the issue to verify this Agent Run still owns the Claim Setup.
+        re_read_record = self._issues.view_issue(issue_number)
+        re_read_parsed = parse_issue(
+            GitHubIssue(
+                number=re_read_record.number,
+                title=re_read_record.title,
+                body=re_read_record.body,
+                labels=re_read_record.labels,
+            )
+        )
+        if (
+            not isinstance(re_read_parsed, ImplementationIssue)
+            or re_read_parsed.orchestration.agent_run_id != agent_run_id
+        ):
+            return self._fail(
+                issue_number,
+                "Ownership mismatch after writing provisional claim metadata.",
+                agent_run_id,
+                implementation_branch,
+            )
+
+        # Attempt branch and worktree setup.
         try:
-            self._issues.remove_labels(issue_number, "ready-for-agent")
-            self._issues.update_body(issue_number, updated_body)
             self._workspace.ensure_remote_branch_from_base(
                 repo_path=repo_path,
                 base_branch=prd_branch,
@@ -212,12 +254,32 @@ class ImplementationClaimService:
                 issue_number=issue_number,
             )
         except ClaimError as exc:
+            # Record Failed Claim Setup diagnostics.
+            failed_body = upsert_claim_metadata(
+                issue_record.body,
+                agent_run_id=agent_run_id,
+                claimed_at=claimed_at,
+                implementation_branch=implementation_branch,
+                claim_status="failed claim",
+            )
+            self._issues.update_body(issue_number, failed_body)
             self._issues.add_labels(issue_number, "needs-triage")
             self._issues.add_comment(
                 issue_number,
-                f"Branch setup failed during claim.\n\n**Diagnostics:**\n{exc}"
+                f"Failed Claim Setup during branch or worktree creation.\n\n**Diagnostics:**\n{exc}"
             )
             return self._fail(issue_number, str(exc), agent_run_id, implementation_branch)
+
+        # Promote to Active Claim.
+        active_body = upsert_claim_metadata(
+            issue_record.body,
+            agent_run_id=agent_run_id,
+            claimed_at=claimed_at,
+            implementation_branch=implementation_branch,
+            claim_status="active",
+        )
+        self._issues.add_labels(issue_number, "claimed")
+        self._issues.update_body(issue_number, active_body)
 
         return ClaimResult(
             issue_number=issue_number,
@@ -252,14 +314,20 @@ def build_implementation_branch_name(
 
 
 def upsert_claim_metadata(
-    body: str, *, agent_run_id: str, claimed_at: str, implementation_branch: str
+    body: str,
+    *,
+    agent_run_id: str,
+    claimed_at: str,
+    implementation_branch: str,
+    claim_status: str | None = None,
 ) -> str:
     lines = [
         f"- Agent Run: {agent_run_id}",
         f"- Claimed At: {claimed_at}",
+        f"- Claim Status: {claim_status}" if claim_status else None,
         f"- Implementation Branch: {implementation_branch}",
     ]
-    return upsert_section(body, "Orchestration", "\n".join(lines))
+    return upsert_section(body, "Orchestration", "\n".join(line for line in lines if line is not None))
 
 
 def _utc_now() -> str:

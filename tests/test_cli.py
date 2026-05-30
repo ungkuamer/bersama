@@ -5,6 +5,7 @@ from bersama.cli import main
 from bersama.claiming import ClaimResult
 from bersama.prd_preparation import PrdPreparationResult
 from bersama.execution import ExecutionResult
+from bersama.github_issues import GitHubIssueGateway
 
 
 def write_config(tmp_path: Path, contents: str) -> Path:
@@ -471,3 +472,29 @@ repos:
     assert exit_code == 0
     assert "Starting dashboard backend on http://127.0.0.1:8080" in captured.out
     mock_run.assert_called_once()
+
+
+def test_run_command_builds_bounded_issue_gateway(tmp_path: Path) -> None:
+    config_path = write_config(
+        tmp_path,
+        """
+harnesses:
+  local:
+    command: codex
+repos:
+  demo:
+    repo_path: /repos/demo
+    main_branch: main
+    worktree_root: /worktrees/demo
+    default_harness: local
+""".strip(),
+    )
+
+    with patch("bersama.cli.create_bounded_issue_gateway") as create_gateway, patch(
+        "bersama.orchestrator.Orchestrator.run"
+    ):
+        create_gateway.return_value = GitHubIssueGateway()
+        exit_code = main(["run", "demo", "--config", str(config_path)])
+
+    assert exit_code == 0
+    create_gateway.assert_called_once_with(cwd=Path("/repos/demo"))

@@ -860,6 +860,64 @@ def test_bounded_concurrent_scheduling_pass_dispatches_multiple_issues() -> None
     assert orchestrator.integration_service.create_integration_pr.call_count == 2
 
 
+def test_poll_pending_integrations_emits_event_when_polling_raises() -> None:
+    issues_gateway = MagicMock()
+    pending_impl = GitHubIssueRecord(
+        number=8,
+        title="Execute agent harness",
+        body=(
+            "## Parent PRD\n#1\n\n"
+            "## What to Build\nRun the harness.\n\n"
+            "## Acceptance Criteria\n- [ ] Done.\n\n"
+            "## Blocked By\nNone\n\n"
+            "## Orchestration\n"
+            "- Agent Run: run-123\n"
+            "- Claimed At: 2026-05-29T16:00:00Z\n"
+            "- Implementation Branch: impl/1/8-child-impl\n"
+            "- Integration PR: #42\n"
+            "- Integration Status: pending_validation"
+        ),
+        labels=("implementation",),
+        state="open",
+    )
+    issues_gateway.list_issues.return_value = (pending_impl,)
+
+    events: list[SchedulerEvent] = []
+    orchestrator = Orchestrator(
+        issues_gateway=issues_gateway,
+        now_provider=lambda: "2026-05-29T17:00:00Z",
+        event_emitter=events.append,
+    )
+    orchestrator.integration_service = MagicMock()
+    orchestrator.integration_service.poll_integration_pr.side_effect = RuntimeError("gh pr view failed")
+
+    repos = {
+        "demo": RepoConfig(
+            name="demo",
+            repo_path=Path("/repos/demo"),
+            main_branch="main",
+            worktree_root=Path("/worktrees/demo"),
+            global_concurrency=1,
+            per_prd_concurrency=1,
+            default_harness="local",
+        )
+    }
+    config = AppConfig(repos=repos, harnesses={})
+    state = {"repo_name": "demo", "config": config, "claimable_issues": []}
+
+    orchestrator._poll_pending_integrations(state)
+
+    assert events == [
+        SchedulerEvent(
+            event="integration.poll_failed",
+            issue_number=8,
+            agent_run_id="run-123",
+            status="failed",
+            detail="gh pr view failed",
+        )
+    ]
+
+
 def test_failed_agent_run_does_not_block_other_concurrent_issues() -> None:
     issues_gateway = MagicMock()
 
@@ -2449,4 +2507,3 @@ def test_plan_actions_with_sliding_window_passes_labels_and_updated_since() -> N
     closed_call = closed_calls[0]
     assert closed_call.kwargs["labels"] == ("prd", "implementation")
     assert closed_call.kwargs["updated_since"] == "2026-05-28"
-
