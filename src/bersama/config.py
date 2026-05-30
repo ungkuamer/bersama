@@ -15,6 +15,7 @@ class HarnessConfig:
     name: str
     command: str
     args_template: tuple[str, ...]
+    timeout_seconds: int | None = None
 
 
 @dataclass(frozen=True)
@@ -85,10 +86,17 @@ def _parse_harnesses(raw_harnesses: object) -> dict[str, HarnessConfig]:
             raw_value.get("args_template", []),
             context=f"harness '{name}' args_template",
         )
+        timeout_seconds = raw_value.get("timeout_seconds")
+        if timeout_seconds is not None:
+            timeout_seconds = _parse_positive_int(
+                timeout_seconds, context=f"harness '{name}' timeout_seconds"
+            )
+
         harnesses[name] = HarnessConfig(
             name=name,
             command=command,
             args_template=tuple(args_template),
+            timeout_seconds=timeout_seconds,
         )
 
     return harnesses
