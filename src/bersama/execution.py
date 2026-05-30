@@ -63,6 +63,7 @@ class HarnessExecutionService:
         config: AppConfig,
     ) -> ExecutionResult:
         import os
+        import signal
         import json
         import subprocess
         from datetime import datetime, UTC
@@ -174,17 +175,33 @@ class HarnessExecutionService:
 
             initial_commit = get_head_commit(worktree_path)
 
-            # 9. Run subprocess, capturing stdout/stderr
+            # 9. Run subprocess with process group and timeout, capturing stdout/stderr
             log_path = worktree_path / "harness.log"
+            timeout_expired = False
             with open(log_path, "w", encoding="utf-8") as log_file:
-                process = subprocess.run(
+                process = subprocess.Popen(
                     command,
                     cwd=worktree_path,
                     env=env,
                     stdout=log_file,
                     stderr=log_file,
+                    preexec_fn=os.setsid,
                 )
-            exit_code = process.returncode
+                try:
+                    process.wait(timeout=harness.timeout_seconds)
+                    exit_code = process.returncode
+                except subprocess.TimeoutExpired:
+                    timeout_expired = True
+                    try:
+                        os.killpg(process.pid, signal.SIGKILL)
+                    except OSError:
+                        pass
+                    try:
+                        process.wait(timeout=5)
+                    except subprocess.TimeoutExpired:
+                        process.kill()
+                        process.wait()
+                    exit_code = -1
 
             # 10. Record final HEAD commit and verify commit presence
             final_commit = get_head_commit(worktree_path)
@@ -211,7 +228,9 @@ class HarnessExecutionService:
                     )
                 else:
                     status = "failed"
-                    if exit_code != 0:
+                    if timeout_expired:
+                        failure_reason = f"Harness execution timed out after {harness.timeout_seconds} seconds."
+                    elif exit_code != 0:
                         failure_reason = f"Harness exited with non-zero exit code {exit_code}."
                     else:
                         failure_reason = "Harness exited with code 0 but created no new commits."
