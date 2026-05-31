@@ -510,7 +510,12 @@ function App() {
             </ul>
           </article>
         </section>
-        <SideDrawer issue={selectedIssue} open={drawerOpen} onOpenChange={setDrawerOpen} />
+        <SideDrawer
+          issue={selectedIssue}
+          open={drawerOpen}
+          onOpenChange={setDrawerOpen}
+          readOnly={true}
+        />
       </main>
     </div>
   )

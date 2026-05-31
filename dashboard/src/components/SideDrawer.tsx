@@ -72,6 +72,7 @@ export interface SideDrawerProps {
   issue: Issue | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  readOnly?: boolean;
   // Action handlers
   onClaim?: (issueNumber: number) => void;
   onStart?: (issueNumber: number) => void;
@@ -145,6 +146,7 @@ export default function SideDrawer({
   issue,
   open,
   onOpenChange,
+  readOnly = false,
   onClaim,
   onStart,
   onIntegrate,
@@ -162,9 +164,9 @@ export default function SideDrawer({
   if (!issue) return null;
 
   const isImplementation = issue.kind === 'implementation';
-  const canClaimIssue = isImplementation && issue.state !== 'closed' && issue.status === 'ready';
-  const canStartIssue = isImplementation && issue.state !== 'closed' && issue.status === 'claimed';
-  const canIntegrateIssue = isImplementation && issue.state !== 'closed' && issue.status === 'succeeded';
+  const canClaimIssue = !readOnly && isImplementation && issue.state !== 'closed' && issue.status === 'ready';
+  const canStartIssue = !readOnly && isImplementation && issue.state !== 'closed' && issue.status === 'claimed';
+  const canIntegrateIssue = !readOnly && isImplementation && issue.state !== 'closed' && issue.status === 'succeeded';
   const isClaiming = claimState?.status === 'loading';
   const isStarting = startState?.status === 'loading';
   const isIntegrating = integrateState?.status === 'loading';
@@ -459,8 +461,17 @@ export default function SideDrawer({
               {/* Action Controls */}
               {isImplementation && (
                 <section>
-                  <h4 className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 mb-2">Action Controls</h4>
-                  <div className="space-y-2">
+                  {readOnly ? (
+                    <>
+                      <h4 className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 mb-2">Read-Only Guardrail</h4>
+                      <div className="dashboard-glass-surface rounded border p-3 text-[10px] text-zinc-500">
+                        Scheduling Readiness is read-only. Lifecycle Mutation controls stay outside this landing view.
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <h4 className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 mb-2">Action Controls</h4>
+                      <div className="space-y-2">
                     {/* Claim */}
                     {canClaimIssue && (
                       <div className="dashboard-glass-surface rounded border p-3">
@@ -580,7 +591,9 @@ export default function SideDrawer({
                           : 'No actions available for current status.'}
                       </p>
                     )}
-                  </div>
+                      </div>
+                    </>
+                  )}
                 </section>
               )}
             </div>

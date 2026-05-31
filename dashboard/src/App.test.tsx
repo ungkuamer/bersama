@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import '@testing-library/jest-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
@@ -613,7 +613,7 @@ describe('Scheduling Readiness landing view', () => {
       expect(screen.getByRole('button', { name: /Open Implementation Issue #14/i })).toBeInTheDocument()
     })
 
-    screen.getByRole('button', { name: /Open Implementation Issue #14/i }).click()
+    fireEvent.click(screen.getByRole('button', { name: /Open Implementation Issue #14/i }))
 
     await waitFor(() => {
       expect(screen.getByText('Implementation Issue Timeline')).toBeInTheDocument()
@@ -623,9 +623,99 @@ describe('Scheduling Readiness landing view', () => {
     expect(screen.getByText('Prepared PRD Issue')).toBeInTheDocument()
     expect(screen.getByText('Claim Setup')).toBeInTheDocument()
     expect(screen.getByText('Active Claim')).toBeInTheDocument()
-    expect(screen.getByText('Agent Run')).toBeInTheDocument()
+    expect(screen.getAllByText('Agent Run').length).toBeGreaterThan(0)
     expect(screen.getByText('Integration Pull Request')).toBeInTheDocument()
     expect(screen.getByText('Integrated Implementation Issue')).toBeInTheDocument()
     expect(screen.queryByText('Agent Run Timeline')).not.toBeInTheDocument()
+  })
+
+  it('keeps the selected issue drawer read-only within Scheduling Readiness', async () => {
+    mockFetch.mockImplementation((url: string) => {
+      if (url.endsWith('/api/repos')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(mockRepos),
+        })
+      }
+
+      if (url.includes('/api/scheduling-readiness/demo')) {
+        return Promise.resolve({
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              ...mockSchedulingReadinessSnapshot,
+              snapshot: {
+                ...mockSchedulingReadinessSnapshot.snapshot,
+                implementation_issue_state: {
+                  items: [
+                    {
+                      issue_number: 15,
+                      title: 'Ready issue',
+                      status: 'ready',
+                      parent_prd_number: 10,
+                      blocked_by: [],
+                      active_blockers: [],
+                    },
+                  ],
+                  groups: [
+                    {
+                      parent_prd: {
+                        issue_number: 10,
+                        title: 'Prepared PRD',
+                        prepared: true,
+                      },
+                      items: [
+                        {
+                          issue_number: 15,
+                          title: 'Ready issue',
+                          status: 'ready',
+                          blocked_by: [],
+                          active_blockers: [],
+                        },
+                      ],
+                    },
+                  ],
+                  agent_run_capacity: {
+                    used: 0,
+                    total: 2,
+                  },
+                  summary: {
+                    ready: 1,
+                    blocked: 0,
+                    claimed: 0,
+                    running: 0,
+                    failed: 0,
+                    succeeded: 0,
+                    other: 0,
+                  },
+                },
+              },
+            }),
+        })
+      }
+
+      return Promise.reject(new Error(`Unhandled mock fetch for ${url}`))
+    })
+
+    render(<App />)
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Open Implementation Issue #15/i })).toBeInTheDocument()
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: /Open Implementation Issue #15/i }))
+
+    const drawer = await screen.findByRole('dialog')
+    fireEvent.click(within(drawer).getByRole('button', { name: 'Branch' }))
+
+    await waitFor(() => {
+      expect(screen.getByText(/Scheduling Readiness is read-only/i)).toBeInTheDocument()
+    })
+
+    expect(screen.queryByRole('button', { name: /Claim #15/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Start Agent Run/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Integrate #15/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('form', { name: /Claim Implementation Issue #15/i })).not.toBeInTheDocument()
+    expect(screen.queryByText('Action Controls')).not.toBeInTheDocument()
   })
 })
