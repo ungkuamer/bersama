@@ -16,6 +16,7 @@ from bersama.issues import GitHubIssue, ImplementationIssue, parse_issue
 from bersama.prd_preparation import GitWorkspaceGateway, PrdPreparationService
 from bersama.reconciliation import ReconciliationService
 from bersama.repo_lock import RepoLock
+from bersama.scheduling_readiness import SchedulingReadinessProvider
 from bersama.command_executor import CommandExecutor
 
 ReconciliationServiceFactory = Callable[[RepoConfig], ReconciliationService]
@@ -25,6 +26,7 @@ ExecutionServiceFactory = Callable[[RepoConfig], HarnessExecutionService]
 IntegrationServiceFactory = Callable[[RepoConfig], IntegrationService]
 IssueGatewayFactory = Callable[[], GitHubIssueGateway]
 BackgroundTaskScheduler = Callable[..., object]
+SchedulingReadinessProviderFactory = Callable[[str], dict[str, object]]
 
 
 def _serialize_diagnostics(parsed_issue: object) -> list[dict[str, str]]:
@@ -79,6 +81,7 @@ def create_dashboard_app(
     integration_service_factory: IntegrationServiceFactory | None = None,
     issue_gateway_factory: IssueGatewayFactory | None = None,
     background_task_scheduler: BackgroundTaskScheduler | None = None,
+    scheduling_readiness_provider: object | None = None,
 ) -> FastAPI:
     app = FastAPI()
 
@@ -140,6 +143,7 @@ def create_dashboard_app(
     execute_service_factory = execution_service_factory or build_execution_service
     integrate_service_factory = integration_service_factory or build_integration_service
     issues_factory = issue_gateway_factory or (lambda: create_bounded_issue_gateway())
+    readiness_provider = scheduling_readiness_provider or SchedulingReadinessProvider(config)
 
     def schedule_background_task(
         background_tasks: BackgroundTasks,
@@ -509,39 +513,11 @@ def create_dashboard_app(
     @app.get("/api/scheduling-readiness/{repo_name}")
     def get_scheduling_readiness_snapshot(repo_name: str) -> dict[str, object]:
         try:
-            repo = config.repo(repo_name)
+            config.repo(repo_name)
         except ConfigError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
 
-        harness = config.harness(repo.default_harness)
-        observed_at = (
-            datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
-        )
-
-        return {
-            "repo": {
-                "name": repo.name,
-                "path": str(repo.repo_path),
-                "main_branch": repo.main_branch,
-                "worktree_root": str(repo.worktree_root),
-            },
-            "snapshot": {
-                "observed_at": observed_at,
-                "config_provenance": {
-                    "source": "app-config",
-                    "default_harness": {
-                        "name": harness.name,
-                        "timeout_seconds": harness.timeout_seconds,
-                    },
-                },
-                "harness_summary": {
-                    "default_harness": harness.name,
-                    "timeout_seconds": harness.timeout_seconds,
-                },
-                "readiness_checks": [],
-                "implementation_issue_state": _build_empty_implementation_issue_state(),
-            },
-        }
+        return readiness_provider.build_snapshot(repo_name)
 
     @app.get("/api/runs")
     def get_runs(repo: str) -> list[dict[str, object]]:

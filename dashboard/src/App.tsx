@@ -34,12 +34,18 @@ interface SchedulingReadinessSnapshot {
       default_harness: string
       timeout_seconds: number | null
     }
-    readiness_checks: Array<{
-      id: string
-      label: string
-      status: string
-      detail?: string
-    }>
+    readiness_checks: {
+      critical_failures: Array<{
+        message: string
+        remediation: string
+        details?: Record<string, unknown>
+      }>
+      warnings: Array<{
+        message: string
+        remediation: string
+        details?: Record<string, unknown>
+      }>
+    }
     implementation_issue_state: {
       items: Array<{
         issue_number: number
@@ -156,6 +162,9 @@ function App() {
   }, [selectedRepo])
 
   const summary = snapshot?.snapshot.implementation_issue_state.summary
+  const readinessChecks = snapshot?.snapshot.readiness_checks
+  const criticalFailures = readinessChecks?.critical_failures ?? []
+  const warnings = readinessChecks?.warnings ?? []
 
   return (
     <div className="dashboard-shell">
@@ -253,21 +262,45 @@ function App() {
               <ShieldCheck className="panel-icon" />
               <div>
                 <h2>Readiness Checks</h2>
-                <p>Reserved structure for later readiness signals.</p>
+                <p>Read-only repository diagnostics for scheduling readiness.</p>
               </div>
             </div>
 
-            {snapshot && snapshot.snapshot.readiness_checks.length > 0 ? (
-              <ul className="empty-list">
-                {snapshot.snapshot.readiness_checks.map((check) => (
-                  <li key={check.id}>
-                    <strong>{check.label}</strong>
-                    <span>{check.status}</span>
-                  </li>
-                ))}
-              </ul>
-            ) : (
+            {!snapshot || (criticalFailures.length === 0 && warnings.length === 0) ? (
               <p className="empty-state">No readiness checks yet.</p>
+            ) : (
+              <div className="readiness-groups">
+                <div>
+                  <h3>Critical readiness failures</h3>
+                  {criticalFailures.length > 0 ? (
+                    <ul className="empty-list">
+                      {criticalFailures.map((check, index) => (
+                        <li key={`critical-${index}`}>
+                          <strong>{check.message}</strong>
+                          <span>{check.remediation}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="empty-state">No critical readiness failures.</p>
+                  )}
+                </div>
+                <div>
+                  <h3>Readiness warnings</h3>
+                  {warnings.length > 0 ? (
+                    <ul className="empty-list">
+                      {warnings.map((check, index) => (
+                        <li key={`warning-${index}`}>
+                          <strong>{check.message}</strong>
+                          <span>{check.remediation}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="empty-state">No readiness warnings.</p>
+                  )}
+                </div>
+              </div>
             )}
           </article>
 

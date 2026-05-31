@@ -38,7 +38,10 @@ const mockSchedulingReadinessSnapshot = {
       default_harness: 'local-agent',
       timeout_seconds: 900,
     },
-    readiness_checks: [],
+    readiness_checks: {
+      critical_failures: [],
+      warnings: [],
+    },
     implementation_issue_state: {
       items: [],
       summary: {
@@ -79,7 +82,7 @@ describe('Scheduling Readiness landing view', () => {
   it('renders Scheduling Readiness as the landing view for the selected repo', async () => {
     render(<App />)
 
-    expect(screen.getByText(/Scheduling Readiness/i)).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Scheduling Readiness' })).toBeInTheDocument()
 
     await waitFor(() => {
       expect(screen.getByText('/path/to/demo')).toBeInTheDocument()
@@ -111,5 +114,67 @@ describe('Scheduling Readiness landing view', () => {
     expect(requestedUrls.some((url) => url.includes('/api/issues'))).toBe(false)
     expect(requestedUrls.some((url) => url.includes('/api/runs'))).toBe(false)
     expect(mockFetch).toHaveBeenCalledTimes(2)
+  })
+
+  it('renders critical readiness failures separately from warnings with human-readable remediation', async () => {
+    mockFetch.mockImplementation((url: string) => {
+      if (url.endsWith('/api/repos')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(mockRepos),
+        })
+      }
+
+      if (url.includes('/api/scheduling-readiness/demo')) {
+        return Promise.resolve({
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              ...mockSchedulingReadinessSnapshot,
+              snapshot: {
+                ...mockSchedulingReadinessSnapshot.snapshot,
+                readiness_checks: {
+                  critical_failures: [
+                    {
+                      message: 'Required repository labels are missing.',
+                      remediation: 'Add the required labels in GitHub before running scheduling.',
+                      details: {
+                        code: 'missing-required-labels',
+                        missing_labels: ['prd', 'claimed'],
+                      },
+                    },
+                  ],
+                  warnings: [
+                    {
+                      message: 'Working tree has local changes.',
+                      remediation: 'Review local changes before running scheduling.',
+                      details: {
+                        code: 'working-tree-dirty',
+                      },
+                    },
+                  ],
+                },
+              },
+            }),
+        })
+      }
+
+      return Promise.reject(new Error(`Unhandled mock fetch for ${url}`))
+    })
+
+    render(<App />)
+
+    await waitFor(() => {
+      expect(screen.getByText(/Critical readiness failures/i)).toBeInTheDocument()
+    })
+
+    expect(screen.getByText('Required repository labels are missing.')).toBeInTheDocument()
+    expect(
+      screen.getByText('Add the required labels in GitHub before running scheduling.')
+    ).toBeInTheDocument()
+    expect(screen.getByText(/Readiness warnings/i)).toBeInTheDocument()
+    expect(screen.getByText('Working tree has local changes.')).toBeInTheDocument()
+    expect(screen.getByText('Review local changes before running scheduling.')).toBeInTheDocument()
+    expect(screen.queryByText(/missing-required-labels/i)).not.toBeInTheDocument()
   })
 })
