@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import BackgroundTasks, FastAPI, HTTPException
@@ -47,6 +48,21 @@ def _issue_number_from_worktree(worktree_path: Path) -> int | None:
         return int(suffix)
     except ValueError:
         return None
+
+
+def _build_empty_implementation_issue_state() -> dict[str, object]:
+    return {
+        "items": [],
+        "summary": {
+            "ready": 0,
+            "blocked": 0,
+            "claimed": 0,
+            "running": 0,
+            "failed": 0,
+            "succeeded": 0,
+            "other": 0,
+        },
+    }
 
 
 class ClaimImplementationIssueRequest(BaseModel):
@@ -489,6 +505,43 @@ def create_dashboard_app(
             flat_results.append(item)
 
         return flat_results
+
+    @app.get("/api/scheduling-readiness/{repo_name}")
+    def get_scheduling_readiness_snapshot(repo_name: str) -> dict[str, object]:
+        try:
+            repo = config.repo(repo_name)
+        except ConfigError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+        harness = config.harness(repo.default_harness)
+        observed_at = (
+            datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+        )
+
+        return {
+            "repo": {
+                "name": repo.name,
+                "path": str(repo.repo_path),
+                "main_branch": repo.main_branch,
+                "worktree_root": str(repo.worktree_root),
+            },
+            "snapshot": {
+                "observed_at": observed_at,
+                "config_provenance": {
+                    "source": "app-config",
+                    "default_harness": {
+                        "name": harness.name,
+                        "timeout_seconds": harness.timeout_seconds,
+                    },
+                },
+                "harness_summary": {
+                    "default_harness": harness.name,
+                    "timeout_seconds": harness.timeout_seconds,
+                },
+                "readiness_checks": [],
+                "implementation_issue_state": _build_empty_implementation_issue_state(),
+            },
+        }
 
     @app.get("/api/runs")
     def get_runs(repo: str) -> list[dict[str, object]]:
