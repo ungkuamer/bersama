@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
   Sheet,
   SheetContent,
@@ -12,13 +12,13 @@ import { ShimmerCard } from '@/components/Shimmer'
 import {
   Info,
   Play,
-  GitBranch,
   AlertCircle,
   CheckCircle2,
   GitMerge,
   Hand,
   Send,
   Eye,
+  Clock,
 } from 'lucide-react'
 
 export interface Issue {
@@ -45,6 +45,7 @@ export interface SideDrawerProps {
   issue: Issue | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  readOnly?: boolean;
   // Action handlers
   onClaim?: (issueNumber: number) => void;
   onStart?: (issueNumber: number) => void;
@@ -61,12 +62,12 @@ export interface SideDrawerProps {
   selectedRunIssue?: number | null;
 }
 
-type TabId = 'overview' | 'execution' | 'branch';
+type TabId = 'overview' | 'timeline' | 'operations';
 
 const TABS: { id: TabId; label: string; icon: React.ReactNode }[] = [
   { id: 'overview', label: 'Overview', icon: <Info className="size-3.5" /> },
-  { id: 'execution', label: 'Execution', icon: <Play className="size-3.5" /> },
-  { id: 'branch', label: 'Branch', icon: <GitBranch className="size-3.5" /> },
+  { id: 'timeline', label: 'Readiness Timeline', icon: <Clock className="size-3.5" /> },
+  { id: 'operations', label: 'Operations', icon: <Play className="size-3.5" /> },
 ];
 
 function getStatusBadge(status?: string) {
@@ -118,6 +119,7 @@ export default function SideDrawer({
   issue,
   open,
   onOpenChange,
+  readOnly = false,
   onClaim,
   onStart,
   onIntegrate,
@@ -131,6 +133,18 @@ export default function SideDrawer({
 }: SideDrawerProps) {
   const [activeTab, setActiveTab] = useState<TabId>('overview');
   const [claimFormOpen, setClaimFormOpen] = useState(false);
+
+  useEffect(() => {
+    if (open) {
+      setActiveTab('overview');
+    }
+  }, [open]);
+
+  useEffect(() => {
+    if (readOnly && activeTab === 'operations') {
+      setActiveTab('overview');
+    }
+  }, [readOnly, activeTab]);
 
   if (!issue) return null;
 
@@ -147,6 +161,8 @@ export default function SideDrawer({
     e.preventDefault();
     if (onClaim) onClaim(issue.number);
   };
+
+  const visibleTabs = TABS.filter(tab => !(tab.id === 'operations' && readOnly));
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -173,7 +189,7 @@ export default function SideDrawer({
 
         {/* Tab Bar */}
         <div className="flex border-b border-zinc-800 shrink-0">
-          {TABS.map((tab) => (
+          {visibleTabs.map((tab) => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
@@ -297,80 +313,207 @@ export default function SideDrawer({
             </div>
           )}
 
-          {/* ---- Execution Tab ---- */}
-          {activeTab === 'execution' && (
-            <div className="space-y-4">
-              {/* Run Metrics */}
-              <section>
-                <h4 className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 mb-2">Run Metrics</h4>
-                {isImplementation && (issue.status === 'running' || issue.status === 'succeeded' || issue.status === 'failed') ? (
-                  <div className="dashboard-glass-surface rounded border p-3 space-y-2 text-[10px]">
-                    <div className="flex justify-between">
-                      <span className="text-zinc-500">Status:</span>
-                      <span className="text-zinc-300">{issue.status}</span>
-                    </div>
-                    {issue.started_at && (
-                      <div className="flex justify-between">
-                        <span className="text-zinc-500">Started:</span>
-                        <span className="text-zinc-300 font-mono">{formatDate(issue.started_at)}</span>
-                      </div>
-                    )}
-                    {issue.finished_at && (
-                      <div className="flex justify-between">
-                        <span className="text-zinc-500">Finished:</span>
-                        <span className="text-zinc-300 font-mono">{formatDate(issue.finished_at)}</span>
-                      </div>
-                    )}
-                    {formatElapsed(issue.started_at, issue.finished_at) && (
-                      <div className="flex justify-between">
-                        <span className="text-zinc-500">Elapsed:</span>
-                        <span className="text-amber-400 font-mono">{formatElapsed(issue.started_at, issue.finished_at)}</span>
-                      </div>
-                    )}
-                    {issue.agent_run_id && (
-                      <div className="flex justify-between">
-                        <span className="text-zinc-500">Agent Run:</span>
-                        <span className="text-zinc-300 font-mono">{issue.agent_run_id}</span>
-                      </div>
-                    )}
-                  </div>
-                ) : issue.status === 'running' ? (
-                  <ShimmerCard />
-                ) : (
-                  <div className="dashboard-glass-surface rounded border p-4 text-center">
-                    <Play className="size-5 text-zinc-700 mx-auto mb-1.5" />
-                    <p className="text-[10px] text-zinc-500">No active run for this issue.</p>
-                    <p className="text-[9px] text-zinc-600 mt-0.5">Start an agent run to see execution metrics.</p>
-                  </div>
-                )}
-              </section>
+          {/* ---- Readiness Timeline Tab ---- */}
+          {activeTab === 'timeline' && (
+            <div className="space-y-6 py-2 px-1">
+              <div className="relative border-l border-zinc-800 ml-3.5 pl-6 space-y-6">
+                {(() => {
+                  const isClosed = issue.state === 'closed' || issue.status === 'closed';
 
-              {/* Logs Quick View */}
-              {isImplementation && (issue.status === 'running' || issue.status === 'succeeded' || issue.status === 'failed') && (
-                <section>
-                  <h4 className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 mb-2">Agent Logs</h4>
-                  <div className="dashboard-glass-surface rounded border p-3">
-                    <Button
-                      type="button"
-                      size="xs"
-                      variant="outline"
-                      onClick={() => onViewLog?.(issue.number)}
-                      className={`dashboard-control text-[9px] uppercase tracking-wider ${
-                        isSelectedLog ? 'text-emerald-400' : 'text-zinc-300'
-                      }`}
-                    >
-                      <Eye className="size-3" />
-                      {isSelectedLog ? 'Log Selected' : 'View Terminal Log'}
-                    </Button>
-                  </div>
-                </section>
-              )}
+                  if (issue.kind === 'prd') {
+                    // PRD Specific Timeline
+                    const totalSlices = issue.children?.length ?? 0;
+                    const claimedSlices = issue.children?.filter(c => ['claimed', 'running', 'succeeded', 'failed', 'closed'].includes(c.status || '')).length ?? 0;
+                    const executedSlices = issue.children?.filter(c => ['succeeded', 'closed'].includes(c.status || '')).length ?? 0;
+                    const runningSlices = issue.children?.filter(c => c.status === 'running').length ?? 0;
+                    const integratedSlices = issue.children?.filter(c => c.state === 'closed' || c.status === 'closed').length ?? 0;
+
+                    return [
+                      {
+                        title: 'Prepared PRD',
+                        status: 'completed',
+                        timestamp: 'Confirmed',
+                        description: 'The product requirements document was successfully authored, triaged, and made ready for slicing.'
+                      },
+                      {
+                        title: 'Slices Discovered',
+                        status: totalSlices > 0 ? 'completed' : 'pending',
+                        timestamp: totalSlices > 0 ? `${totalSlices} slices` : 'Pending',
+                        description: totalSlices > 0
+                          ? `Successfully compiled ${totalSlices} implementation slices from the core specifications.`
+                          : 'No implementation slices discovered yet.'
+                      },
+                      {
+                        title: 'Slices Claimed',
+                        status: claimedSlices === totalSlices && totalSlices > 0
+                          ? 'completed'
+                          : claimedSlices > 0
+                          ? 'active'
+                          : 'pending',
+                        timestamp: `${claimedSlices} / ${totalSlices} claimed`,
+                        description: `Agents have claimed ${claimedSlices} of the ${totalSlices} total implementation slices.`
+                      },
+                      {
+                        title: 'Slices Executing',
+                        status: runningSlices > 0
+                          ? 'active'
+                          : executedSlices === totalSlices && totalSlices > 0
+                          ? 'completed'
+                          : 'pending',
+                        timestamp: runningSlices > 0 ? `${runningSlices} running` : `${executedSlices} executed`,
+                        description: runningSlices > 0
+                          ? `${runningSlices} slice(s) are actively running in agent execution sandboxes.`
+                          : `${executedSlices} slices have successfully finished execution.`
+                      },
+                      {
+                        title: 'Slices Integrated',
+                        status: integratedSlices === totalSlices && totalSlices > 0
+                          ? 'completed'
+                          : integratedSlices > 0
+                          ? 'active'
+                          : 'pending',
+                        timestamp: `${integratedSlices} / ${totalSlices} merged`,
+                        description: `${integratedSlices} slices have been integrated into the main production branch.`
+                      },
+                      {
+                        title: 'PRD Integrated',
+                        status: isClosed ? 'completed' : 'pending',
+                        timestamp: isClosed ? 'Closed' : 'Awaiting Slices',
+                        description: isClosed
+                          ? 'PRD requirement has been completely closed and delivered.'
+                          : 'Pending complete integration of all children slices.'
+                      }
+                    ];
+                  }
+
+                  // Implementation Issue Timeline
+                  return [
+                    {
+                      title: 'Prepared PRD',
+                      status: 'completed' as const,
+                      timestamp: 'Confirmed',
+                      description: `The requirement was specified and prepared under parent PRD #${issue.parent_prd_number || 'N/A'}.`
+                    },
+                    {
+                      title: 'Claim Setup',
+                      status: issue.claimed_at
+                        ? ('completed' as const)
+                        : issue.status === 'ready'
+                        ? ('active' as const)
+                        : ('pending' as const),
+                      timestamp: formatDate(issue.claimed_at),
+                      description: issue.claimed_at
+                        ? `Agent run ID "${issue.agent_run_id || 'N/A'}" registered and workspace provisioned.`
+                        : 'Waiting for an agent execution scheduler or operator to claim this issue.'
+                    },
+                    {
+                      title: 'Active Claim',
+                      status: issue.started_at
+                        ? ('completed' as const)
+                        : issue.status === 'claimed'
+                        ? ('active' as const)
+                        : ('pending' as const),
+                      timestamp: formatDate(issue.started_at || issue.claimed_at),
+                      description: issue.started_at
+                        ? 'Workspace environment execution lock acquired.'
+                        : issue.status === 'claimed'
+                        ? 'Claim registered. Workspace ready to initiate execution sandbox.'
+                        : 'Awaiting claim allocation.'
+                    },
+                    {
+                      title: 'Agent Run',
+                      status: ['succeeded', 'closed'].includes(issue.status || '')
+                        ? ('completed' as const)
+                        : issue.status === 'running'
+                        ? ('active' as const)
+                        : issue.status === 'failed'
+                        ? ('failed' as const)
+                        : ('pending' as const),
+                      timestamp: formatDate(issue.finished_at || issue.started_at),
+                      description: issue.status === 'failed'
+                        ? `Agent run execution failed: ${issue.failure_reason || 'Unknown error'}`
+                        : ['succeeded', 'closed'].includes(issue.status || '')
+                        ? `Agent execution succeeded in ${formatElapsed(issue.started_at, issue.finished_at) || 'a few seconds'}.`
+                        : issue.status === 'running'
+                        ? 'Agent is actively running inside the sandbox environment...'
+                        : 'Pending execution start.'
+                    },
+                    {
+                      title: 'Integration PR',
+                      status: isClosed
+                        ? ('completed' as const)
+                        : issue.status === 'succeeded'
+                        ? ('active' as const)
+                        : ('pending' as const),
+                      timestamp: formatDate(issue.finished_at),
+                      description: isClosed
+                        ? 'Pull request successfully integrated and merged to main branch.'
+                        : issue.status === 'succeeded'
+                        ? 'Implementation succeeded. Pull Request is open and awaiting merge validation.'
+                        : 'Pending code correctness check & execution success.'
+                    },
+                    {
+                      title: 'Integrated Issue',
+                      status: isClosed ? ('completed' as const) : ('pending' as const),
+                      timestamp: isClosed ? formatDate(issue.finished_at) : 'Awaiting Merge',
+                      description: isClosed
+                        ? `Issue #${issue.number} has been closed and successfully shipped.`
+                        : 'Awaiting Pull Request merge approval and branch cleanup.'
+                    }
+                  ];
+                })().map((step, idx) => {
+                  let dotBg = 'bg-zinc-900 border-zinc-700';
+                  let dotIcon = <span className="size-1.5 rounded-full bg-zinc-600" />;
+                  let titleColor = 'text-zinc-500';
+
+                  if (step.status === 'completed') {
+                    dotBg = 'bg-emerald-950/80 border-emerald-500 text-emerald-400';
+                    dotIcon = <CheckCircle2 className="size-3.5" />;
+                    titleColor = 'text-zinc-200';
+                  } else if (step.status === 'active') {
+                    dotBg = 'bg-teal-950/80 border-teal-500 text-teal-400 animate-pulse';
+                    dotIcon = <span className="size-2 rounded-full bg-teal-400 shadow-[0_0_8px_rgba(20,184,166,0.5)]" />;
+                    titleColor = 'text-white font-bold';
+                  } else if (step.status === 'failed') {
+                    dotBg = 'bg-red-950/80 border-red-500 text-red-400';
+                    dotIcon = <AlertCircle className="size-3.5" />;
+                    titleColor = 'text-red-400';
+                  }
+
+                  return (
+                    <div key={idx} className="relative group">
+                      {/* Circle dot marker on the left line */}
+                      <div className={`absolute -left-[35px] top-0.5 size-6 rounded-full border flex items-center justify-center transition-all ${dotBg}`}>
+                        {dotIcon}
+                      </div>
+
+                      {/* Header */}
+                      <div className="flex items-baseline justify-between gap-2">
+                        <h4 className={`text-xs font-semibold uppercase tracking-wider ${titleColor}`}>
+                          {step.title}
+                        </h4>
+                        {step.timestamp && step.timestamp !== 'N/A' && (
+                          <span className="font-mono text-[9px] text-zinc-500 shrink-0">
+                            {step.timestamp}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Description */}
+                      <p className="text-[10px] text-zinc-400 leading-relaxed mt-1 font-sans">
+                        {step.description}
+                      </p>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           )}
 
-          {/* ---- Branch Control Deck ---- */}
-          {activeTab === 'branch' && (
+          {/* ---- Operations Tab ---- */}
+          {activeTab === 'operations' && !readOnly && (
             <div className="space-y-4">
+              {/* Git Parameters & Remote Path */}
               <section>
                 <h4 className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 mb-2">Git Parameters</h4>
                 <div className="dashboard-glass-surface rounded border p-3 space-y-2 text-[10px]">
@@ -403,6 +546,63 @@ export default function SideDrawer({
                   </p>
                 </div>
               </section>
+
+              {/* Run Metrics */}
+              {isImplementation && (issue.status === 'running' || issue.status === 'succeeded' || issue.status === 'failed') ? (
+                <section className="space-y-4">
+                  <div>
+                    <h4 className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 mb-2">Run Metrics</h4>
+                    <div className="dashboard-glass-surface rounded border p-3 space-y-2 text-[10px]">
+                      <div className="flex justify-between">
+                        <span className="text-zinc-500">Status:</span>
+                        <span className="text-zinc-300">{issue.status}</span>
+                      </div>
+                      {issue.started_at && (
+                        <div className="flex justify-between">
+                          <span className="text-zinc-500">Started:</span>
+                          <span className="text-zinc-300 font-mono">{formatDate(issue.started_at)}</span>
+                        </div>
+                      )}
+                      {issue.finished_at && (
+                        <div className="flex justify-between">
+                          <span className="text-zinc-500">Finished:</span>
+                          <span className="text-zinc-300 font-mono">{formatDate(issue.finished_at)}</span>
+                        </div>
+                      )}
+                      {formatElapsed(issue.started_at, issue.finished_at) && (
+                        <div className="flex justify-between">
+                          <span className="text-zinc-500">Elapsed:</span>
+                          <span className="text-amber-400 font-mono">{formatElapsed(issue.started_at, issue.finished_at)}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Logs Quick View */}
+                  <div>
+                    <h4 className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 mb-2">Agent Logs</h4>
+                    <div className="dashboard-glass-surface rounded border p-3">
+                      <Button
+                        type="button"
+                        size="xs"
+                        variant="outline"
+                        onClick={() => onViewLog?.(issue.number)}
+                        className={`dashboard-control text-[9px] uppercase tracking-wider ${
+                          isSelectedLog ? 'text-emerald-400' : 'text-zinc-300'
+                        }`}
+                      >
+                        <Eye className="size-3" />
+                        {isSelectedLog ? 'Log Selected' : 'View Terminal Log'}
+                      </Button>
+                    </div>
+                  </div>
+                </section>
+              ) : isImplementation && issue.status === 'running' ? (
+                <section>
+                  <h4 className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 mb-2">Run Metrics</h4>
+                  <ShimmerCard />
+                </section>
+              ) : null}
 
               {/* Action Controls */}
               {isImplementation && (
@@ -518,9 +718,9 @@ export default function SideDrawer({
                     {!canClaimIssue && !canStartIssue && !canIntegrateIssue && (
                       <p className="text-[10px] text-zinc-600 italic text-center py-3">
                         {issue.status === 'running'
-                          ? 'Agent run is active. Monitor in Execution tab.'
+                          ? 'Agent run is active. Monitor in Operations tab.'
                           : issue.status === 'failed'
-                          ? 'Run failed. Check Execution tab for details.'
+                          ? 'Run failed. Check Operations tab for details.'
                           : issue.status === 'unready' || issue.status === 'blocked'
                           ? 'Resolve blocking dependencies to enable actions.'
                           : issue.status === 'succeeded' && issue.state !== 'open'

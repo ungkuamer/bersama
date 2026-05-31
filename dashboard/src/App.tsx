@@ -33,7 +33,7 @@ import { ShimmerText } from '@/components/Shimmer'
 import DependencyPipeline from '@/components/DependencyPipeline'
 import SchedulingReadinessPanel from '@/components/SchedulingReadinessPanel'
 
-const isTestEnv = typeof process !== 'undefined' && process.env.NODE_ENV === 'test';
+const isTestEnv = typeof (globalThis as any).process !== 'undefined' && (globalThis as any).process.env.NODE_ENV === 'test';
 const API_BASE = import.meta.env.DEV ? `http://${window.location.hostname}:8000` : '';
 
 interface Repo {
@@ -174,6 +174,7 @@ export default function App() {
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [drawerIssue, setDrawerIssue] = useState<Issue | null>(null);
   const [drawerOpen, setDrawerOpen] = useState<boolean>(false);
+  const [drawerReadOnly, setDrawerReadOnly] = useState<boolean>(false);
   const [activeTab, setActiveTab] = useState<'readiness' | 'operator'>(isTestEnv ? 'operator' : 'readiness');
   
   const terminalViewportRef = useRef<HTMLDivElement>(null);
@@ -809,7 +810,29 @@ export default function App() {
       {/* Main Content Layout */}
       {activeTab === 'readiness' ? (
         selectedRepo ? (
-          <SchedulingReadinessPanel repoName={selectedRepo} apiBase={API_BASE} />
+          <SchedulingReadinessPanel 
+            repoName={selectedRepo} 
+            apiBase={API_BASE} 
+            onIssueClick={(issueNumber) => {
+              let found = issues.find(i => i.number === issueNumber);
+              if (!found) {
+                for (const prd of issues) {
+                  if (prd.children) {
+                    const child = prd.children.find(c => c.number === issueNumber);
+                    if (child) {
+                      found = child;
+                      break;
+                    }
+                  }
+                }
+              }
+              if (found) {
+                setDrawerIssue(found);
+                setDrawerReadOnly(true);
+                setDrawerOpen(true);
+              }
+            }}
+          />
         ) : (
           <div className="grow p-6 flex items-center justify-center">
             <ShimmerText lines={4} className="w-full max-w-md" />
@@ -1153,6 +1176,7 @@ export default function App() {
                                   onClick={(event) => {
                                     event.stopPropagation();
                                     setDrawerIssue(prd);
+                                    setDrawerReadOnly(false);
                                     setDrawerOpen(true);
                                   }}
                                 >
@@ -1254,6 +1278,7 @@ export default function App() {
                                               className="text-[11px] text-zinc-300 font-semibold leading-tight font-sans cursor-pointer hover:text-teal-400 transition-colors"
                                               onClick={() => {
                                                 setDrawerIssue(c);
+                                                setDrawerReadOnly(false);
                                                 setDrawerOpen(true);
                                               }}
                                             >
@@ -1508,6 +1533,7 @@ export default function App() {
         issue={drawerIssue}
         open={drawerOpen}
         onOpenChange={setDrawerOpen}
+        readOnly={drawerReadOnly}
         onClaim={openClaimForm}
         onStart={startImplementationIssue}
         onIntegrate={integrateImplementationIssue}

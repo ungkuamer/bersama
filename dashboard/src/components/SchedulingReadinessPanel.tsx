@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ShimmerText, ShimmerCard } from '@/components/Shimmer';
+import { ShimmerCard } from '@/components/Shimmer';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { AlertCircle, AlertTriangle, CheckCircle2, Clock, GitBranch, Server, Layers, HardDrive, Shield } from 'lucide-react';
@@ -8,9 +8,10 @@ import DependencyPipeline from '@/components/DependencyPipeline';
 export interface SchedulingReadinessPanelProps {
   repoName: string;
   apiBase: string;
+  onIssueClick?: (issueNumber: number) => void;
 }
 
-export default function SchedulingReadinessPanel({ repoName, apiBase }: SchedulingReadinessPanelProps) {
+export default function SchedulingReadinessPanel({ repoName, apiBase, onIssueClick }: SchedulingReadinessPanelProps) {
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
@@ -359,7 +360,11 @@ export default function SchedulingReadinessPanel({ repoName, apiBase }: Scheduli
                           <span className="bg-zinc-900 border border-zinc-800 text-zinc-400 px-1.5 py-0.5 rounded font-bold">
                             PRD #{prd.issue_number}
                           </span>
-                          <span className="text-white font-bold font-sans truncate max-w-[280px]" title={prd.title}>
+                          <span 
+                            onClick={() => onIssueClick?.(prd.issue_number)}
+                            className="text-white font-bold font-sans truncate max-w-[280px] cursor-pointer hover:text-teal-400 transition-colors" 
+                            title={prd.title}
+                          >
                             {prd.title}
                           </span>
                         </div>
@@ -391,7 +396,12 @@ export default function SchedulingReadinessPanel({ repoName, apiBase }: Scheduli
                               <div className="space-y-1.5 max-w-[480px]">
                                 <div className="flex items-baseline gap-2">
                                   <span className="text-zinc-500 font-bold">#{c.issue_number}</span>
-                                  <span className="text-zinc-300 font-semibold font-sans">{c.title}</span>
+                                  <span 
+                                    onClick={() => onIssueClick?.(c.issue_number)}
+                                    className="text-zinc-300 font-semibold font-sans cursor-pointer hover:text-teal-400 transition-colors"
+                                  >
+                                    {c.title}
+                                  </span>
                                 </div>
                                 
                                 {/* Blocking Dependencies display */}

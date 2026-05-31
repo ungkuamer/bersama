@@ -1624,7 +1624,7 @@ describe('Bersama Dashboard Frontend', () => {
       });
     });
 
-    it('contains Overview, Execution, and Branch Control Deck tabs', async () => {
+    it('contains Overview, Readiness Timeline, and Operations tabs', async () => {
       mockFetch.mockImplementation((url: string) => {
         if (url.endsWith('/api/repos')) {
           return Promise.resolve({ ok: true, json: () => Promise.resolve(mockRepos) });
@@ -1652,10 +1652,10 @@ describe('Bersama Dashboard Frontend', () => {
       // Three tabs should be visible
       const overviewTabs = screen.getAllByText(/Overview/i);
       expect(overviewTabs.length).toBeGreaterThan(0);
-      const executionTabs = screen.getAllByText(/Execution/i);
-      expect(executionTabs.length).toBeGreaterThan(0);
-      const branchTabs = screen.getAllByText(/Branch/i);
-      expect(branchTabs.length).toBeGreaterThan(0);
+      const timelineTabs = screen.getAllByText(/Readiness Timeline/i);
+      expect(timelineTabs.length).toBeGreaterThan(0);
+      const operationsTabs = screen.getAllByText(/Operations/i);
+      expect(operationsTabs.length).toBeGreaterThan(0);
     });
 
     it('shows metadata in the Overview tab', async () => {
@@ -1685,7 +1685,7 @@ describe('Bersama Dashboard Frontend', () => {
       expect(screen.getByText(/Blocking Dependencies/i)).toBeInTheDocument();
     });
 
-    it('shows Branch tab with action controls for eligible issues', async () => {
+    it('shows Operations tab with action controls for eligible issues', async () => {
       mockFetch.mockImplementation((url: string) => {
         if (url.endsWith('/api/repos')) {
           return Promise.resolve({ ok: true, json: () => Promise.resolve(mockRepos) });
@@ -1707,10 +1707,10 @@ describe('Bersama Dashboard Frontend', () => {
 
       await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument());
 
-      // Click Branch tab
-      const branchTabs = screen.getAllByText(/Branch/i);
-      const branchTab = branchTabs.find(el => el.tagName === 'BUTTON')!;
-      fireEvent.click(branchTab);
+      // Click Operations tab
+      const operationsTabs = screen.getAllByText(/Operations/i);
+      const operationsTab = operationsTabs.find(el => el.tagName === 'BUTTON')!;
+      fireEvent.click(operationsTab);
 
       // Should show action controls section
       await waitFor(() => {
@@ -1721,7 +1721,7 @@ describe('Bersama Dashboard Frontend', () => {
       expect(screen.getByText(/Git Parameters/i)).toBeInTheDocument();
     });
 
-    it('Claim action in Branch tab opens the claim form', async () => {
+    it('Claim action in Operations tab opens the claim form', async () => {
       mockFetch.mockImplementation((url: string) => {
         if (url.endsWith('/api/repos')) {
           return Promise.resolve({ ok: true, json: () => Promise.resolve(mockRepos) });
@@ -1746,10 +1746,10 @@ describe('Bersama Dashboard Frontend', () => {
 
       const dialog = screen.getByRole('dialog');
 
-      // Switch to Branch tab within the drawer
-      const branchTabs = within(dialog).getAllByText(/Branch/i);
-      const branchTab = branchTabs.find(el => el.tagName === 'BUTTON')!;
-      fireEvent.click(branchTab);
+      // Switch to Operations tab within the drawer
+      const operationsTabs = within(dialog).getAllByText(/Operations/i);
+      const operationsTab = operationsTabs.find(el => el.tagName === 'BUTTON')!;
+      fireEvent.click(operationsTab);
 
       // Click Claim button within the drawer
       await waitFor(() => {
@@ -1987,6 +1987,49 @@ describe('Bersama Dashboard Frontend', () => {
         expect(screen.getByText(/Product Roadmap & Implementation Lifecycle/i)).toBeInTheDocument();
       });
       expect(screen.queryByText(/Config Provenance/i)).not.toBeInTheDocument();
+    });
+
+    it('opens side drawer in readOnly mode when clicking an issue in Scheduling Readiness view', async () => {
+      mockFetch.mockImplementation((url: string) => {
+        if (url.endsWith('/api/repos')) {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve(mockRepos) });
+        }
+        if (url.includes('/api/issues')) {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve(mockIssues) });
+        }
+        if (url.includes('/api/runs')) {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
+        }
+        if (url.includes('/api/scheduling-readiness/demo')) {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve(mockReadinessData) });
+        }
+        return Promise.reject(new Error(`Unhandled mock fetch for ${url}`));
+      });
+
+      render(<App />);
+
+      // Go to Scheduling Readiness
+      const readinessTab = screen.getByText(/Scheduling Readiness/i);
+      fireEvent.click(readinessTab);
+
+      // Verify page is rendered
+      expect(await screen.findByText(/Config Provenance/i)).toBeInTheDocument();
+
+      // Click on "Implement feature A" issue
+      const issueLink = screen.getByText(/Implement feature A/i);
+      fireEvent.click(issueLink);
+
+      // Drawer should open
+      await waitFor(() => {
+        expect(screen.getByRole('dialog')).toBeInTheDocument();
+      });
+
+      // Verify that the Overview and Readiness Timeline tabs are visible
+      expect(screen.getByText('Overview')).toBeInTheDocument();
+      expect(screen.getByText('Readiness Timeline')).toBeInTheDocument();
+
+      // Operations tab should be completely hidden (readOnly)
+      expect(screen.queryByText('Operations')).not.toBeInTheDocument();
     });
   });
 });
