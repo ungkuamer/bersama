@@ -1815,4 +1815,45 @@ describe('Bersama Dashboard Frontend', () => {
     // The stream indicator should be visible when polling is active
     expect(screen.getByTitle(/Streaming active/i)).toBeInTheDocument();
   });
+
+  describe('Tab Switcher Layout & Navigation', () => {
+    it('renders navigation tabs and switches views on click', async () => {
+      render(<App />);
+
+      // Wait for app load
+      await waitFor(() => {
+        expect(screen.getByText(/Scheduling Readiness/i)).toBeInTheDocument();
+        expect(screen.getByText(/Operator Console/i)).toBeInTheDocument();
+      });
+
+      // Initially, Scheduling Readiness is active
+      expect(screen.getByText(/Product Roadmap & Implementation Lifecycle/i)).toBeInTheDocument();
+      expect(screen.queryByText(/Operator Console under active development/i)).not.toBeInTheDocument();
+
+      // Click on Operator Console tab
+      const operatorTab = screen.getByText(/Operator Console/i);
+      fireEvent.click(operatorTab);
+
+      // Now Operator Console is active and Scheduling Readiness is not
+      await waitFor(() => {
+        expect(screen.getByText(/Operator Console under active development/i)).toBeInTheDocument();
+      });
+      expect(screen.queryByText(/Product Roadmap & Implementation Lifecycle/i)).not.toBeInTheDocument();
+
+      // The top header stats and footer should still be present
+      expect(screen.getByText(/ACTIVE RUNS:/i)).toBeInTheDocument();
+      expect(screen.getByText(/Engine Connected/i)).toBeInTheDocument();
+
+      // Switch back to Scheduling Readiness
+      const readinessTab = screen.getByText(/Scheduling Readiness/i);
+      fireEvent.click(readinessTab);
+
+      // Scheduling Readiness is active again
+      await waitFor(() => {
+        expect(screen.getByText(/Product Roadmap & Implementation Lifecycle/i)).toBeInTheDocument();
+      });
+      expect(screen.queryByText(/Operator Console under active development/i)).not.toBeInTheDocument();
+    });
+  });
 });
+
