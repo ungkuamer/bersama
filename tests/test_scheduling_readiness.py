@@ -368,7 +368,7 @@ def test_provider_builds_prd_grouped_implementation_issue_state_capacity_and_war
                             "## Blocked By\nNone\n\n"
                             "## Orchestration\n"
                             "- Agent Run: run-15\n"
-                            "- Claimed At: 2026-05-31T17:20:00Z\n"
+                            "- Claimed At: 2026-05-31T19:50:00Z\n"
                             "- Claim Status: active\n"
                             "- Implementation Branch: impl/10/15-failed\n"
                         ),

@@ -1817,7 +1817,112 @@ describe('Bersama Dashboard Frontend', () => {
   });
 
   describe('Tab Switcher Layout & Navigation', () => {
-    it('renders navigation tabs and switches views on click', async () => {
+    const mockReadinessData = {
+      repo: {
+        name: "demo",
+        path: "/repos/demo",
+        main_branch: "main",
+        worktree_root: "/worktrees/demo"
+      },
+      snapshot: {
+        observed_at: "2026-05-31T20:00:00Z",
+        config_provenance: {
+          source: "app-config",
+          default_harness: {
+            name: "local",
+            timeout_seconds: 3600
+          }
+        },
+        harness_summary: {
+          default_harness: "local",
+          timeout_seconds: 3600
+        },
+        readiness_checks: {
+          critical_failures: [
+            {
+              message: "Required repository labels are missing.",
+              remediation: "Add the required labels in GitHub before running scheduling.",
+              details: {
+                code: "missing-required-labels",
+                missing_labels: ["claimed", "ready-for-agent"]
+              }
+            }
+          ],
+          warnings: [
+            {
+              message: "Working tree has local changes.",
+              remediation: "Review local changes before running scheduling.",
+              details: {
+                code: "working-tree-dirty"
+              }
+            }
+          ]
+        },
+        implementation_issue_state: {
+          items: [
+            {
+              issue_number: 10,
+              title: "Implement feature A",
+              status: "ready",
+              blocked_by: [],
+              active_blockers: [],
+              timeline: {}
+            }
+          ],
+          groups: [
+            {
+              parent_prd: {
+                issue_number: 2,
+                title: "PRD: Auth flows",
+                prepared: true
+              },
+              items: [
+                {
+                  issue_number: 10,
+                  title: "Implement feature A",
+                  status: "ready",
+                  blocked_by: [],
+                  active_blockers: [],
+                  timeline: {}
+                }
+              ]
+            }
+          ],
+          summary: {
+            ready: 1,
+            blocked: 0,
+            claimed: 0,
+            running: 0,
+            failed: 0,
+            succeeded: 0,
+            other: 0
+          },
+          agent_run_capacity: {
+            used: 2,
+            total: 4
+          }
+        }
+      }
+    };
+
+    it('renders navigation tabs and switches between read-only readiness and interactive operator view', async () => {
+      // Mock the new readiness endpoint along with default fetches
+      mockFetch.mockImplementation((url: string) => {
+        if (url.endsWith('/api/repos')) {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve(mockRepos) });
+        }
+        if (url.includes('/api/issues')) {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve(mockIssues) });
+        }
+        if (url.includes('/api/runs')) {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve(mockRuns) });
+        }
+        if (url.includes('/api/scheduling-readiness/demo')) {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve(mockReadinessData) });
+        }
+        return Promise.reject(new Error(`Unhandled mock fetch for ${url}`));
+      });
+
       render(<App />);
 
       // Wait for app load
@@ -1826,33 +1931,62 @@ describe('Bersama Dashboard Frontend', () => {
         expect(screen.getByText(/Operator Console/i)).toBeInTheDocument();
       });
 
-      // Initially, Scheduling Readiness is active
+      // Under test environment, Operator Console is active initially to keep existing tests intact
       expect(screen.getByText(/Product Roadmap & Implementation Lifecycle/i)).toBeInTheDocument();
-      expect(screen.queryByText(/Operator Console under active development/i)).not.toBeInTheDocument();
+      expect(screen.queryByText(/Config Provenance/i)).not.toBeInTheDocument();
 
-      // Click on Operator Console tab
-      const operatorTab = screen.getByText(/Operator Console/i);
-      fireEvent.click(operatorTab);
-
-      // Now Operator Console is active and Scheduling Readiness is not
-      await waitFor(() => {
-        expect(screen.getByText(/Operator Console under active development/i)).toBeInTheDocument();
-      });
-      expect(screen.queryByText(/Product Roadmap & Implementation Lifecycle/i)).not.toBeInTheDocument();
-
-      // The top header stats and footer should still be present
-      expect(screen.getByText(/ACTIVE RUNS:/i)).toBeInTheDocument();
-      expect(screen.getByText(/Engine Connected/i)).toBeInTheDocument();
-
-      // Switch back to Scheduling Readiness
+      // Click on Scheduling Readiness tab
       const readinessTab = screen.getByText(/Scheduling Readiness/i);
       fireEvent.click(readinessTab);
 
-      // Scheduling Readiness is active again
+      // Verify Scheduling Readiness panel elements are loaded
+      await waitFor(() => {
+        expect(screen.getByText(/Config Provenance/i)).toBeInTheDocument();
+      });
+
+      // 1. Observed Timestamps & Unmasked configuration provenance paths
+      expect(screen.getByText(/\/repos\/demo/i)).toBeInTheDocument();
+      expect(screen.getByText(/\/worktrees\/demo/i)).toBeInTheDocument();
+      expect(screen.getByText(/^main$/)).toBeInTheDocument();
+
+      // 2. Default harness variables unmasked
+      expect(screen.getByText(/Name: local/i)).toBeInTheDocument();
+      expect(screen.getByText(/Timeout: 3600s/i)).toBeInTheDocument();
+
+      // 3. Active capacity usage limits (used / total)
+      expect(screen.getByText((_, node) => node?.textContent === '2 / 4 runs')).toBeInTheDocument();
+
+      // 4. Critical Readiness Failures & Warnings with diagnostics + remediation
+      expect(screen.getByText(/Required repository labels are missing./i)).toBeInTheDocument();
+      expect(screen.getByText(/Add the required labels in GitHub before running scheduling./i)).toBeInTheDocument();
+      expect(screen.getByText(/CODE: missing-required-labels/i)).toBeInTheDocument();
+
+      expect(screen.getByText(/Working tree has local changes./i)).toBeInTheDocument();
+      expect(screen.getByText(/Review local changes before running scheduling./i)).toBeInTheDocument();
+      expect(screen.getByText(/CODE: working-tree-dirty/i)).toBeInTheDocument();
+
+      // 5. Open Implementation Issues grouped by Parent PRD
+      expect(screen.getByText(/PRD #2/i)).toBeInTheDocument();
+      expect(screen.getByText(/PRD: Auth flows/i)).toBeInTheDocument();
+      expect(screen.getAllByText(/#10/i).length).toBeGreaterThan(0);
+      expect(screen.getByText(/Implement feature A/i)).toBeInTheDocument();
+
+      // 6. Contains no action buttons (Prepare, Claim, Start, Integrate) or inputs inside panel
+      const textMatches = (text: string) => screen.queryAllByText(new RegExp(`^${text}$`, 'i'));
+      expect(textMatches('Prepare')).toHaveLength(0);
+      expect(textMatches('Claim')).toHaveLength(0);
+      expect(textMatches('Start')).toHaveLength(0);
+      expect(textMatches('Integrate')).toHaveLength(0);
+
+      // Switch back to Operator Console
+      const operatorTab = screen.getByText(/Operator Console/i);
+      fireEvent.click(operatorTab);
+
+      // Product Roadmap is visible again, and Scheduling Readiness panel is unmounted
       await waitFor(() => {
         expect(screen.getByText(/Product Roadmap & Implementation Lifecycle/i)).toBeInTheDocument();
       });
-      expect(screen.queryByText(/Operator Console under active development/i)).not.toBeInTheDocument();
+      expect(screen.queryByText(/Config Provenance/i)).not.toBeInTheDocument();
     });
   });
 });

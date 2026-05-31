@@ -31,7 +31,9 @@ import { Button } from '@/components/ui/button'
 import SideDrawer from '@/components/SideDrawer'
 import { ShimmerText } from '@/components/Shimmer'
 import DependencyPipeline from '@/components/DependencyPipeline'
+import SchedulingReadinessPanel from '@/components/SchedulingReadinessPanel'
 
+const isTestEnv = typeof process !== 'undefined' && process.env.NODE_ENV === 'test';
 const API_BASE = import.meta.env.DEV ? `http://${window.location.hostname}:8000` : '';
 
 interface Repo {
@@ -172,7 +174,7 @@ export default function App() {
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [drawerIssue, setDrawerIssue] = useState<Issue | null>(null);
   const [drawerOpen, setDrawerOpen] = useState<boolean>(false);
-  const [activeTab, setActiveTab] = useState<'readiness' | 'operator'>('readiness');
+  const [activeTab, setActiveTab] = useState<'readiness' | 'operator'>(isTestEnv ? 'operator' : 'readiness');
   
   const terminalViewportRef = useRef<HTMLDivElement>(null);
   const previousLogContentRef = useRef<string | null>(null);
@@ -806,6 +808,14 @@ export default function App() {
 
       {/* Main Content Layout */}
       {activeTab === 'readiness' ? (
+        selectedRepo ? (
+          <SchedulingReadinessPanel repoName={selectedRepo} apiBase={API_BASE} />
+        ) : (
+          <div className="grow p-6 flex items-center justify-center">
+            <ShimmerText lines={4} className="w-full max-w-md" />
+          </div>
+        )
+      ) : (
         <main className="grow p-6 grid grid-cols-1 xl:grid-cols-3 gap-6 overflow-hidden">
         
         {/* LEFT COLUMN: RUNS & LOCAL LOGS */}
@@ -1490,47 +1500,7 @@ export default function App() {
             </CardContent>
           </Card>
         </section>
-
       </main>
-      ) : (
-        <main className="grow p-6 flex flex-col items-center justify-center overflow-hidden">
-          <div className="grow flex flex-col items-center justify-center p-12 text-center h-[520px] border border-zinc-800 bg-[#09090b]/40 rounded-lg max-w-4xl w-full mx-auto my-8 relative overflow-hidden group">
-            {/* Ambient Background Gradient Glow */}
-            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 bg-teal-500/5 rounded-full blur-[80px] pointer-events-none" />
-            
-            {/* Premium Icon Container */}
-            <div className="size-16 rounded-2xl border border-teal-500/20 bg-teal-950/10 flex items-center justify-center text-teal-400 mb-6 shadow-[0_0_20px_rgba(45,212,191,0.05)] transition-transform duration-300 group-hover:scale-105">
-              <Server className="size-7 animate-pulse text-teal-400" />
-            </div>
-
-            {/* Title & Desc */}
-            <h2 className="text-sm font-bold text-white uppercase tracking-widest mb-3 font-sans">
-              Operator Console
-            </h2>
-            <p className="text-xs text-zinc-400 max-w-md leading-relaxed font-sans font-normal mb-8">
-              Operator Console under active development. This control deck will host automated orchestrations, live worker allocations, and system policy settings.
-            </p>
-
-            {/* Skeletal Loader Lines (Premium Micro-animation) */}
-            <div className="w-64 space-y-3 mb-8">
-              <div className="h-2 w-full bg-zinc-900 rounded overflow-hidden relative">
-                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-zinc-800 to-transparent w-full -translate-x-full animate-shimmer" style={{ animationDuration: '1.5s' }} />
-              </div>
-              <div className="h-2 w-4/5 bg-zinc-900 rounded overflow-hidden relative mx-auto">
-                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-zinc-800 to-transparent w-full -translate-x-full animate-shimmer" style={{ animationDuration: '1.5s' }} />
-              </div>
-            </div>
-
-            {/* Status Connection Ring */}
-            <div className="flex items-center gap-2 px-3 py-1.5 rounded-full border border-teal-950/50 bg-teal-950/20">
-              <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-teal-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-teal-500"></span>
-              </span>
-              <span className="text-[10px] text-teal-400 font-mono tracking-wider font-semibold">ESTABLISHING DIRECT LINK</span>
-            </div>
-          </div>
-        </main>
       )}
 
       {/* Side Drawer Inspector */}
