@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { AlertCircle, Clock3, FolderGit2, GitBranch, ShieldCheck, TerminalSquare } from 'lucide-react'
+import DependencyPipeline from './components/DependencyPipeline'
 import './App.css'
 
 const API_BASE = import.meta.env.DEV ? `http://${window.location.hostname}:8000` : ''
@@ -63,6 +64,8 @@ interface SchedulingReadinessSnapshot {
           issue_number: number
           title: string
           status: string
+          blocked_by?: number[]
+          active_blockers?: number[]
         }>
       }>
       agent_run_capacity: {
@@ -362,6 +365,38 @@ function App() {
               </div>
             ) : (
               <p className="empty-state">No implementation issues observed yet.</p>
+            )}
+          </article>
+
+          <article className="info-panel">
+            <div className="panel-heading">
+              <GitBranch className="panel-icon" />
+              <div>
+                <h2>Dependency Pipeline</h2>
+                <p>Implementation Issue State dependency visual within Scheduling Readiness.</p>
+              </div>
+            </div>
+
+            {snapshot && implementationIssueState && implementationIssueState.groups.length > 0 ? (
+              <div className="readiness-groups">
+                {implementationIssueState.groups.map((group) => (
+                  <div key={`pipeline-${group.parent_prd.issue_number}`}>
+                    <h3>
+                      {group.parent_prd.title} {!group.parent_prd.prepared ? '(Unprepared)' : ''}
+                    </h3>
+                    <DependencyPipeline
+                      children={group.items.map((item) => ({
+                        number: item.issue_number,
+                        status: item.status,
+                        blocked_by: item.blocked_by ?? [],
+                        active_blockers: item.active_blockers ?? [],
+                      }))}
+                    />
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="empty-state">No Dependency Pipeline observed yet.</p>
             )}
           </article>
 

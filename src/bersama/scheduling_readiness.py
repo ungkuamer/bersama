@@ -534,6 +534,10 @@ def _build_implementation_issue_state(repo: RepoConfig | None) -> dict[str, obje
             "title": issue.issue.title,
             "status": status,
             "parent_prd_number": issue.parent_prd_number,
+            "blocked_by": list(issue.blocked_by),
+            "active_blockers": [
+                blocker for blocker in issue.blocked_by if blocker in open_impl_numbers
+            ],
         }
         items.append(item)
 
@@ -645,6 +649,8 @@ def _build_implementation_issue_state(repo: RepoConfig | None) -> dict[str, obje
                 "issue_number": item["issue_number"],
                 "title": item["title"],
                 "status": item["status"],
+                "blocked_by": list(item["blocked_by"]),
+                "active_blockers": list(item["active_blockers"]),
             }
         )
 
