@@ -1319,3 +1319,90 @@ def test_get_run_log_endpoint_returns_actionable_diagnostics_for_read_failure(
             "log_path": str(log_path),
         }
     }
+
+
+def test_get_scheduling_readiness_snapshot_returns_normalized_repo_snapshot() -> None:
+    app = create_dashboard_app(config=build_config())
+
+    response = TestClient(app).get("/api/scheduling-readiness/demo")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "repo": {
+            "name": "demo",
+            "path": "/repos/demo",
+            "main_branch": "main",
+            "worktree_root": "/worktrees/demo",
+        },
+        "snapshot": {
+            "observed_at": response.json()["snapshot"]["observed_at"],
+            "config_provenance": {
+                "source": "app-config",
+                "default_harness": {
+                    "name": "local",
+                    "timeout_seconds": None,
+                },
+            },
+            "harness_summary": {
+                "default_harness": "local",
+                "timeout_seconds": None,
+            },
+            "readiness_checks": [],
+            "implementation_issue_state": {
+                "items": [],
+                "summary": {
+                    "ready": 0,
+                    "blocked": 0,
+                    "claimed": 0,
+                    "running": 0,
+                    "failed": 0,
+                    "succeeded": 0,
+                    "other": 0,
+                },
+            },
+        },
+    }
+
+
+def test_get_scheduling_readiness_snapshot_includes_harness_timeout_when_configured() -> None:
+    config = AppConfig(
+        repos={
+            "demo": RepoConfig(
+                name="demo",
+                repo_path=Path("/repos/demo"),
+                main_branch="main",
+                worktree_root=Path("/worktrees/demo"),
+                global_concurrency=1,
+                per_prd_concurrency=1,
+                default_harness="local",
+            )
+        },
+        harnesses={
+            "local": HarnessConfig(
+                name="local",
+                command="codex",
+                args_template=(),
+                timeout_seconds=900,
+            )
+        },
+    )
+    app = create_dashboard_app(config=config)
+
+    response = TestClient(app).get("/api/scheduling-readiness/demo")
+
+    assert response.status_code == 200
+    assert response.json()["snapshot"]["harness_summary"] == {
+        "default_harness": "local",
+        "timeout_seconds": 900,
+    }
+
+
+def test_get_scheduling_readiness_snapshot_returns_actionable_not_found_for_unknown_repo() -> None:
+    app = create_dashboard_app(config=build_config())
+
+    response = TestClient(app).get("/api/scheduling-readiness/missing")
+
+    assert response.status_code == 404
+    assert response.json() == {
+        "detail": "Unknown repo 'missing'. Available repos: demo."
+    }
