@@ -1,13 +1,22 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
+import json
 from pathlib import Path
 import os
 import shutil
 import subprocess
 
 from bersama.config import AppConfig, ConfigError, RepoConfig
+from bersama.issues import (
+    ClaimStatus,
+    GitHubIssue,
+    ImplementationIssue,
+    PrdIssue,
+    parse_claim_status,
+    parse_issue,
+)
 
 
 REQUIRED_LABELS = (
@@ -94,6 +103,16 @@ class SchedulingReadinessProvider:
                 ),
             )
 
+        implementation_issue_state = _build_implementation_issue_state(repo)
+        checks["warnings"].extend(
+            ReadinessCheck(
+                message=str(warning["message"]),
+                remediation=str(warning["remediation"]),
+                details=dict(warning["details"]),
+            )
+            for warning in implementation_issue_state.get("derived_warnings", [])
+        )
+
         return {
             "repo": _serialize_repo(repo_name, repo),
             "snapshot": {
@@ -113,7 +132,11 @@ class SchedulingReadinessProvider:
                     "critical_failures": [check.__dict__ for check in checks["critical_failures"]],
                     "warnings": [check.__dict__ for check in checks["warnings"]],
                 },
-                "implementation_issue_state": _build_empty_implementation_issue_state(),
+                "implementation_issue_state": {
+                    key: value
+                    for key, value in implementation_issue_state.items()
+                    if key != "derived_warnings"
+                },
             },
         }
 
@@ -391,6 +414,12 @@ def _serialize_repo(repo_name: str, repo: RepoConfig | None) -> dict[str, str | 
 def _build_empty_implementation_issue_state() -> dict[str, object]:
     return {
         "items": [],
+        "groups": [],
+        "agent_run_capacity": {
+            "used": 0,
+            "total": 0,
+        },
+        "derived_warnings": [],
         "summary": {
             "ready": 0,
             "blocked": 0,
@@ -456,6 +485,302 @@ def _fetch_repo_labels(repo_path: Path) -> set[str] | None:
     if result.returncode != 0:
         return None
     return {line.strip() for line in result.stdout.splitlines() if line.strip()}
+
+
+def _build_implementation_issue_state(repo: RepoConfig | None) -> dict[str, object]:
+    empty = _build_empty_implementation_issue_state()
+    if repo is None:
+        return empty
+
+    empty["agent_run_capacity"]["total"] = repo.global_concurrency
+    records = _fetch_issue_records(repo.repo_path)
+    if records is None:
+        return empty
+
+    prds_by_number: dict[int, PrdIssue] = {}
+    open_implementation_issues: list[ImplementationIssue] = []
+    open_impl_numbers: set[int] = set()
+
+    for record in records:
+        parsed = parse_issue(
+            GitHubIssue(
+                number=record["number"],
+                title=record["title"],
+                body=record["body"],
+                labels=tuple(record["labels"]),
+            )
+        )
+        if isinstance(parsed, PrdIssue):
+            prds_by_number[parsed.issue.number] = parsed
+            continue
+        if isinstance(parsed, ImplementationIssue) and record["state"] == "open":
+            open_implementation_issues.append(parsed)
+            open_impl_numbers.add(parsed.issue.number)
+
+    items: list[dict[str, object]] = []
+    warnings: list[dict[str, object]] = []
+    warning_keys: set[tuple[str, int | None]] = set()
+    capacity_used = 0
+
+    for issue in sorted(open_implementation_issues, key=lambda item: item.issue.number):
+        parent_prd = prds_by_number.get(issue.parent_prd_number or -1)
+        status, is_stale = _derive_observed_status(
+            issue,
+            repo=repo,
+            open_impl_numbers=open_impl_numbers,
+        )
+        item = {
+            "issue_number": issue.issue.number,
+            "title": issue.issue.title,
+            "status": status,
+            "parent_prd_number": issue.parent_prd_number,
+        }
+        items.append(item)
+
+        if status in {"claimed", "running"} and not is_stale:
+            capacity_used += 1
+
+        if parent_prd is None or not parent_prd.orchestration.prd_branch:
+            _append_warning(
+                warnings,
+                warning_keys,
+                code="unprepared-prd-issue",
+                message="Implementation Issues are attached to an unprepared PRD Issue.",
+                remediation="Prepare the Parent PRD before relying on Scheduling Readiness for its child work.",
+                issue_number=issue.issue.number,
+                parent_prd_number=issue.parent_prd_number,
+            )
+
+        if status == "blocked":
+            _append_warning(
+                warnings,
+                warning_keys,
+                code="blocked-implementation-issue",
+                message="Blocked Implementation Issues are reducing Scheduling Readiness.",
+                remediation="Resolve the open Blocking Dependency or close the blocked issue.",
+                issue_number=issue.issue.number,
+                parent_prd_number=issue.parent_prd_number,
+            )
+
+        if status == "failed":
+            _append_warning(
+                warnings,
+                warning_keys,
+                code="failed-implementation-issue",
+                message="Failed Implementation Issues require human review.",
+                remediation="Inspect the failed Agent Run or integration outcome before scheduling more work.",
+                issue_number=issue.issue.number,
+                parent_prd_number=issue.parent_prd_number,
+            )
+
+        if is_stale:
+            _append_warning(
+                warnings,
+                warning_keys,
+                code="stale-claim",
+                message="Stale Claims are present in open Implementation Issues.",
+                remediation="Reconcile or release stale claims before counting available Agent Run Capacity.",
+                issue_number=issue.issue.number,
+                parent_prd_number=issue.parent_prd_number,
+            )
+
+        if "needs-info" in issue.issue.labels:
+            _append_warning(
+                warnings,
+                warning_keys,
+                code="needs-info-implementation-issue",
+                message="Some Implementation Issues are waiting on more information.",
+                remediation="Resolve needs-info issues before expecting them to become Ready Implementation Issues.",
+                issue_number=issue.issue.number,
+                parent_prd_number=issue.parent_prd_number,
+            )
+
+    summary = {
+        "ready": sum(1 for item in items if item["status"] == "ready"),
+        "blocked": sum(1 for item in items if item["status"] == "blocked"),
+        "claimed": sum(1 for item in items if item["status"] == "claimed"),
+        "running": sum(1 for item in items if item["status"] == "running"),
+        "failed": sum(1 for item in items if item["status"] == "failed"),
+        "succeeded": sum(1 for item in items if item["status"] == "succeeded"),
+        "other": sum(
+            1
+            for item in items
+            if item["status"] not in {"ready", "blocked", "claimed", "running", "failed", "succeeded"}
+        ),
+    }
+
+    if summary["ready"] == 0 and items:
+        _append_warning(
+            warnings,
+            warning_keys,
+            code="no-ready-implementation-issues",
+            message="No Ready Implementation Issues are currently observed.",
+            remediation="Prepare more child work or unblock existing issues before the next Scheduling Pass.",
+            issue_number=None,
+            parent_prd_number=None,
+        )
+
+    groups_by_prd: dict[int, dict[str, object]] = {}
+    for item in items:
+        parent_prd_number = int(item["parent_prd_number"])
+        parent_prd = prds_by_number.get(parent_prd_number)
+        if parent_prd is None:
+            parent_title = f"PRD #{parent_prd_number}"
+            prepared = False
+        else:
+            parent_title = parent_prd.issue.title
+            prepared = bool(parent_prd.orchestration.prd_branch)
+        groups_by_prd.setdefault(
+            parent_prd_number,
+            {
+                "parent_prd": {
+                    "issue_number": parent_prd_number,
+                    "title": parent_title,
+                    "prepared": prepared,
+                },
+                "items": [],
+            },
+        )["items"].append(
+            {
+                "issue_number": item["issue_number"],
+                "title": item["title"],
+                "status": item["status"],
+            }
+        )
+
+    empty["items"] = items
+    empty["groups"] = [groups_by_prd[number] for number in sorted(groups_by_prd)]
+    empty["summary"] = summary
+    empty["agent_run_capacity"] = {
+        "used": capacity_used,
+        "total": repo.global_concurrency,
+    }
+    empty["derived_warnings"] = warnings
+    return empty
+
+
+def _fetch_issue_records(repo_path: Path) -> list[dict[str, object]] | None:
+    result = _run_command(
+        (
+            "gh",
+            "issue",
+            "list",
+            "--state",
+            "all",
+            "--json",
+            "number,title,body,labels,state",
+            "--search",
+            "label:prd,implementation",
+        ),
+        cwd=repo_path,
+    )
+    if result.returncode != 0:
+        return None
+    payload = json.loads(result.stdout or "[]")
+    issue_records: list[dict[str, object]] = []
+    for item in payload:
+        issue_records.append(
+            {
+                "number": int(item["number"]),
+                "title": str(item["title"]),
+                "body": str(item["body"]),
+                "labels": tuple(
+                    label["name"] if isinstance(label, dict) else str(label)
+                    for label in item.get("labels", [])
+                ),
+                "state": str(item["state"]).lower(),
+            }
+        )
+    return issue_records
+
+
+def _derive_observed_status(
+    issue: ImplementationIssue,
+    *,
+    repo: RepoConfig,
+    open_impl_numbers: set[int],
+) -> tuple[str, bool]:
+    run_state = _read_run_state(repo.worktree_root / f"issue-{issue.issue.number}" / "run-state.json")
+    if run_state is not None:
+        run_status = str(run_state.get("status", "unknown"))
+        if run_status in {"running", "failed", "succeeded"}:
+            return run_status, _is_stale_claim(issue)
+        return "unknown", _is_stale_claim(issue)
+
+    stale = _is_stale_claim(issue)
+    claim_status = parse_claim_status(issue.orchestration.claim_status)
+    if claim_status is ClaimStatus.FAILED:
+        return "failed", stale
+    if (
+        issue.orchestration.integration_status == "pending_validation"
+        or issue.orchestration.integration_status == "merged"
+    ):
+        return "succeeded", stale
+    if _has_claim_metadata(issue):
+        return "claimed", stale
+    if "ready-for-agent" in issue.issue.labels:
+        if any(blocker in open_impl_numbers for blocker in issue.blocked_by):
+            return "blocked", stale
+        return "ready", stale
+    return "unready", stale
+
+
+def _read_run_state(run_state_path: Path) -> dict[str, object] | None:
+    if not run_state_path.exists():
+        return None
+    try:
+        return json.loads(run_state_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return None
+
+
+def _has_claim_metadata(issue: ImplementationIssue) -> bool:
+    orchestration = issue.orchestration
+    return any(
+        (
+            orchestration.agent_run_id,
+            orchestration.claimed_at,
+            orchestration.implementation_branch,
+        )
+    )
+
+
+def _is_stale_claim(issue: ImplementationIssue) -> bool:
+    claimed_at = issue.orchestration.claimed_at
+    if not claimed_at:
+        return False
+    try:
+        claimed_at_dt = datetime.fromisoformat(claimed_at.replace("Z", "+00:00"))
+    except ValueError:
+        return False
+    return datetime.now(timezone.utc) - claimed_at_dt > timedelta(hours=2)
+
+
+def _append_warning(
+    warnings: list[dict[str, object]],
+    warning_keys: set[tuple[str, int | None]],
+    *,
+    code: str,
+    message: str,
+    remediation: str,
+    issue_number: int | None,
+    parent_prd_number: int | None,
+) -> None:
+    key = (code, issue_number)
+    if key in warning_keys:
+        return
+    warning_keys.add(key)
+    warnings.append(
+        {
+            "message": message,
+            "remediation": remediation,
+            "details": {
+                "code": code,
+                "issue_number": issue_number,
+                "parent_prd_number": parent_prd_number,
+            },
+        }
+    )
 
 
 def _git_permission(repo_path: Path) -> dict[str, object] | None:
