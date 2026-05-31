@@ -39,40 +39,12 @@ export interface Issue {
   failure_reason?: string | null;
   started_at?: string | null;
   finished_at?: string | null;
-  timeline?: {
-    observed_state: string;
-    is_observed: boolean;
-    steps: Array<{
-      key: string;
-      label: string;
-      status: string;
-      observed_at: string | null;
-      detail: string;
-    }>;
-    run?: {
-      status?: string | null;
-      agent_run_id?: string | null;
-      started_at?: string | null;
-      finished_at?: string | null;
-      failure_reason?: string | null;
-    };
-    claim?: {
-      status?: string | null;
-      claimed_at?: string | null;
-      implementation_branch?: string | null;
-    };
-    integration?: {
-      pull_request?: string | null;
-      status?: string | null;
-    };
-  };
 }
 
 export interface SideDrawerProps {
   issue: Issue | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  readOnly?: boolean;
   // Action handlers
   onClaim?: (issueNumber: number) => void;
   onStart?: (issueNumber: number) => void;
@@ -146,7 +118,6 @@ export default function SideDrawer({
   issue,
   open,
   onOpenChange,
-  readOnly = false,
   onClaim,
   onStart,
   onIntegrate,
@@ -164,9 +135,9 @@ export default function SideDrawer({
   if (!issue) return null;
 
   const isImplementation = issue.kind === 'implementation';
-  const canClaimIssue = !readOnly && isImplementation && issue.state !== 'closed' && issue.status === 'ready';
-  const canStartIssue = !readOnly && isImplementation && issue.state !== 'closed' && issue.status === 'claimed';
-  const canIntegrateIssue = !readOnly && isImplementation && issue.state !== 'closed' && issue.status === 'succeeded';
+  const canClaimIssue = isImplementation && issue.state !== 'closed' && issue.status === 'ready';
+  const canStartIssue = isImplementation && issue.state !== 'closed' && issue.status === 'claimed';
+  const canIntegrateIssue = isImplementation && issue.state !== 'closed' && issue.status === 'succeeded';
   const isClaiming = claimState?.status === 'loading';
   const isStarting = startState?.status === 'loading';
   const isIntegrating = integrateState?.status === 'loading';
@@ -292,31 +263,6 @@ export default function SideDrawer({
                         <span className="text-zinc-300">{formatDate(issue.claimed_at)}</span>
                       </div>
                     )}
-                  </div>
-                </section>
-              )}
-
-              {isImplementation && issue.timeline && (
-                <section>
-                  <h4 className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 mb-2">Implementation Issue Timeline</h4>
-                  <div className="dashboard-glass-surface rounded border p-3 space-y-3 text-[10px]">
-                    <p className="text-zinc-500">Observed lifecycle state, not a perfect audit log.</p>
-                    <div className="space-y-2">
-                      {issue.timeline.steps.map((step) => (
-                        <div key={step.key} className="flex items-start justify-between gap-3 border-b border-zinc-900 pb-2 last:border-b-0 last:pb-0">
-                          <div>
-                            <div className="text-zinc-200 font-semibold">{step.label}</div>
-                            <div className="text-zinc-500">{step.detail}</div>
-                          </div>
-                          <div className="shrink-0 text-right">
-                            <div className="text-zinc-300 uppercase">{step.status}</div>
-                            {step.observed_at && (
-                              <div className="text-zinc-600 font-mono">{formatDate(step.observed_at)}</div>
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
                   </div>
                 </section>
               )}
@@ -461,17 +407,8 @@ export default function SideDrawer({
               {/* Action Controls */}
               {isImplementation && (
                 <section>
-                  {readOnly ? (
-                    <>
-                      <h4 className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 mb-2">Read-Only Guardrail</h4>
-                      <div className="dashboard-glass-surface rounded border p-3 text-[10px] text-zinc-500">
-                        Scheduling Readiness is read-only. Lifecycle Mutation controls stay outside this landing view.
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <h4 className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 mb-2">Action Controls</h4>
-                      <div className="space-y-2">
+                  <h4 className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 mb-2">Action Controls</h4>
+                  <div className="space-y-2">
                     {/* Claim */}
                     {canClaimIssue && (
                       <div className="dashboard-glass-surface rounded border p-3">
@@ -591,9 +528,7 @@ export default function SideDrawer({
                           : 'No actions available for current status.'}
                       </p>
                     )}
-                      </div>
-                    </>
-                  )}
+                  </div>
                 </section>
               )}
             </div>
