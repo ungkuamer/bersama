@@ -475,6 +475,51 @@ def test_provider_builds_prd_grouped_implementation_issue_state_capacity_and_war
         "stale-claim",
         "needs-info-implementation-issue",
     ])
+    assert implementation_issue_state["groups"][0]["items"] == [
+        {
+            "issue_number": 12,
+            "title": "Ready issue",
+            "status": "ready",
+            "blocked_by": [],
+            "active_blockers": [],
+        },
+        {
+            "issue_number": 13,
+            "title": "Blocked issue",
+            "status": "blocked",
+            "blocked_by": [12],
+            "active_blockers": [12],
+        },
+        {
+            "issue_number": 14,
+            "title": "Running issue",
+            "status": "running",
+            "blocked_by": [],
+            "active_blockers": [],
+        },
+        {
+            "issue_number": 15,
+            "title": "Failed issue",
+            "status": "failed",
+            "blocked_by": [],
+            "active_blockers": [],
+        },
+        {
+            "issue_number": 16,
+            "title": "Stale claim",
+            "status": "claimed",
+            "blocked_by": [],
+            "active_blockers": [],
+        },
+        {
+            "issue_number": 17,
+            "title": "Needs info issue",
+            "status": "unready",
+            "blocked_by": [],
+            "active_blockers": [],
+        },
+    ]
+    assert all("x" not in item and "y" not in item for item in implementation_issue_state["items"])
 
 
 def _completed(
