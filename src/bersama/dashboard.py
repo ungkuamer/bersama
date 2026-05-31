@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import BackgroundTasks, FastAPI, HTTPException
@@ -15,6 +16,7 @@ from bersama.issues import GitHubIssue, ImplementationIssue, parse_issue
 from bersama.prd_preparation import GitWorkspaceGateway, PrdPreparationService
 from bersama.reconciliation import ReconciliationService
 from bersama.repo_lock import RepoLock
+from bersama.scheduling_readiness import SchedulingReadinessProvider
 from bersama.command_executor import CommandExecutor
 
 ReconciliationServiceFactory = Callable[[RepoConfig], ReconciliationService]
@@ -24,6 +26,7 @@ ExecutionServiceFactory = Callable[[RepoConfig], HarnessExecutionService]
 IntegrationServiceFactory = Callable[[RepoConfig], IntegrationService]
 IssueGatewayFactory = Callable[[], GitHubIssueGateway]
 BackgroundTaskScheduler = Callable[..., object]
+SchedulingReadinessProviderFactory = Callable[[str], dict[str, object]]
 
 
 def _serialize_diagnostics(parsed_issue: object) -> list[dict[str, str]]:
@@ -49,6 +52,21 @@ def _issue_number_from_worktree(worktree_path: Path) -> int | None:
         return None
 
 
+def _build_empty_implementation_issue_state() -> dict[str, object]:
+    return {
+        "items": [],
+        "summary": {
+            "ready": 0,
+            "blocked": 0,
+            "claimed": 0,
+            "running": 0,
+            "failed": 0,
+            "succeeded": 0,
+            "other": 0,
+        },
+    }
+
+
 class ClaimImplementationIssueRequest(BaseModel):
     agent_run_id: str
 
@@ -63,6 +81,7 @@ def create_dashboard_app(
     integration_service_factory: IntegrationServiceFactory | None = None,
     issue_gateway_factory: IssueGatewayFactory | None = None,
     background_task_scheduler: BackgroundTaskScheduler | None = None,
+    scheduling_readiness_provider: object | None = None,
 ) -> FastAPI:
     app = FastAPI()
 
@@ -124,6 +143,7 @@ def create_dashboard_app(
     execute_service_factory = execution_service_factory or build_execution_service
     integrate_service_factory = integration_service_factory or build_integration_service
     issues_factory = issue_gateway_factory or (lambda: create_bounded_issue_gateway())
+    readiness_provider = scheduling_readiness_provider or SchedulingReadinessProvider(config)
 
     def schedule_background_task(
         background_tasks: BackgroundTasks,
@@ -489,6 +509,15 @@ def create_dashboard_app(
             flat_results.append(item)
 
         return flat_results
+
+    @app.get("/api/scheduling-readiness/{repo_name}")
+    def get_scheduling_readiness_snapshot(repo_name: str) -> dict[str, object]:
+        try:
+            config.repo(repo_name)
+        except ConfigError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+        return readiness_provider.build_snapshot(repo_name)
 
     @app.get("/api/runs")
     def get_runs(repo: str) -> list[dict[str, object]]:

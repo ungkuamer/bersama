@@ -1,1501 +1,524 @@
-import { useState, useEffect, useRef, type ReactNode } from 'react'
-import { 
-  Terminal, 
-  RefreshCw, 
-  GitBranch, 
-  AlertCircle, 
-  CheckCircle2,
-  Clock, 
-  Database, 
-  Layers, 
-  FileText, 
-  CornerDownRight, 
-  ListFilter,
-  Eye,
-  EyeOff,
-  ChevronDown,
-  ChevronRight,
-  Play,
-  Pause,
-  Server,
-  GitMerge,
-  ArrowDown,
-  Download,
-  Hand,
-  Send
-} from 'lucide-react'
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
-import { ScrollArea } from '@/components/ui/scroll-area'
-import { Button } from '@/components/ui/button'
-import SideDrawer from '@/components/SideDrawer'
-import { ShimmerText } from '@/components/Shimmer'
-import DependencyPipeline from '@/components/DependencyPipeline'
+import { useEffect, useState } from 'react'
+import { AlertCircle, Clock3, FolderGit2, GitBranch, ShieldCheck, TerminalSquare } from 'lucide-react'
+import DependencyPipeline from './components/DependencyPipeline'
+import SideDrawer, { type Issue as DrawerIssue } from './components/SideDrawer'
+import './App.css'
 
-const API_BASE = import.meta.env.DEV ? `http://${window.location.hostname}:8000` : '';
+const API_BASE = import.meta.env.DEV ? `http://${window.location.hostname}:8000` : ''
 
 interface Repo {
-  name: string;
-  repo_path: string;
-  main_branch: string;
-  worktree_root: string;
-  global_concurrency: number;
-  per_prd_concurrency: number;
-  default_harness: string;
+  name: string
+  repo_path: string
+  main_branch: string
+  worktree_root: string
+  global_concurrency: number
+  per_prd_concurrency: number
+  default_harness: string
 }
 
-interface Issue {
-  number: number;
-  title: string;
-  labels: string[];
-  state: string;
-  kind: 'prd' | 'implementation';
-  prd_branch?: string;
-  children?: Issue[];
-  parent_prd_number?: number;
-  implementation_branch?: string;
-  blocked_by?: number[];
-  active_blockers?: number[];
-  status?: 'closed' | 'failed' | 'ready' | 'claimed' | 'unready' | 'running' | 'blocked' | 'succeeded' | 'unknown';
-  agent_run_id?: string | null;
-  claimed_at?: string | null;
-  failure_reason?: string | null;
-  started_at?: string | null;
-  finished_at?: string | null;
-}
-
-interface RunState {
-  issue_number: number;
-  status: 'running' | 'failed' | 'succeeded' | 'unknown';
-  prd_branch: string;
-  implementation_branch: string;
-  started_at: string;
-  finished_at?: string;
-  failure_reason?: string;
-  exit_code?: number;
-  harness_name?: string;
-}
-
-interface LogTail {
-  issue_number: number;
-  log_path: string;
-  lines_returned: number;
-  content: string;
-}
-
-type PrdPreparationState = {
-  status: 'loading' | 'succeeded' | 'failed';
-  message: string;
-}
-
-type ImplementationIntegrationState = {
-  status: 'loading' | 'succeeded' | 'failed';
-  message: string;
-}
-
-type ImplementationClaimState = {
-  status: 'loading' | 'succeeded' | 'failed';
-  message: string;
-}
-
-type ImplementationStartState = {
-  status: 'loading' | 'succeeded' | 'failed';
-  message: string;
-}
-
-type PrdPreparationResponse = {
-  prd_branch?: string;
-}
-
-type ImplementationIntegrationResponse = {
-  prd_branch?: string;
-}
-
-type ImplementationClaimResponse = {
-  agent_run_id?: string;
-}
-
-type ImplementationStartResponse = {
-  agent_run_id?: string;
+interface SchedulingReadinessSnapshot {
+  repo: {
+    name: string
+    path: string
+    main_branch: string
+    worktree_root: string
+  }
+  snapshot: {
+    observed_at: string
+    config_provenance: {
+      source: string
+      default_harness: {
+        name: string
+        timeout_seconds: number | null
+      }
+    }
+    harness_summary: {
+      default_harness: string
+      timeout_seconds: number | null
+    }
+    readiness_checks: {
+      critical_failures: Array<{
+        message: string
+        remediation: string
+        details?: Record<string, unknown>
+      }>
+      warnings: Array<{
+        message: string
+        remediation: string
+        details?: Record<string, unknown>
+      }>
+    }
+    implementation_issue_state: {
+      items: Array<{
+        issue_number: number
+        title: string
+        status: string
+        parent_prd_number?: number
+        blocked_by?: number[]
+        active_blockers?: number[]
+        timeline?: {
+          observed_state: string
+          is_observed: boolean
+          steps: Array<{
+            key: string
+            label: string
+            status: string
+            observed_at: string | null
+            detail: string
+          }>
+          run?: {
+            status?: string | null
+            agent_run_id?: string | null
+            started_at?: string | null
+            finished_at?: string | null
+            failure_reason?: string | null
+          }
+          claim?: {
+            status?: string | null
+            claimed_at?: string | null
+            implementation_branch?: string | null
+          }
+          integration?: {
+            pull_request?: string | null
+            status?: string | null
+          }
+        }
+      }>
+      groups: Array<{
+        parent_prd: {
+          issue_number: number
+          title: string
+          prepared: boolean
+        }
+        items: Array<{
+          issue_number: number
+          title: string
+          status: string
+          blocked_by?: number[]
+          active_blockers?: number[]
+          timeline?: {
+            observed_state: string
+            is_observed: boolean
+            steps: Array<{
+              key: string
+              label: string
+              status: string
+              observed_at: string | null
+              detail: string
+            }>
+            run?: {
+              status?: string | null
+              agent_run_id?: string | null
+              started_at?: string | null
+              finished_at?: string | null
+              failure_reason?: string | null
+            }
+            claim?: {
+              status?: string | null
+              claimed_at?: string | null
+              implementation_branch?: string | null
+            }
+            integration?: {
+              pull_request?: string | null
+              status?: string | null
+            }
+          }
+        }>
+      }>
+      agent_run_capacity: {
+        used: number
+        total: number
+      }
+      summary: Record<string, number>
+    }
+  }
 }
 
 const messageFromError = (error: unknown): string => {
-  return error instanceof Error ? error.message : String(error);
+  return error instanceof Error ? error.message : String(error)
 }
 
 const detailFromResponse = async (response: Response): Promise<string | undefined> => {
-  const data: unknown = await response.json().catch(() => null);
+  const data: unknown = await response.json().catch(() => null)
   if (data && typeof data === 'object' && 'detail' in data) {
-    const detail = data.detail;
-    return typeof detail === 'string' ? detail : undefined;
+    const detail = data.detail
+    return typeof detail === 'string' ? detail : undefined
   }
-  return undefined;
+  return undefined
 }
 
-const LOG_BOTTOM_THRESHOLD_PX = 80;
-
-const isNearBottom = (element: HTMLElement): boolean => {
-  return element.scrollHeight - element.scrollTop - element.clientHeight <= LOG_BOTTOM_THRESHOLD_PX;
+const formatObservedAt = (value: string): string => {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value
+  return date.toLocaleString([], {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  })
 }
 
-const buildAgentRunId = (issueNumber: number): string => {
-  return `run-${issueNumber}-${Date.now().toString(16)}`;
+const formatTimeout = (timeoutSeconds: number | null): string => {
+  return timeoutSeconds === null ? 'Not configured' : `${timeoutSeconds}s`
 }
 
-export default function App() {
-  const [repos, setRepos] = useState<Repo[]>([]);
-  const [selectedRepo, setSelectedRepo] = useState<string>('');
-  const [issues, setIssues] = useState<Issue[]>([]);
-  const [runs, setRuns] = useState<RunState[]>([]);
-  const [selectedRunIssue, setSelectedRunIssue] = useState<number | null>(null);
-  const [logTail, setLogTail] = useState<LogTail | null>(null);
-  const [logsLimit, setLogsLimit] = useState<number>(100);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [refreshing, setRefreshing] = useState<boolean>(false);
-  const [pollingInterval] = useState<number>(5000); // 5s
-  const [pollingActive, setPollingActive] = useState<boolean>(true);
-  const [pollLogsActive, setPollLogsActive] = useState<boolean>(true);
-  const [error, setError] = useState<string | null>(null);
-  const [preparePrdState, setPreparePrdState] = useState<Record<number, PrdPreparationState>>({});
-  const [claimIssueState, setClaimIssueState] = useState<Record<number, ImplementationClaimState>>({});
-  const [claimFormIssue, setClaimFormIssue] = useState<number | null>(null);
-  const [claimAgentRunIds, setClaimAgentRunIds] = useState<Record<number, string>>({});
-  const [startIssueState, setStartIssueState] = useState<Record<number, ImplementationStartState>>({});
-  const [integrateIssueState, setIntegrateIssueState] = useState<Record<number, ImplementationIntegrationState>>({});
-  const [hasNewPausedLogOutput, setHasNewPausedLogOutput] = useState<boolean>(false);
-  const [logSearchQuery, setLogSearchQuery] = useState<string>('');
-  const logAutoScrollActiveRef = useRef<boolean>(true);
-  
-  // UI States
-  const [expandedPrds, setExpandedPrds] = useState<Record<number, boolean>>({});
-  const [filterStatus, setFilterStatus] = useState<string>('all');
-  const [searchTerm, setSearchTerm] = useState<string>('');
-  const [drawerIssue, setDrawerIssue] = useState<Issue | null>(null);
-  const [drawerOpen, setDrawerOpen] = useState<boolean>(false);
-  
-  const terminalViewportRef = useRef<HTMLDivElement>(null);
-  const previousLogContentRef = useRef<string | null>(null);
-  const previousSelectedRunIssueRef = useRef<number | null>(null);
+function App() {
+  const [repos, setRepos] = useState<Repo[]>([])
+  const [selectedRepo, setSelectedRepo] = useState('')
+  const [snapshot, setSnapshot] = useState<SchedulingReadinessSnapshot | null>(null)
+  const [loadingRepos, setLoadingRepos] = useState(true)
+  const [loadingSnapshot, setLoadingSnapshot] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [selectedIssue, setSelectedIssue] = useState<DrawerIssue | null>(null)
+  const [drawerOpen, setDrawerOpen] = useState(false)
 
-  const setLogAutoScroll = (isActive: boolean) => {
-    logAutoScrollActiveRef.current = isActive;
-  };
-
-  // Fetch initial repositories list
   useEffect(() => {
-    fetchRepos();
-  }, []);
+    let active = true
 
-  const fetchRepos = async () => {
-    try {
-      const res = await fetch(`${API_BASE}/api/repos`);
-      if (!res.ok) throw new Error(`HTTP error ${res.status}`);
-      const data = await res.json() as Repo[];
-      setRepos(data);
-      if (data.length > 0 && !selectedRepo) {
-        setSelectedRepo(data[0].name);
+    const fetchRepos = async () => {
+      try {
+        const response = await fetch(`${API_BASE}/api/repos`)
+        if (!response.ok) {
+          throw new Error(await detailFromResponse(response) || `HTTP error ${response.status}`)
+        }
+        const data = (await response.json()) as Repo[]
+        if (!active) return
+        setRepos(data)
+        setSelectedRepo((current) => current || data[0]?.name || '')
+      } catch (err: unknown) {
+        if (!active) return
+        setError(`Failed to load repos: ${messageFromError(err)}`)
+      } finally {
+        if (active) {
+          setLoadingRepos(false)
+        }
       }
-    } catch (err: unknown) {
-      console.error("Error fetching repos:", err);
-      setError(`Failed to connect to backend: ${messageFromError(err)}`);
     }
-  };
 
-  // Fetch core data (issues & runs)
-  const fetchData = async (showRefreshIndicator = false) => {
-    if (showRefreshIndicator) setRefreshing(true);
-    try {
-      const repoParam = selectedRepo ? `?repo=${encodeURIComponent(selectedRepo)}` : '';
-      
-      const [issuesRes, runsRes] = await Promise.all([
-        fetch(`${API_BASE}/api/issues${repoParam}`),
-        fetch(`${API_BASE}/api/runs${repoParam}`)
-      ]);
+    void fetchRepos()
 
-      if (!issuesRes.ok) throw new Error(`Issues HTTP error ${issuesRes.status}`);
-      if (!runsRes.ok) throw new Error(`Runs HTTP error ${runsRes.status}`);
-
-      const issuesData = await issuesRes.json() as Issue[];
-      const runsData = await runsRes.json() as RunState[];
-
-      setIssues(issuesData);
-      setRuns(runsData);
-      
-      // Auto expand PRDs on first load
-      if (loading) {
-        const initialExpanded: Record<number, boolean> = {};
-        issuesData.forEach((issue: Issue) => {
-          if (issue.kind === 'prd') {
-            initialExpanded[issue.number] = true;
-          }
-        });
-        setExpandedPrds(initialExpanded);
-      }
-      
-      setError(null);
-    } catch (err: unknown) {
-      console.error("Error fetching data:", err);
-      setError(`Data fetch failed: ${messageFromError(err)}`);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
+    return () => {
+      active = false
     }
-  };
+  }, [])
 
-  // Handle selected repository changes
   useEffect(() => {
-    if (selectedRepo) {
-      fetchData(true);
-    }
-  }, [selectedRepo]);
+    if (!selectedRepo) return
 
-  // Polling core data
-  useEffect(() => {
-    if (!pollingActive || !selectedRepo) return;
-    const interval = setInterval(() => {
-      fetchData(false);
-    }, pollingInterval);
-    return () => clearInterval(interval);
-  }, [pollingActive, selectedRepo, pollingInterval]);
+    let active = true
+    setLoadingSnapshot(true)
 
-  // Fetch selected run logs
-  const fetchLogs = async (issueNumber: number) => {
-    try {
-      const repoParam = selectedRepo ? `&repo=${encodeURIComponent(selectedRepo)}` : '';
-      const res = await fetch(`${API_BASE}/api/runs/${issueNumber}/log?limit=${logsLimit}${repoParam}`);
-      if (!res.ok) {
-        if (res.status === 404) {
-          setLogTail({
-            issue_number: issueNumber,
-            log_path: 'System Path',
-            lines_returned: 0,
-            content: 'Log file not found yet. The agent run might be starting up...'
-          });
-          return;
+    const fetchSnapshot = async () => {
+      try {
+        const response = await fetch(
+          `${API_BASE}/api/scheduling-readiness/${encodeURIComponent(selectedRepo)}`
+        )
+        if (!response.ok) {
+          throw new Error(await detailFromResponse(response) || `HTTP error ${response.status}`)
         }
-        throw new Error(`HTTP error ${res.status}`);
-      }
-      const data = await res.json() as LogTail;
-      setLogTail(data);
-    } catch (err: unknown) {
-      console.error("Error fetching logs:", err);
-      setLogTail({
-        issue_number: issueNumber,
-        log_path: 'Error',
-        lines_returned: 0,
-        content: `Error loading log: ${messageFromError(err)}`
-      });
-    }
-  };
-
-  // Fetch logs whenever selected run or limit changes
-  useEffect(() => {
-    if (previousSelectedRunIssueRef.current !== selectedRunIssue) {
-      previousLogContentRef.current = null;
-      setLogAutoScroll(true);
-      setHasNewPausedLogOutput(false);
-      previousSelectedRunIssueRef.current = selectedRunIssue;
-    }
-
-    if (selectedRunIssue !== null) {
-      fetchLogs(selectedRunIssue);
-    } else {
-      setLogTail(null);
-    }
-  }, [selectedRunIssue, logsLimit]);
-
-  // Polling logs for running states
-  useEffect(() => {
-    if (selectedRunIssue === null || !pollLogsActive) return;
-    
-    // Check if the current selected run is actively running
-    const activeRun = runs.find(r => r.issue_number === selectedRunIssue);
-    const isRunning = activeRun ? activeRun.status === 'running' : false;
-    
-    if (!isRunning && !pollLogsActive) return;
-
-    const interval = setInterval(() => {
-      fetchLogs(selectedRunIssue);
-    }, 2000); // Poll logs faster
-
-    return () => clearInterval(interval);
-  }, [selectedRunIssue, pollLogsActive, runs]);
-
-  const scrollLogToBottom = () => {
-    const viewport = terminalViewportRef.current;
-    if (!viewport) return;
-
-    viewport.scrollTop = viewport.scrollHeight;
-  };
-
-  const highlightMatches = (text: string, query: string): ReactNode[] => {
-    if (!query.trim()) return [text];
-    const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const parts = text.split(new RegExp(`(${escaped})`, 'gi'));
-    return parts.map((part, i) =>
-      part.toLowerCase() === query.toLowerCase()
-        ? <mark key={i} className="log-highlight">{part}</mark>
-        : part
-    );
-  };
-
-  const jumpToLatestLogOutput = () => {
-    setLogAutoScroll(true);
-    setHasNewPausedLogOutput(false);
-    scrollLogToBottom();
-  };
-
-  const handleLogScroll = () => {
-    const viewport = terminalViewportRef.current;
-    if (!viewport) return;
-
-    const nearBottom = isNearBottom(viewport);
-    setLogAutoScroll(nearBottom);
-    if (nearBottom) {
-      setHasNewPausedLogOutput(false);
-    }
-  };
-
-  const exportLoadedLogTail = () => {
-    if (!logTail) return;
-
-    const blob = new Blob([logTail.content], { type: 'text/plain;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `implementation-issue-${logTail.issue_number}-log-tail.txt`;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    URL.revokeObjectURL(url);
-  };
-
-  // Scroll terminal to bottom without moving the page.
-  useEffect(() => {
-    if (!logTail) {
-      previousLogContentRef.current = null;
-      return;
-    }
-
-    const previousLogContent = previousLogContentRef.current;
-    const hasNewContent = previousLogContent !== null && previousLogContent !== logTail.content;
-    previousLogContentRef.current = logTail.content;
-
-    if (logAutoScrollActiveRef.current) {
-      scrollLogToBottom();
-      setHasNewPausedLogOutput(false);
-      return;
-    }
-
-    if (hasNewContent) {
-      setHasNewPausedLogOutput(true);
-    }
-  }, [logTail]);
-
-  const togglePrdExpand = (prdNumber: number) => {
-    setExpandedPrds(prev => ({
-      ...prev,
-      [prdNumber]: !prev[prdNumber]
-    }));
-  };
-
-  const preparePrdIssue = async (issueNumber: number) => {
-    if (!selectedRepo) return;
-
-    setPreparePrdState(prev => ({
-      ...prev,
-      [issueNumber]: {
-        status: 'loading',
-        message: 'Preparing PRD Issue...'
-      }
-    }));
-
-    try {
-      const res = await fetch(
-        `${API_BASE}/dashboard/repos/${encodeURIComponent(selectedRepo)}/prd-issues/${issueNumber}/prepare`,
-        { method: 'POST' }
-      );
-      if (!res.ok) {
-        throw new Error(await detailFromResponse(res) || `HTTP error ${res.status}`);
-      }
-      const data = await res.json() as PrdPreparationResponse;
-      setPreparePrdState(prev => ({
-        ...prev,
-        [issueNumber]: {
-          status: 'succeeded',
-          message: `Prepared PRD #${issueNumber}${data.prd_branch ? ` on ${data.prd_branch}` : ''}.`
+        const data = (await response.json()) as SchedulingReadinessSnapshot
+        if (!active) return
+        setSnapshot(data)
+        setError(null)
+      } catch (err: unknown) {
+        if (!active) return
+        setSnapshot(null)
+        setError(`Failed to load Scheduling Readiness: ${messageFromError(err)}`)
+      } finally {
+        if (active) {
+          setLoadingSnapshot(false)
         }
-      }));
-      await fetchData(false);
-    } catch (err: unknown) {
-      if (err instanceof TypeError) {
-        setPreparePrdState(prev => {
-          const next = { ...prev };
-          delete next[issueNumber];
-          return next;
-        });
-        setError(`Failed to connect to backend: ${err.message}`);
-        return;
       }
-      const message = messageFromError(err);
-      setPreparePrdState(prev => ({
-        ...prev,
-        [issueNumber]: {
-          status: 'failed',
-          message: message || 'PRD preparation failed.'
-        }
-      }));
-    }
-  };
-
-  const integrateImplementationIssue = async (issueNumber: number) => {
-    if (!selectedRepo) return;
-
-    setIntegrateIssueState(prev => ({
-      ...prev,
-      [issueNumber]: {
-        status: 'loading',
-        message: 'Integrating Implementation Issue...'
-      }
-    }));
-
-    try {
-      const res = await fetch(
-        `${API_BASE}/dashboard/repos/${encodeURIComponent(selectedRepo)}/implementation-issues/${issueNumber}/integrate`,
-        { method: 'POST' }
-      );
-      if (!res.ok) {
-        throw new Error(await detailFromResponse(res) || `HTTP error ${res.status}`);
-      }
-      const data = await res.json() as ImplementationIntegrationResponse;
-      setIntegrateIssueState(prev => ({
-        ...prev,
-        [issueNumber]: {
-          status: 'succeeded',
-          message: `Integrated Implementation Issue #${issueNumber}${data.prd_branch ? ` into ${data.prd_branch}` : ''}.`
-        }
-      }));
-      await fetchData(false);
-    } catch (err: unknown) {
-      if (err instanceof TypeError) {
-        setIntegrateIssueState(prev => {
-          const next = { ...prev };
-          delete next[issueNumber];
-          return next;
-        });
-        setError(`Failed to connect to backend: ${err.message}`);
-        return;
-      }
-      const message = messageFromError(err);
-      setIntegrateIssueState(prev => ({
-        ...prev,
-        [issueNumber]: {
-          status: 'failed',
-          message: message || 'Implementation Issue integration failed.'
-        }
-      }));
-    }
-  };
-
-  const claimImplementationIssue = async (issueNumber: number) => {
-    if (!selectedRepo) return;
-
-    const agentRunId = (claimAgentRunIds[issueNumber] || '').trim();
-    if (!agentRunId) {
-      setClaimIssueState(prev => ({
-        ...prev,
-        [issueNumber]: {
-          status: 'failed',
-          message: 'Agent Run identifier is required.'
-        }
-      }));
-      return;
     }
 
-    setClaimIssueState(prev => ({
-      ...prev,
-      [issueNumber]: {
-        status: 'loading',
-        message: 'Claiming Implementation Issue...'
-      }
-    }));
+    void fetchSnapshot()
 
-    try {
-      const res = await fetch(
-        `${API_BASE}/dashboard/repos/${encodeURIComponent(selectedRepo)}/implementation-issues/${issueNumber}/claim`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ agent_run_id: agentRunId })
-        }
-      );
-      if (!res.ok) {
-        throw new Error(await detailFromResponse(res) || `HTTP error ${res.status}`);
-      }
-      const data = await res.json() as ImplementationClaimResponse;
-      const claimedAgentRunId = data.agent_run_id || agentRunId;
-      setClaimIssueState(prev => ({
-        ...prev,
-        [issueNumber]: {
-          status: 'succeeded',
-          message: `Claimed Implementation Issue #${issueNumber} with ${claimedAgentRunId}.`
-        }
-      }));
-      setClaimFormIssue(null);
-      await fetchData(false);
-    } catch (err: unknown) {
-      if (err instanceof TypeError) {
-        setClaimIssueState(prev => {
-          const next = { ...prev };
-          delete next[issueNumber];
-          return next;
-        });
-        setError(`Failed to connect to backend: ${err.message}`);
-        return;
-      }
-      const message = messageFromError(err);
-      setClaimIssueState(prev => ({
-        ...prev,
-        [issueNumber]: {
-          status: 'failed',
-          message: message || 'Implementation Issue claim failed.'
-        }
-      }));
+    return () => {
+      active = false
     }
-  };
+  }, [selectedRepo])
 
-  const openClaimForm = (issueNumber: number) => {
-    setClaimFormIssue(issueNumber);
-    setClaimAgentRunIds(prev => ({
-      ...prev,
-      [issueNumber]: prev[issueNumber] || buildAgentRunId(issueNumber)
-    }));
-  };
+  const summary = snapshot?.snapshot.implementation_issue_state.summary
+  const implementationIssueState = snapshot?.snapshot.implementation_issue_state
+  const readinessChecks = snapshot?.snapshot.readiness_checks
+  const criticalFailures = readinessChecks?.critical_failures ?? []
+  const warnings = readinessChecks?.warnings ?? []
 
-  const startImplementationIssue = async (issueNumber: number) => {
-    if (!selectedRepo) return;
-
-    setStartIssueState(prev => ({
-      ...prev,
-      [issueNumber]: {
-        status: 'loading',
-        message: 'Starting Agent Run...'
-      }
-    }));
-
-    try {
-      const res = await fetch(
-        `${API_BASE}/dashboard/repos/${encodeURIComponent(selectedRepo)}/implementation-issues/${issueNumber}/start`,
-        { method: 'POST' }
-      );
-      if (!res.ok) {
-        throw new Error(await detailFromResponse(res) || `HTTP error ${res.status}`);
-      }
-      const data = await res.json() as ImplementationStartResponse;
-      const startedAgentRunId = data.agent_run_id;
-      setStartIssueState(prev => ({
-        ...prev,
-        [issueNumber]: {
-          status: 'succeeded',
-          message: startedAgentRunId
-            ? `Started Agent Run ${startedAgentRunId} for Implementation Issue #${issueNumber}.`
-            : `Started Agent Run for Implementation Issue #${issueNumber}.`
-        }
-      }));
-      await fetchData(false);
-      setSelectedRunIssue(issueNumber);
-    } catch (err: unknown) {
-      if (err instanceof TypeError) {
-        setStartIssueState(prev => {
-          const next = { ...prev };
-          delete next[issueNumber];
-          return next;
-        });
-        setError(`Failed to connect to backend: ${err.message}`);
-        return;
-      }
-      const message = messageFromError(err);
-      setStartIssueState(prev => ({
-        ...prev,
-        [issueNumber]: {
-          status: 'failed',
-          message: message || 'Implementation Issue start failed.'
-        }
-      }));
-    }
-  };
-
-  const getStatusBadge = (status?: string) => {
-    const defaultClasses = "font-mono font-semibold uppercase tracking-wider text-[10px] px-2 py-0.5 rounded border";
-    switch (status) {
-      case 'closed':
-      case 'succeeded':
-        return <Badge className={`${defaultClasses} bg-emerald-950/40 text-emerald-400 border-emerald-800`}>SUCCEEDED</Badge>;
-      case 'running':
-        return <Badge className={`${defaultClasses} bg-amber-950/40 text-amber-400 border-amber-800 animate-pulse`}>RUNNING</Badge>;
-      case 'failed':
-        return <Badge className={`${defaultClasses} bg-red-950/40 text-red-400 border-red-800`}>FAILED</Badge>;
-      case 'blocked':
-        return <Badge className={`${defaultClasses} bg-orange-950/40 text-orange-400 border-orange-800`}>BLOCKED</Badge>;
-      case 'ready':
-        return <Badge className={`${defaultClasses} bg-blue-950/40 text-blue-400 border-blue-800`}>READY</Badge>;
-      case 'claimed':
-        return <Badge className={`${defaultClasses} bg-cyan-950/40 text-cyan-400 border-cyan-800`}>CLAIMED</Badge>;
-      case 'unready':
-        return <Badge className={`${defaultClasses} bg-zinc-900 text-zinc-400 border-zinc-700`}>UNREADY</Badge>;
-      default:
-        return <Badge className={`${defaultClasses} bg-zinc-900 text-zinc-400 border-zinc-700`}>{status || 'UNKNOWN'}</Badge>;
-    }
-  };
-
-  const formatDate = (dateStr?: string | null) => {
-    if (!dateStr) return 'N/A';
-    try {
-      const d = new Date(dateStr);
-      return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) + ' ' + d.toLocaleDateString([], { month: 'short', day: 'numeric' });
-    } catch {
-      return dateStr;
-    }
-  };
-
-  // Filter issues based on UI controls
-  const prdIssues = issues.filter(i => i.kind === 'prd');
-  const filteredPrds = prdIssues.filter(prd => {
-    const matchesSearch = prd.title.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                          prd.number.toString().includes(searchTerm);
-    if (!matchesSearch) return false;
-
-    if (filterStatus === 'all') return true;
-    
-    // Check if any child matches the filter status
-    const children = prd.children || [];
-    return children.some(c => c.status === filterStatus);
-  });
-
-  const getActiveRunsCount = () => runs.filter(r => r.status === 'running').length;
-  const getFailedRunsCount = () => runs.filter(r => r.status === 'failed').length;
-  const getReadyIssuesCount = () => issues.filter(i => i.kind === 'implementation' && i.status === 'ready').length;
+  const openIssueDrawer = (
+    item: SchedulingReadinessSnapshot['snapshot']['implementation_issue_state']['groups'][number]['items'][number],
+    group: SchedulingReadinessSnapshot['snapshot']['implementation_issue_state']['groups'][number]
+  ) => {
+    setSelectedIssue({
+      number: item.issue_number,
+      title: item.title,
+      labels: [],
+      state: 'open',
+      kind: 'implementation',
+      parent_prd_number: group.parent_prd.issue_number,
+      blocked_by: item.blocked_by ?? [],
+      active_blockers: item.active_blockers ?? [],
+      status: item.status as DrawerIssue['status'],
+      timeline: item.timeline,
+      agent_run_id: item.timeline?.run?.agent_run_id ?? null,
+      claimed_at: item.timeline?.claim?.claimed_at ?? null,
+      failure_reason: item.timeline?.run?.failure_reason ?? null,
+      started_at: item.timeline?.run?.started_at ?? null,
+      finished_at: item.timeline?.run?.finished_at ?? null,
+      implementation_branch: item.timeline?.claim?.implementation_branch ?? undefined,
+      prd_branch: group.parent_prd.prepared ? `prd/${group.parent_prd.issue_number}` : undefined,
+    })
+    setDrawerOpen(true)
+  }
 
   return (
-    <div className="dashboard-shell relative min-h-screen text-[#d4d4d8] flex flex-col antialiased">
-      {/* Top Banner Status Bar */}
-      <header className="dashboard-glass-panel border-b px-6 py-4 flex flex-col md:flex-row md:items-center md:justify-between gap-4 sticky top-0 z-50">
-        <div className="flex items-center gap-3">
-          <div className="dashboard-glass-surface size-8 rounded border flex items-center justify-center text-emerald-400 font-bold">
-            B
-          </div>
-          <div>
-            <h1 className="text-sm font-bold text-white tracking-widest uppercase flex items-center gap-2">
-              Bersama <span className="text-zinc-600">//</span> Agent Orchestration
-            </h1>
-            <p className="text-[10px] text-zinc-500 tracking-tight">Standalone Scaffold Dashboard</p>
-          </div>
-        </div>
-
-        {/* Global Statistics Panel */}
-        <div className="flex flex-wrap items-center gap-4 text-xs">
-          {/* Active Repo Selector */}
-          {repos.length > 0 && (
-            <div className="dashboard-glass-surface flex items-center gap-2 border rounded px-2 py-1">
-              <Database className="size-3 text-zinc-500" />
-              <span className="text-[11px] text-zinc-400">REPO:</span>
-              <select 
-                value={selectedRepo} 
-                onChange={(e) => setSelectedRepo(e.target.value)}
-                className="dashboard-focus bg-transparent text-white focus:outline-none text-[11px] font-bold cursor-pointer pr-1 rounded"
-              >
-                {repos.map(r => (
-                  <option key={r.name} value={r.name} className="bg-zinc-950 text-white">{r.name}</option>
-                ))}
-              </select>
-            </div>
-          )}
-
-          {/* Quick Metrics */}
-          <div className="dashboard-glass-surface flex items-center gap-3 border rounded px-3 py-1 text-[11px]">
-            <div className="flex items-center gap-1.5 border-r border-zinc-800 pr-3">
-              <span className="size-1.5 rounded-full bg-amber-500 animate-pulse"></span>
-              <span className="text-zinc-400">ACTIVE RUNS:</span>
-              <span className="text-white font-bold">{getActiveRunsCount()}</span>
-            </div>
-            <div className="flex items-center gap-1.5 border-r border-zinc-800 pr-3">
-              <span className="size-1.5 rounded-full bg-blue-500"></span>
-              <span className="text-zinc-400">READY ISSUES:</span>
-              <span className="text-white font-bold">{getReadyIssuesCount()}</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span className="size-1.5 rounded-full bg-red-500"></span>
-              <span className="text-zinc-400">FAILED RUNS:</span>
-              <span className="text-white font-bold">{getFailedRunsCount()}</span>
-            </div>
+    <div className="dashboard-shell">
+      <div className="dashboard-backdrop" />
+      <main className="dashboard-layout">
+        <header className="hero-panel">
+          <div className="hero-copy">
+            <p className="eyebrow">Bersama</p>
+            <h1>Scheduling Readiness</h1>
+            <p className="hero-description">
+              Read-only landing view for repo snapshot metadata and empty-state readiness structure.
+            </p>
           </div>
 
-          {/* Refresh / Polling controls */}
-          <div className="dashboard-glass-surface flex items-center gap-2 border rounded px-2 py-1">
-            <button 
-              onClick={() => fetchData(true)} 
-              disabled={refreshing}
-              className="dashboard-focus rounded text-zinc-400 hover:text-white transition disabled:opacity-50"
-              title="Manual Sync"
+          <label className="repo-picker">
+            <span>REPO:</span>
+            <select
+              aria-label="Repo"
+              value={selectedRepo}
+              onChange={(event) => setSelectedRepo(event.target.value)}
+              disabled={loadingRepos || repos.length === 0}
             >
-              <RefreshCw className={`size-3.5 ${refreshing ? 'animate-spin' : ''}`} />
-            </button>
-            <span className="text-[10px] text-zinc-600">|</span>
-            <button
-              onClick={() => setPollingActive(!pollingActive)}
-              className="dashboard-focus rounded flex items-center gap-1 hover:text-white transition"
-            >
-              {pollingActive ? (
-                <>
-                  <Pause className="size-3 text-emerald-400" />
-                  <span className="text-[10px] text-zinc-400">AUTO SYNC ON</span>
-                </>
-              ) : (
-                <>
-                  <Play className="size-3 text-zinc-500" />
-                  <span className="text-[10px] text-zinc-500">AUTO SYNC OFF</span>
-                </>
-              )}
-            </button>
-          </div>
-        </div>
-      </header>
+              {repos.map((repo) => (
+                <option key={repo.name} value={repo.name}>
+                  {repo.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        </header>
 
-      {/* Connection Failure banner */}
-      {error && (
-        <div className="bg-red-950/50 border-b border-red-900 text-red-300 px-6 py-2.5 flex items-center gap-3 text-xs font-mono">
-          <AlertCircle className="size-4 shrink-0 text-red-400" />
-          <div className="grow">
-            <strong>SYSTEM FAULT:</strong> {error}
-          </div>
-          <button 
-            onClick={() => { fetchRepos(); if(selectedRepo) fetchData(true); }}
-            className="dashboard-focus px-2.5 py-1 bg-red-900/60 hover:bg-red-800 rounded border border-red-700 text-red-200 uppercase tracking-wider text-[10px]"
-          >
-            Retry Connection
-          </button>
-        </div>
-      )}
+        {error ? (
+          <section className="error-panel" role="alert">
+            <AlertCircle className="panel-icon" />
+            <div>
+              <h2>Snapshot unavailable</h2>
+              <p>{error}</p>
+            </div>
+          </section>
+        ) : null}
 
-      {/* Main Content Layout */}
-      <main className="grow p-6 grid grid-cols-1 xl:grid-cols-3 gap-6 overflow-hidden">
-        
-        {/* LEFT COLUMN: RUNS & LOCAL LOGS */}
-        <section className="xl:col-span-1 flex flex-col gap-6 h-full min-h-[500px]">
-          
-          {/* Agent Runs List Panel */}
-          <Card className="dashboard-glass-panel flex flex-col grow shrink overflow-hidden max-h-[380px]">
-            <CardHeader className="py-3.5 border-b border-zinc-800 px-4 flex flex-row items-center justify-between">
+        <section className="panel-grid" aria-busy={loadingRepos || loadingSnapshot}>
+          <article className="info-panel">
+            <div className="panel-heading">
+              <Clock3 className="panel-icon" />
               <div>
-                <CardTitle className="text-xs tracking-wider font-bold uppercase text-white flex items-center gap-2">
-                  <Layers className="size-3.5 text-zinc-500" />
-                  Recent Agent Runs
-                </CardTitle>
-                <CardDescription className="text-[10px] text-zinc-500">Agent execution history</CardDescription>
+                <h2>Observed At</h2>
+                <p>{snapshot ? formatObservedAt(snapshot.snapshot.observed_at) : 'Loading snapshot...'}</p>
               </div>
-              <Badge variant="outline" className="font-mono text-[9px] border-zinc-800 text-zinc-400">
-                {runs.length} Runs
-              </Badge>
-            </CardHeader>
-            <CardContent className="p-0 grow overflow-hidden">
-              {loading ? (
-                <div className="h-full flex items-center justify-center p-6">
-                  <ShimmerText lines={3} className="w-full max-w-[200px]" />
-                </div>
-              ) : runs.length === 0 ? (
-                <div className="h-full flex flex-col items-center justify-center p-8 text-center">
-                  <Server className="size-6 text-zinc-700 mb-2" />
-                  <p className="text-xs text-zinc-500">No active worktrees or runs registered</p>
-                  <p className="text-[9px] text-zinc-600 mt-1 max-w-[200px]">Runs are initialized when implementation issues are claimed.</p>
-                </div>
-              ) : (
-                <ScrollArea className="h-[280px]">
-                  <div className="divide-y divide-zinc-900">
-                    {[...runs].reverse().map((run) => {
-                      const isSelected = selectedRunIssue === run.issue_number;
-                      return (
-                        <div 
-                          key={run.issue_number}
-                          onClick={() => setSelectedRunIssue(isSelected ? null : run.issue_number)}
-                          role="button"
-                          tabIndex={0}
-                          aria-pressed={isSelected}
-                          aria-label={`${isSelected ? 'Hide' : 'Show'} log for Agent Run issue #${run.issue_number}`}
-                          onKeyDown={(event) => {
-                            if (event.key === 'Enter' || event.key === ' ') {
-                              event.preventDefault();
-                              setSelectedRunIssue(isSelected ? null : run.issue_number);
-                            }
-                          }}
-                          className={`dashboard-row p-3 font-mono cursor-pointer flex flex-col gap-2 ${
-                            isSelected 
-                              ? 'bg-zinc-900/80 border-l-2 border-teal-300'
-                              : 'bg-transparent border-l-2 border-transparent'
-                          }`}
-                        >
-                          <div className="flex items-start justify-between">
-                            <span className="text-xs font-bold text-white">
-                              ISSUE #{run.issue_number}
-                            </span>
-                            {getStatusBadge(run.status)}
-                          </div>
-                          
-                          <div className="flex items-center gap-1.5 text-[10px] text-zinc-500">
-                            <GitBranch className="size-3 shrink-0 text-zinc-600" />
-                            <span className="truncate max-w-[240px]" title={run.implementation_branch}>
-                              {run.implementation_branch}
-                            </span>
-                          </div>
+            </div>
 
-                          <div className="flex items-center justify-between text-[9px] text-zinc-500">
-                            <div className="flex items-center gap-1">
-                              <Clock className="size-2.5 text-zinc-600" />
-                              <span>{formatDate(run.started_at)}</span>
-                            </div>
-                            {run.finished_at && (
-                              <span className="text-zinc-600">
-                                elapsed: {Math.round((new Date(run.finished_at).getTime() - new Date(run.started_at).getTime()) / 1000)}s
-                              </span>
-                            )}
-                          </div>
+            <dl className="metadata-list">
+              <div>
+                <dt>Repo Path</dt>
+                <dd>{snapshot?.repo.path ?? 'Loading...'}</dd>
+              </div>
+              <div>
+                <dt>Main Branch</dt>
+                <dd>{snapshot?.repo.main_branch ?? 'Loading...'}</dd>
+              </div>
+              <div>
+                <dt>Worktree Root</dt>
+                <dd>{snapshot?.repo.worktree_root ?? 'Loading...'}</dd>
+              </div>
+            </dl>
+          </article>
 
-                          {run.failure_reason && (
-                            <div className="bg-red-950/20 border border-red-950 rounded p-1.5 text-[9.5px] text-red-400 font-mono mt-1 whitespace-pre-wrap max-h-16 overflow-y-auto">
-                              <strong>Fail Reason:</strong> {run.failure_reason}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </ScrollArea>
-              )}
-            </CardContent>
-          </Card>
+          <article className="info-panel">
+            <div className="panel-heading">
+              <TerminalSquare className="panel-icon" />
+              <div>
+                <h2>Harness Summary</h2>
+                <p>Compact provenance only. Full prompts and templates stay hidden.</p>
+              </div>
+            </div>
 
-          {/* Local Log Tails Console */}
-          <Card className="dashboard-glass-panel flex flex-col grow shrink overflow-hidden min-h-[220px]">
-            <CardHeader className="py-2.5 border-b border-zinc-800/80 px-4 flex flex-row items-center justify-between bg-black select-none gap-4">
-              <div className="flex items-center gap-3">
-                {/* macOS Window Controls */}
-                <div className="flex items-center gap-1.5 mr-1">
-                  <span className="size-2.5 rounded-full bg-[#ef4444]/90 hover:bg-[#ef4444] transition-colors cursor-pointer" title="Close" />
-                  <span className="size-2.5 rounded-full bg-[#f59e0b]/90 hover:bg-[#f59e0b] transition-colors cursor-pointer" title="Minimize" />
-                  <span className="size-2.5 rounded-full bg-[#10b981]/90 hover:bg-[#10b981] transition-colors cursor-pointer" title="Maximize" />
-                </div>
-                
-                <span className="text-zinc-850 font-mono text-sm">/</span>
+            <dl className="metadata-list">
+              <div>
+                <dt>Default Harness</dt>
+                <dd>{snapshot?.snapshot.harness_summary.default_harness ?? 'Loading...'}</dd>
+              </div>
+              <div>
+                <dt>Harness Timeout</dt>
+                <dd>{snapshot ? formatTimeout(snapshot.snapshot.harness_summary.timeout_seconds) : 'Loading...'}</dd>
+              </div>
+              <div>
+                <dt>Config Provenance</dt>
+                <dd>{snapshot?.snapshot.config_provenance.source ?? 'Loading...'}</dd>
+              </div>
+            </dl>
+          </article>
 
-                {/* Tab Container */}
-                <div className="flex items-center gap-2 bg-black border border-zinc-900 px-3 py-1 rounded text-[11px] font-mono text-zinc-300 shadow-inner">
-                  <Terminal className="size-3.5 text-emerald-400" />
-                  <span className="font-semibold tracking-tight">harness.log</span>
-                  {selectedRunIssue && (
-                    <span className="text-[9px] bg-emerald-950/60 border border-emerald-900/60 text-emerald-400 px-1 rounded-sm uppercase font-bold">
-                      #{selectedRunIssue}
-                    </span>
+          <article className="info-panel">
+            <div className="panel-heading">
+              <ShieldCheck className="panel-icon" />
+              <div>
+                <h2>Readiness Checks</h2>
+                <p>Read-only repository diagnostics for scheduling readiness.</p>
+              </div>
+            </div>
+
+            {!snapshot || (criticalFailures.length === 0 && warnings.length === 0) ? (
+              <p className="empty-state">No readiness checks yet.</p>
+            ) : (
+              <div className="readiness-groups">
+                <div>
+                  <h3>Critical readiness failures</h3>
+                  {criticalFailures.length > 0 ? (
+                    <ul className="empty-list">
+                      {criticalFailures.map((check, index) => (
+                        <li key={`critical-${index}`}>
+                          <strong>{check.message}</strong>
+                          <span>{check.remediation}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="empty-state">No critical readiness failures.</p>
                   )}
                 </div>
-
-                {/* Status / Description */}
-                <span className="hidden md:inline text-[10px] text-zinc-500 font-mono font-medium tracking-tight">
-                  {selectedRunIssue ? `Tailing active runner for Issue #${selectedRunIssue}` : 'Idle — No active run selected'}
-                </span>
-              </div>
-              {selectedRunIssue !== null && (
-                <div className="flex items-center gap-2 text-[10px] font-mono">
-                  {/* Log search */}
-                  <input
-                    type="text"
-                    placeholder="Search log…"
-                    aria-label="Search log content"
-                    value={logSearchQuery}
-                    onChange={(e) => setLogSearchQuery(e.target.value)}
-                    className="dashboard-control w-[120px] text-zinc-300 rounded px-1.5 py-0.5 focus:outline-none placeholder-zinc-700 text-[10px]"
-                  />
-
-                  <span className="text-zinc-800">|</span>
-
-                  {/* Lines Limit */}
-                  <select 
-                    aria-label="Log tail limit"
-                    value={logsLimit} 
-                    onChange={(e) => setLogsLimit(Number(e.target.value))}
-                    className="dashboard-control text-zinc-400 rounded px-1.5 py-0.5 focus:outline-none"
-                  >
-                    <option value={20}>20 lines</option>
-                    <option value={50}>50 lines</option>
-                    <option value={100}>100 lines</option>
-                    <option value={300}>300 lines</option>
-                  </select>
-
-                  <span className="text-zinc-800">|</span>
-
-                  {/* Polling Switch */}
-                  <button
-                    onClick={() => setPollLogsActive(!pollLogsActive)}
-                    className={`dashboard-control px-1.5 py-0.5 rounded border font-semibold tracking-wider text-[9px] flex items-center gap-1.5 ${
-                      pollLogsActive 
-                        ? 'bg-emerald-950/40 text-emerald-400 border-emerald-900' 
-                        : 'bg-black text-zinc-500'
-                    }`}
-                  >
-                    {pollLogsActive && (
-                      <span
-                        title="Streaming active"
-                        className="stream-indicator"
-                        aria-label="Streaming active"
-                      />
-                    )}
-                    {pollLogsActive ? 'STREAM ON' : 'STREAM OFF'}
-                  </button>
-
-                  {logTail && (
-                    <Button
-                      type="button"
-                      size="icon-xs"
-                      variant="outline"
-                      onClick={exportLoadedLogTail}
-                      aria-label={`Export loaded tail for Implementation Issue #${logTail.issue_number}`}
-                      title="Export loaded tail"
-                      className="dashboard-control text-zinc-400 hover:text-white"
-                    >
-                      <Download data-icon="inline-start" />
-                    </Button>
+                <div>
+                  <h3>Readiness warnings</h3>
+                  {warnings.length > 0 ? (
+                    <ul className="empty-list">
+                      {warnings.map((check, index) => (
+                        <li key={`warning-${index}`}>
+                          <strong>{check.message}</strong>
+                          <span>{check.remediation}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="empty-state">No readiness warnings.</p>
                   )}
                 </div>
-              )}
-            </CardHeader>
-            <CardContent className="p-0 grow bg-black flex flex-col font-mono overflow-hidden">
-              {selectedRunIssue === null ? (
-                <div className="grow flex flex-col items-center justify-center p-6 text-zinc-600 text-center font-mono">
-                  <Terminal className="size-8 text-zinc-800 mb-2" />
-                  <p className="text-xs">Console is offline.</p>
-                  <p className="text-[9px] text-zinc-700 mt-1">Pick a claimed/active run from the list to display active logs.</p>
-                </div>
-              ) : !logTail ? (
-                <div className="grow flex items-center justify-center p-6">
-                  <ShimmerText lines={2} className="w-full max-w-[180px]" />
-                </div>
-              ) : (
-                <div className="grow flex flex-col overflow-hidden text-[10px]">
-                  <div className="bg-black px-4 py-1.5 border-b border-zinc-900 text-zinc-500 text-[9px] flex items-center justify-between shrink-0 font-mono">
-                    <span className="truncate pr-4">PATH: {logTail.log_path}</span>
-                    <span className="shrink-0">{logTail.lines_returned} lines</span>
-                  </div>
-                  
-                  <div
-                    ref={terminalViewportRef}
-                    role="log"
-                    aria-label={`Issue #${logTail.issue_number} harness log tail`}
-                    aria-live="polite"
-                    onScroll={handleLogScroll}
-                    className="terminal-scrollbar dashboard-focus relative grow p-4 bg-black overflow-y-auto"
-                  >
-                    <div className="space-y-1 font-mono text-zinc-300 whitespace-pre-wrap leading-relaxed select-text">
-                      {logTail.content ? (
-                        logTail.content.split('\n').map((line, idx) => (
-                          <div key={idx} className="table-row">
-                            <span className="table-cell text-zinc-700 select-none pr-3 text-right w-8">{idx + 1}</span>
-                            <span className="table-cell text-[#f4f4f5]">{highlightMatches(line, logSearchQuery)}</span>
-                          </div>
-                        ))
-                      ) : (
-                        <div className="text-zinc-600 text-center py-4">
-                          Log is empty. No outputs written by harness.
-                        </div>
-                      )}
-                    </div>
-                    {hasNewPausedLogOutput && (
-                      <Button
-                        type="button"
-                        size="xs"
-                        variant="outline"
-                        onClick={jumpToLatestLogOutput}
-                        aria-label="Jump to latest log output"
-                        className="dashboard-control sticky bottom-2 ml-auto text-zinc-100 font-mono text-[9px] uppercase tracking-wider"
-                      >
-                        <ArrowDown data-icon="inline-start" />
-                        Latest output
-                      </Button>
-                    )}
-                  </div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </section>
+              </div>
+            )}
+          </article>
 
-        {/* RIGHT COLUMN: PRDS & CHILD IMPLEMENTATION ISSUES */}
-        <section className="xl:col-span-2 flex flex-col gap-6 h-full overflow-hidden">
-          <Card className="dashboard-glass-panel flex flex-col grow h-full overflow-hidden">
-            {/* Header Controls for filtering */}
-            <CardHeader className="py-4 border-b border-zinc-800 px-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <article className="info-panel">
+            <div className="panel-heading">
+              <GitBranch className="panel-icon" />
               <div>
-                <CardTitle className="text-sm text-white flex items-center gap-2 uppercase tracking-wider">
-                  <Database className="size-4 text-zinc-500" />
-                  Product Roadmap & Implementation Lifecycle
-                </CardTitle>
-                <CardDescription className="text-xs text-zinc-500">
-                  PRD issues hierarchy derived from GitHub Issues state
-                </CardDescription>
+                <h2>Implementation Issue State</h2>
+                <p>Observed open Implementation Issues grouped by Parent PRD.</p>
               </div>
+            </div>
 
-              {/* Filtering / Search Controls */}
-              <div className="flex items-center gap-2 text-xs">
-                {/* Search */}
-                <input 
-                  type="text" 
-                  placeholder="SEARCH ISSUE..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="dashboard-control text-zinc-300 rounded px-2.5 py-1.5 focus:outline-none placeholder-zinc-700 w-[140px] text-xs"
-                />
+            <div className="summary-strip">
+              <span>Agent Run Capacity {implementationIssueState?.agent_run_capacity.used ?? 0} / {implementationIssueState?.agent_run_capacity.total ?? 0}</span>
+              <span>Ready {summary?.ready ?? 0}</span>
+              <span>Blocked {summary?.blocked ?? 0}</span>
+              <span>Claimed {summary?.claimed ?? 0}</span>
+              <span>Running {summary?.running ?? 0}</span>
+              <span>Failed {summary?.failed ?? 0}</span>
+              <span>Succeeded {summary?.succeeded ?? 0}</span>
+            </div>
 
-                {/* Filter */}
-                <div className="dashboard-control flex items-center gap-1.5 border rounded px-2 py-1">
-                  <ListFilter className="size-3 text-zinc-500" />
-                  <select
-                    value={filterStatus}
-                    onChange={(e) => setFilterStatus(e.target.value)}
-                    className="dashboard-focus bg-transparent text-zinc-300 focus:outline-none cursor-pointer text-xs font-semibold pr-1 rounded"
-                  >
-                    <option value="all" className="bg-[#09090b]">ALL STATUS</option>
-                    <option value="ready" className="bg-[#09090b]">READY</option>
-                    <option value="claimed" className="bg-[#09090b]">CLAIMED</option>
-                    <option value="running" className="bg-[#09090b]">RUNNING</option>
-                    <option value="succeeded" className="bg-[#09090b]">SUCCEEDED</option>
-                    <option value="failed" className="bg-[#09090b]">FAILED</option>
-                    <option value="blocked" className="bg-[#09090b]">BLOCKED</option>
-                    <option value="unready" className="bg-[#09090b]">UNREADY</option>
-                  </select>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent className="p-0 grow overflow-hidden">
-              {loading ? (
-                <div className="h-full flex items-center justify-center p-8">
-                  <ShimmerText lines={4} className="w-full max-w-[220px]" />
-                </div>
-              ) : filteredPrds.length === 0 ? (
-                <div className="h-full flex flex-col items-center justify-center p-12 text-center">
-                  <FileText className="size-8 text-zinc-700 mb-2" />
-                  <p className="text-xs text-zinc-500">No PRD Issues found matching search criteria</p>
-                  <p className="text-[10px] text-zinc-600 mt-1 max-w-[340px]">
-                    Configure issue gateways and ensure issues carry labels such as 'prd' or 'implementation'.
-                  </p>
-                </div>
-              ) : (
-                <ScrollArea className="h-[600px] px-6 py-4">
-                  <div className="space-y-6">
-                    {filteredPrds.map((prd) => {
-                      const isExpanded = expandedPrds[prd.number];
-                      const children = prd.children || [];
-                      const canPreparePrd = prd.state === 'open' && !prd.prd_branch;
-                      const prepareState = preparePrdState[prd.number];
-                      const isPreparingPrd = prepareState?.status === 'loading';
-                      
-                      return (
-                        <div 
-                          key={prd.number}
-                          className="dashboard-glass-surface border rounded overflow-hidden transition-all duration-200 hover:border-zinc-600"
-                        >
-                          {/* PRD Main Bar */}
-                          <div 
-                            onClick={() => togglePrdExpand(prd.number)}
-                            className="dashboard-row bg-[#0d0d0f]/80 px-4 py-3.5 cursor-pointer flex items-center justify-between border-b border-zinc-800 transition"
+            {snapshot && implementationIssueState && implementationIssueState.groups.length > 0 ? (
+              <div className="readiness-groups">
+                {implementationIssueState.groups.map((group) => (
+                  <div key={group.parent_prd.issue_number}>
+                    <h3>
+                      {group.parent_prd.title} {!group.parent_prd.prepared ? '(Unprepared)' : ''}
+                    </h3>
+                    <ul className="empty-list">
+                      {group.items.map((item) => (
+                        <li key={item.issue_number}>
+                          <button
+                            type="button"
+                            className="issue-row-button"
+                            aria-label={`Open Implementation Issue #${item.issue_number}`}
+                            onClick={() => openIssueDrawer(item, group)}
                           >
-                            <div className="flex items-center gap-3">
-                              <span className="font-mono text-xs font-extrabold text-zinc-400 bg-zinc-900 border border-zinc-800 px-1.5 py-0.5 rounded">
-                                PRD #{prd.number}
-                              </span>
-                              <div>
-                                <h3
-                                  className="text-xs font-bold text-white tracking-wide leading-none mb-1.5 cursor-pointer hover:text-teal-400 transition-colors"
-                                  onClick={(event) => {
-                                    event.stopPropagation();
-                                    setDrawerIssue(prd);
-                                    setDrawerOpen(true);
-                                  }}
-                                >
-                                  {prd.title}
-                                </h3>
-                                {prd.prd_branch && (
-                                  <div className="flex items-center gap-1 text-[9px] text-zinc-500 font-mono">
-                                    <GitBranch className="size-2.5 text-zinc-600" />
-                                    <span>BRANCH: {prd.prd_branch}</span>
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                            
-                            <div className="flex items-center gap-4">
-                              {canPreparePrd && (
-                                <Button
-                                  type="button"
-                                  size="xs"
-                                  variant="outline"
-                                  onClick={(event) => {
-                                    event.stopPropagation();
-                                    preparePrdIssue(prd.number);
-                                  }}
-                                  disabled={isPreparingPrd}
-                                  className="dashboard-control text-[9px] uppercase tracking-wider text-zinc-200"
-                                >
-                                  <GitBranch data-icon="inline-start" className={isPreparingPrd ? 'animate-pulse' : ''} />
-                                  {isPreparingPrd ? 'Preparing' : 'Prepare'} PRD #{prd.number}
-                                </Button>
-                              )}
-                              <Badge variant="outline" className="font-mono text-[9px] border-zinc-800 text-zinc-500 bg-zinc-900 px-2 py-0.5">
-                                {children.length} Slices
-                              </Badge>
-                              {isExpanded ? (
-                                <ChevronDown className="size-4 text-zinc-500" />
-                              ) : (
-                                <ChevronRight className="size-4 text-zinc-500" />
-                              )}
-                            </div>
-                          </div>
-
-                          {prepareState && prepareState.status !== 'loading' && (
-                            <div
-                              className={`px-4 py-2 border-b text-[10px] font-mono ${
-                                prepareState.status === 'succeeded'
-                                  ? 'bg-emerald-950/20 border-emerald-950/60 text-emerald-300'
-                                  : 'bg-red-950/25 border-red-950/70 text-red-300'
-                              }`}
-                              role={prepareState.status === 'failed' ? 'alert' : 'status'}
-                            >
-                              {prepareState.message}
-                            </div>
-                          )}
-
-                          {/* Dependency Pipeline Map */}
-                          {isExpanded && children.length > 0 && (
-                            <DependencyPipeline children={children} />
-                          )}
-
-                          {/* PRD Children (Implementation Issues) */}
-                          {isExpanded && (
-                            <div className="p-4 bg-[#050506] divide-y divide-zinc-900">
-                              {children.length === 0 ? (
-                                <div className="text-center py-4 text-[10px] text-zinc-600">
-                                  No implementation issue slices declared for this PRD.
-                                </div>
-                              ) : (
-                                children.map((c) => {
-                                  const isSelectedLog = selectedRunIssue === c.number;
-                                  const canClaimIssue = c.state !== 'closed' && c.status === 'ready';
-                                  const isClaimFormOpen = claimFormIssue === c.number;
-                                  const claimAgentRunId = claimAgentRunIds[c.number] || '';
-                                  const claimState = claimIssueState[c.number];
-                                  const isClaimingIssue = claimState?.status === 'loading';
-                                  const canIntegrateIssue = c.state !== 'closed' && c.status === 'succeeded';
-                                  const integrateState = integrateIssueState[c.number];
-                                  const isIntegratingIssue = integrateState?.status === 'loading';
-                                  const canStartIssue = c.state !== 'closed' && c.status === 'claimed';
-                                  const startState = startIssueState[c.number];
-                                  const isStartingIssue = startState?.status === 'loading';
-
-                                  return (
-                                    <div 
-                                      key={c.number}
-                                      className={`dashboard-row py-3.5 flex flex-col md:flex-row md:items-start justify-between gap-4 font-mono ${
-                                        isSelectedLog ? 'bg-zinc-900/40 px-2 -mx-2 rounded border border-zinc-800' : ''
-                                      }`}
-                                    >
-                                      {/* Issue Title / Kind */}
-                                      <div className="flex items-start gap-2.5 grow">
-                                        <CornerDownRight className="size-4 text-zinc-700 shrink-0 mt-0.5" />
-                                        <div className="space-y-1.5 max-w-[480px]">
-                                          <div className="flex flex-wrap items-center gap-2">
-                                            <span className="text-[10px] font-bold text-white hover:underline cursor-pointer">
-                                              #{c.number}
-                                            </span>
-                                            <span
-                                              className="text-[11px] text-zinc-300 font-semibold leading-tight font-sans cursor-pointer hover:text-teal-400 transition-colors"
-                                              onClick={() => {
-                                                setDrawerIssue(c);
-                                                setDrawerOpen(true);
-                                              }}
-                                            >
-                                              {c.title}
-                                            </span>
-                                          </div>
-                                          
-                                          {/* Branch & Dates */}
-                                          <div className="flex flex-col gap-1 text-[9.5px] text-zinc-500">
-                                            {c.implementation_branch && (
-                                              <span className="flex items-center gap-1.5">
-                                                <GitBranch className="size-3 text-zinc-700 shrink-0" />
-                                                <span className="truncate max-w-[380px] text-zinc-400">
-                                                  {c.implementation_branch}
-                                                </span>
-                                              </span>
-                                            )}
-                                            
-                                            {c.started_at && (
-                                              <span className="flex items-center gap-1.5">
-                                                <Clock className="size-3 text-zinc-700 shrink-0" />
-                                                <span>
-                                                  Started: {formatDate(c.started_at)}
-                                                  {c.finished_at && ` | Done: ${formatDate(c.finished_at)}`}
-                                                </span>
-                                              </span>
-                                            )}
-                                            {c.claimed_at && (
-                                              <span className="flex items-center gap-1.5">
-                                                <Clock className="size-3 text-zinc-700 shrink-0" />
-                                                <span>
-                                                  Claimed: {formatDate(c.claimed_at)}
-                                                  {c.agent_run_id && ` | ${c.agent_run_id}`}
-                                                </span>
-                                              </span>
-                                            )}
-                                          </div>
-
-                                          {/* Blocking Dependency rail */}
-                                          {c.blocked_by && c.blocked_by.length > 0 && (
-                                            <div
-                                              role="group"
-                                              aria-label={`Blocking Dependency rail for Implementation Issue #${c.number}`}
-                                              className="dashboard-glass-surface flex flex-wrap items-center gap-2 rounded border px-2 py-1.5"
-                                            >
-                                              <span className="text-[9px] text-zinc-500 font-bold uppercase tracking-wider">
-                                                Blocking Dependency
-                                              </span>
-                                              <div className="relative flex flex-wrap items-center gap-1.5 pl-1 before:absolute before:left-1 before:right-1 before:top-1/2 before:h-px before:-translate-y-1/2 before:bg-zinc-800">
-                                                {c.blocked_by.map(num => {
-                                                  const isOpenBlockingDependency = c.active_blockers?.includes(num) ?? false;
-
-                                                  return (
-                                                    <span
-                                                      key={num}
-                                                      aria-label={`${isOpenBlockingDependency ? 'Open' : 'Resolved'} Blocking Dependency #${num}`}
-                                                      className={`relative z-10 inline-flex h-5 items-center gap-1 rounded-full border px-1.5 text-[9px] font-bold uppercase tracking-wider ${
-                                                        isOpenBlockingDependency
-                                                          ? 'border-orange-800 bg-orange-950/60 text-orange-300'
-                                                          : 'border-zinc-800 bg-[#050506] text-zinc-600'
-                                                      }`}
-                                                    >
-                                                      {isOpenBlockingDependency ? (
-                                                        <AlertCircle className="size-2.5" aria-hidden="true" />
-                                                      ) : (
-                                                        <CheckCircle2 className="size-2.5" aria-hidden="true" />
-                                                      )}
-                                                      <span>{isOpenBlockingDependency ? 'Open' : 'Resolved'} #{num}</span>
-                                                    </span>
-                                                  );
-                                                })}
-                                              </div>
-                                            </div>
-                                          )}
-
-                                          {integrateState && integrateState.status !== 'loading' && (
-                                            <div
-                                              className={`rounded border px-2 py-1 text-[9.5px] font-mono ${
-                                                integrateState.status === 'succeeded'
-                                                  ? 'bg-emerald-950/20 border-emerald-950/60 text-emerald-300'
-                                                  : 'bg-red-950/25 border-red-950/70 text-red-300'
-                                              }`}
-                                              role={integrateState.status === 'failed' ? 'alert' : 'status'}
-                                            >
-                                              {integrateState.message}
-                                            </div>
-                                          )}
-
-                                          {startState && startState.status !== 'loading' && (
-                                            <div
-                                              className={`rounded border px-2 py-1 text-[9.5px] font-mono ${
-                                                startState.status === 'succeeded'
-                                                  ? 'bg-emerald-950/20 border-emerald-950/60 text-emerald-300'
-                                                  : 'bg-red-950/25 border-red-950/70 text-red-300'
-                                              }`}
-                                              role={startState.status === 'failed' ? 'alert' : 'status'}
-                                            >
-                                              {startState.message}
-                                            </div>
-                                          )}
-
-                                          {isClaimFormOpen && (
-                                            <form
-                                              className="rounded border border-zinc-900 bg-zinc-950/70 px-2 py-2 flex flex-col gap-2"
-                                              aria-label={`Claim Implementation Issue #${c.number}`}
-                                              onSubmit={(event) => {
-                                                event.preventDefault();
-                                                claimImplementationIssue(c.number);
-                                              }}
-                                            >
-                                              <label
-                                                htmlFor={`claim-agent-run-${c.number}`}
-                                                className="text-[9px] text-zinc-500 font-bold uppercase tracking-wider"
-                                              >
-                                                Agent Run identifier for Implementation Issue #{c.number}
-                                              </label>
-                                              <div className="flex flex-col sm:flex-row gap-2">
-                                                <input
-                                                  id={`claim-agent-run-${c.number}`}
-                                                  value={claimAgentRunId}
-                                                  disabled={isClaimingIssue}
-                                                  onChange={(event) => setClaimAgentRunIds(prev => ({
-                                                    ...prev,
-                                                    [c.number]: event.target.value
-                                                  }))}
-                                                  className="dashboard-control min-w-0 w-full sm:w-[260px] rounded px-2 py-1 text-[10px] text-zinc-200 focus:outline-none font-mono"
-                                                />
-                                                <Button
-                                                  type="submit"
-                                                  size="xs"
-                                                  variant="outline"
-                                                  aria-label={
-                                                    isClaimingIssue
-                                                      ? `Claiming #${c.number}`
-                                                      : `Submit claim for Implementation Issue #${c.number}`
-                                                  }
-                                                  disabled={isClaimingIssue}
-                                                  className="dashboard-control text-[9px] uppercase tracking-wider text-zinc-200"
-                                                >
-                                                  <Send data-icon="inline-start" className={isClaimingIssue ? 'animate-pulse' : ''} />
-                                                  {isClaimingIssue ? 'Claiming' : 'Submit'} #{c.number}
-                                                </Button>
-                                              </div>
-                                            </form>
-                                          )}
-
-                                          {claimState && claimState.status !== 'loading' && (
-                                            <div
-                                              className={`rounded border px-2 py-1 text-[9.5px] font-mono ${
-                                                claimState.status === 'succeeded'
-                                                  ? 'bg-emerald-950/20 border-emerald-950/60 text-emerald-300'
-                                                  : 'bg-red-950/25 border-red-950/70 text-red-300'
-                                              }`}
-                                              role={claimState.status === 'failed' ? 'alert' : 'status'}
-                                            >
-                                              {claimState.message}
-                                            </div>
-                                          )}
-                                        </div>
-                                      </div>
-
-                                      {/* Status / Actions */}
-                                      <div className="flex flex-row md:flex-col items-center md:items-end justify-between md:justify-start gap-2 shrink-0 self-center md:self-start">
-                                        {getStatusBadge(c.status)}
-
-                                        {/* Action: Open logs */}
-                                        {(c.status === 'running' || c.status === 'succeeded' || c.status === 'failed') && (
-                                          <button
-                                            onClick={() => setSelectedRunIssue(isSelectedLog ? null : c.number)}
-                                            className="dashboard-control text-[9.5px] uppercase font-bold tracking-wider px-2 py-0.5 rounded flex items-center gap-1"
-                                          >
-                                            {isSelectedLog ? (
-                                              <>
-                                                <EyeOff className="size-3 text-zinc-500" />
-                                                Hide Log
-                                              </>
-                                            ) : (
-                                              <>
-                                                <Eye className="size-3 text-emerald-400" />
-                                                View Log
-                                              </>
-                                            )}
-                                          </button>
-                                        )}
-
-                                        {canIntegrateIssue && (
-                                          <Button
-                                            type="button"
-                                            size="xs"
-                                            variant="outline"
-                                            onClick={() => integrateImplementationIssue(c.number)}
-                                            disabled={isIntegratingIssue}
-                                            className="dashboard-control text-[9px] uppercase tracking-wider text-zinc-200"
-                                          >
-                                            <GitMerge data-icon="inline-start" className={isIntegratingIssue ? 'animate-pulse' : ''} />
-                                            {isIntegratingIssue ? 'Integrating' : 'Integrate'} #{c.number}
-                                          </Button>
-                                        )}
-
-                                        {canStartIssue && (
-                                          <Button
-                                            type="button"
-                                            size="xs"
-                                            variant="outline"
-                                            aria-label={
-                                              isStartingIssue
-                                                ? `Starting Agent Run for Implementation Issue #${c.number}`
-                                                : `Start Agent Run for Implementation Issue #${c.number}`
-                                            }
-                                            onClick={() => startImplementationIssue(c.number)}
-                                            disabled={isStartingIssue}
-                                            className="dashboard-control text-[9px] uppercase tracking-wider text-zinc-200"
-                                          >
-                                            <Play data-icon="inline-start" className={isStartingIssue ? 'animate-pulse' : ''} />
-                                            {isStartingIssue ? 'Starting' : 'Start'} #{c.number}
-                                          </Button>
-                                        )}
-
-                                        {canClaimIssue && (
-                                          <Button
-                                            type="button"
-                                            size="xs"
-                                            variant="outline"
-                                            onClick={() => openClaimForm(c.number)}
-                                            className="dashboard-control text-[9px] uppercase tracking-wider text-zinc-200"
-                                          >
-                                            <Hand data-icon="inline-start" />
-                                            Claim #{c.number}
-                                          </Button>
-                                        )}
-                                      </div>
-                                    </div>
-                                  );
-                                })
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
+                            <strong>#{item.issue_number}</strong>
+                            <span>{item.title}</span>
+                            <span>{item.status}</span>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
                   </div>
-                </ScrollArea>
-              )}
-            </CardContent>
-          </Card>
+                ))}
+              </div>
+            ) : (
+              <p className="empty-state">No implementation issues observed yet.</p>
+            )}
+          </article>
+
+          <article className="info-panel">
+            <div className="panel-heading">
+              <GitBranch className="panel-icon" />
+              <div>
+                <h2>Dependency Pipeline</h2>
+                <p>Implementation Issue State dependency visual within Scheduling Readiness.</p>
+              </div>
+            </div>
+
+            {snapshot && implementationIssueState && implementationIssueState.groups.length > 0 ? (
+              <div className="readiness-groups">
+                {implementationIssueState.groups.map((group) => (
+                  <div key={`pipeline-${group.parent_prd.issue_number}`}>
+                    <h3>
+                      {group.parent_prd.title} {!group.parent_prd.prepared ? '(Unprepared)' : ''}
+                    </h3>
+                    <DependencyPipeline
+                      children={group.items.map((item) => ({
+                        number: item.issue_number,
+                        status: item.status,
+                        blocked_by: item.blocked_by ?? [],
+                        active_blockers: item.active_blockers ?? [],
+                      }))}
+                    />
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="empty-state">No Dependency Pipeline observed yet.</p>
+            )}
+          </article>
+
+          <article className="info-panel wide-panel">
+            <div className="panel-heading">
+              <FolderGit2 className="panel-icon" />
+              <div>
+                <h2>Landing View Guardrails</h2>
+                <p>This landing view is intentionally passive.</p>
+              </div>
+            </div>
+
+            <ul className="guardrail-list">
+              <li>Read-only snapshot only.</li>
+              <li>No lifecycle action buttons.</li>
+              <li>No automatic refresh after initial page load.</li>
+              <li>No simulated Scheduling Pass.</li>
+              <li>No Lifecycle Mutations on load.</li>
+            </ul>
+          </article>
         </section>
-
+        <SideDrawer
+          issue={selectedIssue}
+          open={drawerOpen}
+          onOpenChange={setDrawerOpen}
+          readOnly={true}
+        />
       </main>
-
-      {/* Side Drawer Inspector */}
-      <SideDrawer
-        issue={drawerIssue}
-        open={drawerOpen}
-        onOpenChange={setDrawerOpen}
-        onClaim={openClaimForm}
-        onStart={startImplementationIssue}
-        onIntegrate={integrateImplementationIssue}
-        onViewLog={(num) => setSelectedRunIssue(selectedRunIssue === num ? null : num)}
-        claimState={drawerIssue ? claimIssueState[drawerIssue.number] : undefined}
-        startState={drawerIssue ? startIssueState[drawerIssue.number] : undefined}
-        integrateState={drawerIssue ? integrateIssueState[drawerIssue.number] : undefined}
-        claimAgentRunId={drawerIssue ? claimAgentRunIds[drawerIssue.number] : ''}
-        onClaimAgentRunIdChange={(val) => {
-          if (drawerIssue) {
-            setClaimAgentRunIds(prev => ({ ...prev, [drawerIssue.number]: val }));
-          }
-        }}
-        selectedRunIssue={selectedRunIssue}
-      />
-
-      {/* Footer Info Box */}
-      <footer className="dashboard-glass-panel border-t px-6 py-3 flex items-center justify-between text-[10px] text-zinc-500 mt-auto shrink-0">
-        <div className="flex items-center gap-2">
-          <span className="size-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-          <span>Engine Connected</span>
-        </div>
-        <div>
-          <span>Antigravity Orchestration Scaffold v1.0.0</span>
-        </div>
-      </footer>
     </div>
   )
 }
+
+export default App
