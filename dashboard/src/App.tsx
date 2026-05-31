@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { AlertCircle, Clock3, FolderGit2, GitBranch, ShieldCheck, TerminalSquare } from 'lucide-react'
 import DependencyPipeline from './components/DependencyPipeline'
+import SideDrawer, { type Issue as DrawerIssue } from './components/SideDrawer'
 import './App.css'
 
 const API_BASE = import.meta.env.DEV ? `http://${window.location.hostname}:8000` : ''
@@ -53,6 +54,35 @@ interface SchedulingReadinessSnapshot {
         title: string
         status: string
         parent_prd_number?: number
+        blocked_by?: number[]
+        active_blockers?: number[]
+        timeline?: {
+          observed_state: string
+          is_observed: boolean
+          steps: Array<{
+            key: string
+            label: string
+            status: string
+            observed_at: string | null
+            detail: string
+          }>
+          run?: {
+            status?: string | null
+            agent_run_id?: string | null
+            started_at?: string | null
+            finished_at?: string | null
+            failure_reason?: string | null
+          }
+          claim?: {
+            status?: string | null
+            claimed_at?: string | null
+            implementation_branch?: string | null
+          }
+          integration?: {
+            pull_request?: string | null
+            status?: string | null
+          }
+        }
       }>
       groups: Array<{
         parent_prd: {
@@ -66,6 +96,33 @@ interface SchedulingReadinessSnapshot {
           status: string
           blocked_by?: number[]
           active_blockers?: number[]
+          timeline?: {
+            observed_state: string
+            is_observed: boolean
+            steps: Array<{
+              key: string
+              label: string
+              status: string
+              observed_at: string | null
+              detail: string
+            }>
+            run?: {
+              status?: string | null
+              agent_run_id?: string | null
+              started_at?: string | null
+              finished_at?: string | null
+              failure_reason?: string | null
+            }
+            claim?: {
+              status?: string | null
+              claimed_at?: string | null
+              implementation_branch?: string | null
+            }
+            integration?: {
+              pull_request?: string | null
+              status?: string | null
+            }
+          }
         }>
       }>
       agent_run_capacity: {
@@ -114,6 +171,8 @@ function App() {
   const [loadingRepos, setLoadingRepos] = useState(true)
   const [loadingSnapshot, setLoadingSnapshot] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [selectedIssue, setSelectedIssue] = useState<DrawerIssue | null>(null)
+  const [drawerOpen, setDrawerOpen] = useState(false)
 
   useEffect(() => {
     let active = true
@@ -186,6 +245,32 @@ function App() {
   const readinessChecks = snapshot?.snapshot.readiness_checks
   const criticalFailures = readinessChecks?.critical_failures ?? []
   const warnings = readinessChecks?.warnings ?? []
+
+  const openIssueDrawer = (
+    item: SchedulingReadinessSnapshot['snapshot']['implementation_issue_state']['groups'][number]['items'][number],
+    group: SchedulingReadinessSnapshot['snapshot']['implementation_issue_state']['groups'][number]
+  ) => {
+    setSelectedIssue({
+      number: item.issue_number,
+      title: item.title,
+      labels: [],
+      state: 'open',
+      kind: 'implementation',
+      parent_prd_number: group.parent_prd.issue_number,
+      blocked_by: item.blocked_by ?? [],
+      active_blockers: item.active_blockers ?? [],
+      status: item.status as DrawerIssue['status'],
+      timeline: item.timeline,
+      agent_run_id: item.timeline?.run?.agent_run_id ?? null,
+      claimed_at: item.timeline?.claim?.claimed_at ?? null,
+      failure_reason: item.timeline?.run?.failure_reason ?? null,
+      started_at: item.timeline?.run?.started_at ?? null,
+      finished_at: item.timeline?.run?.finished_at ?? null,
+      implementation_branch: item.timeline?.claim?.implementation_branch ?? undefined,
+      prd_branch: group.parent_prd.prepared ? `prd/${group.parent_prd.issue_number}` : undefined,
+    })
+    setDrawerOpen(true)
+  }
 
   return (
     <div className="dashboard-shell">
@@ -354,9 +439,16 @@ function App() {
                     <ul className="empty-list">
                       {group.items.map((item) => (
                         <li key={item.issue_number}>
-                          <strong>#{item.issue_number}</strong>
-                          <span>{item.title}</span>
-                          <span>{item.status}</span>
+                          <button
+                            type="button"
+                            className="issue-row-button"
+                            aria-label={`Open Implementation Issue #${item.issue_number}`}
+                            onClick={() => openIssueDrawer(item, group)}
+                          >
+                            <strong>#{item.issue_number}</strong>
+                            <span>{item.title}</span>
+                            <span>{item.status}</span>
+                          </button>
                         </li>
                       ))}
                     </ul>
@@ -418,6 +510,7 @@ function App() {
             </ul>
           </article>
         </section>
+        <SideDrawer issue={selectedIssue} open={drawerOpen} onOpenChange={setDrawerOpen} />
       </main>
     </div>
   )

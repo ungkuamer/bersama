@@ -445,6 +445,76 @@ def test_provider_builds_prd_grouped_implementation_issue_state_capacity_and_war
         "used": 1,
         "total": 1,
     }
+    assert implementation_issue_state["items"][2]["timeline"] == {
+        "observed_state": "running-agent-run",
+        "is_observed": True,
+        "steps": [
+            {
+                "key": "prepared_prd_issue",
+                "label": "Prepared PRD Issue",
+                "status": "completed",
+                "observed_at": None,
+                "detail": "Observed PRD branch metadata.",
+            },
+            {
+                "key": "claim_setup",
+                "label": "Claim Setup",
+                "status": "completed",
+                "observed_at": "2026-05-31T18:05:00Z",
+                "detail": "Observed implementation branch metadata.",
+            },
+            {
+                "key": "active_claim",
+                "label": "Active Claim",
+                "status": "completed",
+                "observed_at": "2026-05-31T18:05:00Z",
+                "detail": "Observed active claim metadata.",
+            },
+            {
+                "key": "agent_run",
+                "label": "Agent Run",
+                "status": "active",
+                "observed_at": "2026-05-31T18:00:00Z",
+                "detail": "Observed Agent Run state from normalized backend fields.",
+            },
+            {
+                "key": "integration_pull_request",
+                "label": "Integration Pull Request",
+                "status": "pending",
+                "observed_at": None,
+                "detail": "No observed Integration Pull Request metadata yet.",
+            },
+            {
+                "key": "integrated_implementation_issue",
+                "label": "Integrated Implementation Issue",
+                "status": "pending",
+                "observed_at": None,
+                "detail": "Implementation Issue remains open.",
+            },
+        ],
+        "run": {
+            "status": "running",
+            "agent_run_id": "run-14",
+            "started_at": "2026-05-31T18:00:00Z",
+            "finished_at": None,
+            "failure_reason": None,
+        },
+        "claim": {
+            "status": "active",
+            "claimed_at": "2026-05-31T18:05:00Z",
+            "implementation_branch": "impl/10/14-running",
+        },
+        "integration": {
+            "pull_request": None,
+            "status": None,
+        },
+    }
+    assert implementation_issue_state["items"][4]["timeline"]["steps"][0]["status"] == "completed"
+    assert implementation_issue_state["items"][4]["timeline"]["steps"][1]["status"] == "completed"
+    assert implementation_issue_state["items"][4]["timeline"]["steps"][2]["status"] == "active"
+    assert implementation_issue_state["items"][4]["timeline"]["steps"][3]["status"] == "pending"
+    assert implementation_issue_state["items"][5]["timeline"]["steps"][0]["status"] == "completed"
+    assert implementation_issue_state["items"][6]["timeline"]["steps"][0]["status"] == "pending"
     assert implementation_issue_state["summary"] == {
         "ready": 1,
         "blocked": 1,
@@ -475,7 +545,14 @@ def test_provider_builds_prd_grouped_implementation_issue_state_capacity_and_war
         "stale-claim",
         "needs-info-implementation-issue",
     ])
-    assert implementation_issue_state["groups"][0]["items"] == [
+    assert [
+        {
+            key: value
+            for key, value in item.items()
+            if key != "timeline"
+        }
+        for item in implementation_issue_state["groups"][0]["items"]
+    ] == [
         {
             "issue_number": 12,
             "title": "Ready issue",

@@ -432,6 +432,178 @@ def _build_empty_implementation_issue_state() -> dict[str, object]:
     }
 
 
+def _normalize_run_summary(run_state: dict[str, object] | None, issue: ImplementationIssue) -> dict[str, object]:
+    return {
+        "status": str(run_state.get("status")) if run_state is not None and run_state.get("status") is not None else None,
+        "agent_run_id": issue.orchestration.agent_run_id,
+        "started_at": str(run_state.get("started_at")) if run_state is not None and run_state.get("started_at") is not None else None,
+        "finished_at": str(run_state.get("finished_at")) if run_state is not None and run_state.get("finished_at") is not None else None,
+        "failure_reason": str(run_state.get("failure_reason")) if run_state is not None and run_state.get("failure_reason") is not None else None,
+    }
+
+
+def _normalize_claim_summary(issue: ImplementationIssue) -> dict[str, object]:
+    return {
+        "status": issue.orchestration.claim_status,
+        "claimed_at": issue.orchestration.claimed_at,
+        "implementation_branch": issue.orchestration.implementation_branch,
+    }
+
+
+def _normalize_integration_summary(issue: ImplementationIssue) -> dict[str, object]:
+    return {
+        "pull_request": issue.orchestration.integration_pr,
+        "status": issue.orchestration.integration_status,
+    }
+
+
+def _build_timeline_step(
+    *,
+    key: str,
+    label: str,
+    status: str,
+    observed_at: str | None,
+    detail: str,
+) -> dict[str, object]:
+    return {
+        "key": key,
+        "label": label,
+        "status": status,
+        "observed_at": observed_at,
+        "detail": detail,
+    }
+
+
+def _build_implementation_issue_timeline(
+    issue: ImplementationIssue,
+    *,
+    parent_prd: PrdIssue | None,
+    observed_status: str,
+    run_summary: dict[str, object],
+    claim_summary: dict[str, object],
+    integration_summary: dict[str, object],
+) -> dict[str, object]:
+    prepared = bool(parent_prd and parent_prd.orchestration.prd_branch)
+    claim_status = parse_claim_status(issue.orchestration.claim_status)
+    integration_status = str(integration_summary["status"]) if integration_summary["status"] is not None else None
+    integration_pr = integration_summary["pull_request"]
+    run_status = run_summary["status"]
+
+    prepared_step_status = "completed" if prepared else "pending"
+    claim_setup_status = "completed" if issue.orchestration.implementation_branch else "pending"
+    active_claim_status = "pending"
+    if claim_status is ClaimStatus.ACTIVE and run_status in {"running", "failed", "succeeded"}:
+        active_claim_status = "completed"
+    elif claim_status is ClaimStatus.ACTIVE:
+        active_claim_status = "active"
+    elif claim_status is ClaimStatus.SETTING_UP:
+        active_claim_status = "active"
+    elif claim_status is ClaimStatus.FAILED:
+        active_claim_status = "failed"
+
+    agent_run_status = "pending"
+    if run_status == "running":
+        agent_run_status = "active"
+    elif run_status == "failed":
+        agent_run_status = "failed"
+    elif run_status == "succeeded":
+        agent_run_status = "completed"
+
+    integration_step_status = "pending"
+    if integration_pr is not None and integration_status == "merged":
+        integration_step_status = "completed"
+    elif integration_pr is not None:
+        integration_step_status = "active"
+
+    integrated_step_status = "completed" if integration_status == "merged" else "pending"
+
+    observed_state = {
+        "running": "running-agent-run",
+        "failed": "failed-agent-run",
+        "succeeded": "pending-integration",
+        "claimed": "claimed-issue",
+        "ready": "unclaimed-issue",
+        "blocked": "blocked-issue",
+        "unready": "unprepared-or-needs-info",
+    }.get(observed_status, observed_status)
+
+    return {
+        "observed_state": observed_state,
+        "is_observed": True,
+        "steps": [
+            _build_timeline_step(
+                key="prepared_prd_issue",
+                label="Prepared PRD Issue",
+                status=prepared_step_status,
+                observed_at=None,
+                detail=(
+                    "Observed PRD branch metadata."
+                    if prepared
+                    else "No observed PRD branch metadata yet."
+                ),
+            ),
+            _build_timeline_step(
+                key="claim_setup",
+                label="Claim Setup",
+                status=claim_setup_status,
+                observed_at=issue.orchestration.claimed_at,
+                detail=(
+                    "Observed implementation branch metadata."
+                    if issue.orchestration.implementation_branch
+                    else "No observed implementation branch metadata yet."
+                ),
+            ),
+            _build_timeline_step(
+                key="active_claim",
+                label="Active Claim",
+                status=active_claim_status,
+                observed_at=issue.orchestration.claimed_at,
+                detail=(
+                    "Observed active claim metadata."
+                    if claim_status is ClaimStatus.ACTIVE
+                    else "Claim metadata not observed as active."
+                ),
+            ),
+            _build_timeline_step(
+                key="agent_run",
+                label="Agent Run",
+                status=agent_run_status,
+                observed_at=run_summary["started_at"] if isinstance(run_summary["started_at"], str) else None,
+                detail=(
+                    "Observed Agent Run state from normalized backend fields."
+                    if run_status in {"running", "failed", "succeeded"}
+                    else "No observed Agent Run state yet."
+                ),
+            ),
+            _build_timeline_step(
+                key="integration_pull_request",
+                label="Integration Pull Request",
+                status=integration_step_status,
+                observed_at=None,
+                detail=(
+                    "Observed Integration Pull Request metadata."
+                    if integration_pr is not None
+                    else "No observed Integration Pull Request metadata yet."
+                ),
+            ),
+            _build_timeline_step(
+                key="integrated_implementation_issue",
+                label="Integrated Implementation Issue",
+                status=integrated_step_status,
+                observed_at=None,
+                detail=(
+                    "Observed merged Integration Pull Request metadata."
+                    if integration_status == "merged"
+                    else "Implementation Issue remains open."
+                ),
+            ),
+        ],
+        "run": run_summary,
+        "claim": claim_summary,
+        "integration": integration_summary,
+    }
+
+
 def _safe_repo_lookup(config: AppConfig, repo_name: str) -> tuple[RepoConfig | None, ConfigError | None]:
     try:
         return (config.repo(repo_name), None)
@@ -524,11 +696,15 @@ def _build_implementation_issue_state(repo: RepoConfig | None) -> dict[str, obje
 
     for issue in sorted(open_implementation_issues, key=lambda item: item.issue.number):
         parent_prd = prds_by_number.get(issue.parent_prd_number or -1)
+        run_state = _read_run_state(repo.worktree_root / f"issue-{issue.issue.number}" / "run-state.json")
         status, is_stale = _derive_observed_status(
             issue,
             repo=repo,
             open_impl_numbers=open_impl_numbers,
         )
+        run_summary = _normalize_run_summary(run_state, issue)
+        claim_summary = _normalize_claim_summary(issue)
+        integration_summary = _normalize_integration_summary(issue)
         item = {
             "issue_number": issue.issue.number,
             "title": issue.issue.title,
@@ -538,6 +714,14 @@ def _build_implementation_issue_state(repo: RepoConfig | None) -> dict[str, obje
             "active_blockers": [
                 blocker for blocker in issue.blocked_by if blocker in open_impl_numbers
             ],
+            "timeline": _build_implementation_issue_timeline(
+                issue,
+                parent_prd=parent_prd,
+                observed_status=status,
+                run_summary=run_summary,
+                claim_summary=claim_summary,
+                integration_summary=integration_summary,
+            ),
         }
         items.append(item)
 
@@ -651,6 +835,7 @@ def _build_implementation_issue_state(repo: RepoConfig | None) -> dict[str, obje
                 "status": item["status"],
                 "blocked_by": list(item["blocked_by"]),
                 "active_blockers": list(item["active_blockers"]),
+                "timeline": dict(item["timeline"]),
             }
         )
 
