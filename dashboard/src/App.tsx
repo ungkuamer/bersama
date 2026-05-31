@@ -51,7 +51,24 @@ interface SchedulingReadinessSnapshot {
         issue_number: number
         title: string
         status: string
+        parent_prd_number?: number
       }>
+      groups: Array<{
+        parent_prd: {
+          issue_number: number
+          title: string
+          prepared: boolean
+        }
+        items: Array<{
+          issue_number: number
+          title: string
+          status: string
+        }>
+      }>
+      agent_run_capacity: {
+        used: number
+        total: number
+      }
       summary: Record<string, number>
     }
   }
@@ -162,6 +179,7 @@ function App() {
   }, [selectedRepo])
 
   const summary = snapshot?.snapshot.implementation_issue_state.summary
+  const implementationIssueState = snapshot?.snapshot.implementation_issue_state
   const readinessChecks = snapshot?.snapshot.readiness_checks
   const criticalFailures = readinessChecks?.critical_failures ?? []
   const warnings = readinessChecks?.warnings ?? []
@@ -309,11 +327,12 @@ function App() {
               <GitBranch className="panel-icon" />
               <div>
                 <h2>Implementation Issue State</h2>
-                <p>Read-only issue summary shell for later scheduling detail.</p>
+                <p>Observed open Implementation Issues grouped by Parent PRD.</p>
               </div>
             </div>
 
             <div className="summary-strip">
+              <span>Agent Run Capacity {implementationIssueState?.agent_run_capacity.used ?? 0} / {implementationIssueState?.agent_run_capacity.total ?? 0}</span>
               <span>Ready {summary?.ready ?? 0}</span>
               <span>Blocked {summary?.blocked ?? 0}</span>
               <span>Claimed {summary?.claimed ?? 0}</span>
@@ -322,16 +341,25 @@ function App() {
               <span>Succeeded {summary?.succeeded ?? 0}</span>
             </div>
 
-            {snapshot && snapshot.snapshot.implementation_issue_state.items.length > 0 ? (
-              <ul className="empty-list">
-                {snapshot.snapshot.implementation_issue_state.items.map((item) => (
-                  <li key={item.issue_number}>
-                    <strong>#{item.issue_number}</strong>
-                    <span>{item.title}</span>
-                    <span>{item.status}</span>
-                  </li>
+            {snapshot && implementationIssueState && implementationIssueState.groups.length > 0 ? (
+              <div className="readiness-groups">
+                {implementationIssueState.groups.map((group) => (
+                  <div key={group.parent_prd.issue_number}>
+                    <h3>
+                      {group.parent_prd.title} {!group.parent_prd.prepared ? '(Unprepared)' : ''}
+                    </h3>
+                    <ul className="empty-list">
+                      {group.items.map((item) => (
+                        <li key={item.issue_number}>
+                          <strong>#{item.issue_number}</strong>
+                          <span>{item.title}</span>
+                          <span>{item.status}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
                 ))}
-              </ul>
+              </div>
             ) : (
               <p className="empty-state">No implementation issues observed yet.</p>
             )}

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from unittest.mock import patch
 
@@ -49,6 +50,7 @@ def test_provider_reports_missing_required_labels_as_one_critical_failure(tmp_pa
             _completed(stdout=""),
             _completed(),
             _completed(stdout='{"name":"demo"}'),
+            _completed(stdout="[]"),
         ]
 
         snapshot = provider.build_snapshot("demo")
@@ -104,6 +106,7 @@ def test_provider_reports_dirty_working_tree_as_warning_not_critical_failure(tmp
             _completed(stdout=" M src/bersama/dashboard.py\n"),
             _completed(),
             _completed(stdout='{"name":"demo"}'),
+            _completed(stdout="[]"),
         ]
 
         snapshot = provider.build_snapshot("demo")
@@ -179,6 +182,7 @@ def test_provider_reports_invalid_config_as_critical_failure_when_harness_is_mis
             _completed(stdout=""),
             _completed(),
             _completed(stdout='{"name":"demo"}'),
+            _completed(stdout="[]"),
         ]
 
         snapshot = provider.build_snapshot("demo")
@@ -222,6 +226,7 @@ def test_provider_reports_missing_harness_command_using_path_resolution_only(tmp
             _completed(stdout=""),
             _completed(),
             _completed(stdout='{"name":"demo"}'),
+            _completed(stdout="[]"),
         ]
 
         snapshot = provider.build_snapshot("demo")
@@ -236,6 +241,240 @@ def test_provider_reports_missing_harness_command_using_path_resolution_only(tmp
             },
         }
     ]
+
+
+def test_provider_builds_prd_grouped_implementation_issue_state_capacity_and_warnings(
+    tmp_path: Path,
+) -> None:
+    repo_path = tmp_path / "repo"
+    repo_path.mkdir()
+    (repo_path / ".git").mkdir()
+    worktree_root = tmp_path / "worktrees"
+    worktree_root.mkdir()
+    provider = SchedulingReadinessProvider(build_config(repo_path=repo_path, worktree_root=worktree_root))
+
+    running_worktree = worktree_root / "issue-14"
+    running_worktree.mkdir()
+    (running_worktree / "run-state.json").write_text(
+        json.dumps(
+            {
+                "status": "running",
+                "started_at": "2026-05-31T18:00:00Z",
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    failed_worktree = worktree_root / "issue-15"
+    failed_worktree.mkdir()
+    (failed_worktree / "run-state.json").write_text(
+        json.dumps(
+            {
+                "status": "failed",
+                "started_at": "2026-05-31T17:30:00Z",
+                "finished_at": "2026-05-31T17:40:00Z",
+                "failure_reason": "Tests failed",
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    with (
+        patch("bersama.scheduling_readiness.shutil.which", return_value="/usr/bin/gh"),
+        patch("bersama.scheduling_readiness.os.access", return_value=True),
+        patch("bersama.scheduling_readiness._run_command") as run_command,
+    ):
+        run_command.side_effect = [
+            _completed(stdout="WRITE"),
+            _completed(stdout="\n".join(
+                [
+                    "prd",
+                    "implementation",
+                    "ready-for-agent",
+                    "claimed",
+                    "needs-info",
+                    "needs-triage",
+                    "ready-for-human",
+                    "wontfix",
+                ]
+            )),
+            _completed(stdout=""),
+            _completed(),
+            _completed(stdout='{"name":"demo"}'),
+            _completed(stdout=json.dumps(
+                [
+                    {
+                        "number": 10,
+                        "title": "Prepared PRD",
+                        "body": "## Problem Statement\n\nPlan work.\n\n## Orchestration\n- PRD Branch: prd/10-prepared",
+                        "labels": [{"name": "prd"}],
+                        "state": "open",
+                    },
+                    {
+                        "number": 11,
+                        "title": "Unprepared PRD",
+                        "body": "## Problem Statement\n\nNeeds preparation.",
+                        "labels": [{"name": "prd"}],
+                        "state": "open",
+                    },
+                    {
+                        "number": 12,
+                        "title": "Ready issue",
+                        "body": (
+                            "## Parent PRD\n#10\n\n"
+                            "## What to Build\nShip it.\n\n"
+                            "## Acceptance Criteria\n- [ ] Done.\n\n"
+                            "## Blocked By\nNone"
+                        ),
+                        "labels": [{"name": "implementation"}, {"name": "ready-for-agent"}],
+                        "state": "open",
+                    },
+                    {
+                        "number": 13,
+                        "title": "Blocked issue",
+                        "body": (
+                            "## Parent PRD\n#10\n\n"
+                            "## What to Build\nWait for ready issue.\n\n"
+                            "## Acceptance Criteria\n- [ ] Done.\n\n"
+                            "## Blocked By\n#12"
+                        ),
+                        "labels": [{"name": "implementation"}, {"name": "ready-for-agent"}],
+                        "state": "open",
+                    },
+                    {
+                        "number": 14,
+                        "title": "Running issue",
+                        "body": (
+                            "## Parent PRD\n#10\n\n"
+                            "## What to Build\nExecute it.\n\n"
+                            "## Acceptance Criteria\n- [ ] Done.\n\n"
+                            "## Blocked By\nNone\n\n"
+                            "## Orchestration\n"
+                            "- Agent Run: run-14\n"
+                            "- Claimed At: 2026-05-31T18:05:00Z\n"
+                            "- Claim Status: active\n"
+                            "- Implementation Branch: impl/10/14-running\n"
+                        ),
+                        "labels": [{"name": "implementation"}, {"name": "claimed"}],
+                        "state": "open",
+                    },
+                    {
+                        "number": 15,
+                        "title": "Failed issue",
+                        "body": (
+                            "## Parent PRD\n#10\n\n"
+                            "## What to Build\nFail it.\n\n"
+                            "## Acceptance Criteria\n- [ ] Done.\n\n"
+                            "## Blocked By\nNone\n\n"
+                            "## Orchestration\n"
+                            "- Agent Run: run-15\n"
+                            "- Claimed At: 2026-05-31T17:20:00Z\n"
+                            "- Claim Status: active\n"
+                            "- Implementation Branch: impl/10/15-failed\n"
+                        ),
+                        "labels": [{"name": "implementation"}, {"name": "claimed"}],
+                        "state": "open",
+                    },
+                    {
+                        "number": 16,
+                        "title": "Stale claim",
+                        "body": (
+                            "## Parent PRD\n#10\n\n"
+                            "## What to Build\nThis claim is stale.\n\n"
+                            "## Acceptance Criteria\n- [ ] Done.\n\n"
+                            "## Blocked By\nNone\n\n"
+                            "## Orchestration\n"
+                            "- Agent Run: run-16\n"
+                            "- Claimed At: 2026-05-31T12:00:00Z\n"
+                            "- Claim Status: active\n"
+                            "- Implementation Branch: impl/10/16-stale\n"
+                        ),
+                        "labels": [{"name": "implementation"}, {"name": "claimed"}],
+                        "state": "open",
+                    },
+                    {
+                        "number": 17,
+                        "title": "Needs info issue",
+                        "body": (
+                            "## Parent PRD\n#10\n\n"
+                            "## What to Build\nNeed more details.\n\n"
+                            "## Acceptance Criteria\n- [ ] Done.\n\n"
+                            "## Blocked By\nNone"
+                        ),
+                        "labels": [{"name": "implementation"}, {"name": "needs-info"}],
+                        "state": "open",
+                    },
+                    {
+                        "number": 18,
+                        "title": "Closed integrated issue",
+                        "body": (
+                            "## Parent PRD\n#10\n\n"
+                            "## What to Build\nAlready done.\n\n"
+                            "## Acceptance Criteria\n- [ ] Done.\n\n"
+                            "## Blocked By\nNone\n\n"
+                            "## Orchestration\n"
+                            "- Agent Run: run-18\n"
+                            "- Claimed At: 2026-05-31T10:00:00Z\n"
+                            "- Implementation Branch: impl/10/18-done\n"
+                            "- Integration PR: #123\n"
+                            "- Integration Status: merged\n"
+                        ),
+                        "labels": [{"name": "implementation"}],
+                        "state": "closed",
+                    },
+                    {
+                        "number": 19,
+                        "title": "Issue under unprepared PRD",
+                        "body": (
+                            "## Parent PRD\n#11\n\n"
+                            "## What to Build\nBlocked by unprepared PRD.\n\n"
+                            "## Acceptance Criteria\n- [ ] Done.\n\n"
+                            "## Blocked By\nNone"
+                        ),
+                        "labels": [{"name": "implementation"}],
+                        "state": "open",
+                    },
+                ]
+            )),
+        ]
+
+        snapshot = provider.build_snapshot("demo")
+
+    implementation_issue_state = snapshot["snapshot"]["implementation_issue_state"]
+    assert implementation_issue_state["agent_run_capacity"] == {
+        "used": 1,
+        "total": 1,
+    }
+    assert implementation_issue_state["summary"] == {
+        "ready": 1,
+        "blocked": 1,
+        "claimed": 1,
+        "running": 1,
+        "failed": 1,
+        "succeeded": 0,
+        "other": 2,
+    }
+    assert [group["parent_prd"]["issue_number"] for group in implementation_issue_state["groups"]] == [10, 11]
+    assert [item["issue_number"] for item in implementation_issue_state["items"]] == [12, 13, 14, 15, 16, 17, 19]
+    assert {item["issue_number"]: item["status"] for item in implementation_issue_state["items"]} == {
+        12: "ready",
+        13: "blocked",
+        14: "running",
+        15: "failed",
+        16: "claimed",
+        17: "unready",
+        19: "unready",
+    }
+    assert all(item["issue_number"] != 18 for item in implementation_issue_state["items"])
+
+    warnings = snapshot["snapshot"]["readiness_checks"]["warnings"]
+    assert sorted(warning["details"]["code"] for warning in warnings) == sorted([
+        "unprepared-prd-issue",
+        "blocked-implementation-issue",
+        "failed-implementation-issue",
+        "stale-claim",
+        "needs-info-implementation-issue",
+    ])
 
 
 def _completed(

@@ -44,6 +44,11 @@ const mockSchedulingReadinessSnapshot = {
     },
     implementation_issue_state: {
       items: [],
+      groups: [],
+      agent_run_capacity: {
+        used: 0,
+        total: 2,
+      },
       summary: {
         ready: 0,
         blocked: 0,
@@ -176,5 +181,87 @@ describe('Scheduling Readiness landing view', () => {
     expect(screen.getByText('Working tree has local changes.')).toBeInTheDocument()
     expect(screen.getByText('Review local changes before running scheduling.')).toBeInTheDocument()
     expect(screen.queryByText(/missing-required-labels/i)).not.toBeInTheDocument()
+  })
+
+  it('renders PRD-grouped implementation issue state and agent run capacity', async () => {
+    mockFetch.mockImplementation((url: string) => {
+      if (url.endsWith('/api/repos')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(mockRepos),
+        })
+      }
+
+      if (url.includes('/api/scheduling-readiness/demo')) {
+        return Promise.resolve({
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              ...mockSchedulingReadinessSnapshot,
+              snapshot: {
+                ...mockSchedulingReadinessSnapshot.snapshot,
+                implementation_issue_state: {
+                  items: [
+                    { issue_number: 12, title: 'Ready issue', status: 'ready' },
+                    { issue_number: 14, title: 'Running issue', status: 'running' },
+                    { issue_number: 17, title: 'Needs info issue', status: 'unready' },
+                  ],
+                  groups: [
+                    {
+                      parent_prd: {
+                        issue_number: 10,
+                        title: 'Prepared PRD',
+                        prepared: true,
+                      },
+                      items: [
+                        { issue_number: 12, title: 'Ready issue', status: 'ready' },
+                        { issue_number: 14, title: 'Running issue', status: 'running' },
+                      ],
+                    },
+                    {
+                      parent_prd: {
+                        issue_number: 11,
+                        title: 'Unprepared PRD',
+                        prepared: false,
+                      },
+                      items: [
+                        { issue_number: 17, title: 'Needs info issue', status: 'unready' },
+                      ],
+                    },
+                  ],
+                  agent_run_capacity: {
+                    used: 1,
+                    total: 2,
+                  },
+                  summary: {
+                    ready: 1,
+                    blocked: 0,
+                    claimed: 0,
+                    running: 1,
+                    failed: 0,
+                    succeeded: 0,
+                    other: 1,
+                  },
+                },
+              },
+            }),
+        })
+      }
+
+      return Promise.reject(new Error(`Unhandled mock fetch for ${url}`))
+    })
+
+    render(<App />)
+
+    await waitFor(() => {
+      expect(screen.getByText(/Agent Run Capacity/i)).toBeInTheDocument()
+    })
+
+    expect(screen.getByText('1 / 2')).toBeInTheDocument()
+    expect(screen.getByText('Prepared PRD')).toBeInTheDocument()
+    expect(screen.getByText('Unprepared PRD')).toBeInTheDocument()
+    expect(screen.getByText('Ready issue')).toBeInTheDocument()
+    expect(screen.getByText('Running issue')).toBeInTheDocument()
+    expect(screen.getByText('Needs info issue')).toBeInTheDocument()
   })
 })
