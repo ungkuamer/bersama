@@ -1,1 +1,17 @@
-/* App.css */
+.issue-row-button {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  justify-content: space-between;
+  background: transparent;
+  border: 0;
+  color: inherit;
+  padding: 0.25rem 0;
+  text-align: left;
+  cursor: pointer;
+}
+
+.issue-row-button:hover {
+  opacity: 0.85;
+}

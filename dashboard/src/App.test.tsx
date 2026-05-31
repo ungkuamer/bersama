@@ -410,4 +410,222 @@ describe('Scheduling Readiness landing view', () => {
     expect(screen.getAllByText('#18').length).toBeGreaterThan(0)
     expect(screen.queryByText(/Work Queue/i)).not.toBeInTheDocument()
   })
+
+  it('shows an Implementation Issue Timeline in the selected issue drawer without Agent Run Timeline wording', async () => {
+    mockFetch.mockImplementation((url: string) => {
+      if (url.endsWith('/api/repos')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(mockRepos),
+        })
+      }
+
+      if (url.includes('/api/scheduling-readiness/demo')) {
+        return Promise.resolve({
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              ...mockSchedulingReadinessSnapshot,
+              snapshot: {
+                ...mockSchedulingReadinessSnapshot.snapshot,
+                implementation_issue_state: {
+                  items: [
+                    {
+                      issue_number: 14,
+                      title: 'Running issue',
+                      status: 'running',
+                      parent_prd_number: 10,
+                      blocked_by: [],
+                      active_blockers: [],
+                      timeline: {
+                        observed_state: 'running-agent-run',
+                        is_observed: true,
+                        steps: [
+                          {
+                            key: 'prepared_prd_issue',
+                            label: 'Prepared PRD Issue',
+                            status: 'completed',
+                            observed_at: null,
+                            detail: 'Observed PRD branch metadata.',
+                          },
+                          {
+                            key: 'claim_setup',
+                            label: 'Claim Setup',
+                            status: 'completed',
+                            observed_at: '2026-05-31T18:05:00Z',
+                            detail: 'Observed implementation branch metadata.',
+                          },
+                          {
+                            key: 'active_claim',
+                            label: 'Active Claim',
+                            status: 'completed',
+                            observed_at: '2026-05-31T18:05:00Z',
+                            detail: 'Observed active claim metadata.',
+                          },
+                          {
+                            key: 'agent_run',
+                            label: 'Agent Run',
+                            status: 'active',
+                            observed_at: '2026-05-31T18:00:00Z',
+                            detail: 'Observed Agent Run state from normalized backend fields.',
+                          },
+                          {
+                            key: 'integration_pull_request',
+                            label: 'Integration Pull Request',
+                            status: 'pending',
+                            observed_at: null,
+                            detail: 'No observed Integration Pull Request metadata yet.',
+                          },
+                          {
+                            key: 'integrated_implementation_issue',
+                            label: 'Integrated Implementation Issue',
+                            status: 'pending',
+                            observed_at: null,
+                            detail: 'Implementation Issue remains open.',
+                          },
+                        ],
+                        run: {
+                          status: 'running',
+                          agent_run_id: 'run-14',
+                          started_at: '2026-05-31T18:00:00Z',
+                          finished_at: null,
+                          failure_reason: null,
+                        },
+                        claim: {
+                          status: 'active',
+                          claimed_at: '2026-05-31T18:05:00Z',
+                          implementation_branch: 'impl/10/14-running',
+                        },
+                        integration: {
+                          pull_request: null,
+                          status: null,
+                        },
+                      },
+                    },
+                  ],
+                  groups: [
+                    {
+                      parent_prd: {
+                        issue_number: 10,
+                        title: 'Prepared PRD',
+                        prepared: true,
+                      },
+                      items: [
+                        {
+                          issue_number: 14,
+                          title: 'Running issue',
+                          status: 'running',
+                          blocked_by: [],
+                          active_blockers: [],
+                          timeline: {
+                            observed_state: 'running-agent-run',
+                            is_observed: true,
+                            steps: [
+                              {
+                                key: 'prepared_prd_issue',
+                                label: 'Prepared PRD Issue',
+                                status: 'completed',
+                                observed_at: null,
+                                detail: 'Observed PRD branch metadata.',
+                              },
+                              {
+                                key: 'claim_setup',
+                                label: 'Claim Setup',
+                                status: 'completed',
+                                observed_at: '2026-05-31T18:05:00Z',
+                                detail: 'Observed implementation branch metadata.',
+                              },
+                              {
+                                key: 'active_claim',
+                                label: 'Active Claim',
+                                status: 'completed',
+                                observed_at: '2026-05-31T18:05:00Z',
+                                detail: 'Observed active claim metadata.',
+                              },
+                              {
+                                key: 'agent_run',
+                                label: 'Agent Run',
+                                status: 'active',
+                                observed_at: '2026-05-31T18:00:00Z',
+                                detail: 'Observed Agent Run state from normalized backend fields.',
+                              },
+                              {
+                                key: 'integration_pull_request',
+                                label: 'Integration Pull Request',
+                                status: 'pending',
+                                observed_at: null,
+                                detail: 'No observed Integration Pull Request metadata yet.',
+                              },
+                              {
+                                key: 'integrated_implementation_issue',
+                                label: 'Integrated Implementation Issue',
+                                status: 'pending',
+                                observed_at: null,
+                                detail: 'Implementation Issue remains open.',
+                              },
+                            ],
+                            run: {
+                              status: 'running',
+                              agent_run_id: 'run-14',
+                              started_at: '2026-05-31T18:00:00Z',
+                              finished_at: null,
+                              failure_reason: null,
+                            },
+                            claim: {
+                              status: 'active',
+                              claimed_at: '2026-05-31T18:05:00Z',
+                              implementation_branch: 'impl/10/14-running',
+                            },
+                            integration: {
+                              pull_request: null,
+                              status: null,
+                            },
+                          },
+                        },
+                      ],
+                    },
+                  ],
+                  agent_run_capacity: {
+                    used: 1,
+                    total: 2,
+                  },
+                  summary: {
+                    ready: 0,
+                    blocked: 0,
+                    claimed: 0,
+                    running: 1,
+                    failed: 0,
+                    succeeded: 0,
+                    other: 0,
+                  },
+                },
+              },
+            }),
+        })
+      }
+
+      return Promise.reject(new Error(`Unhandled mock fetch for ${url}`))
+    })
+
+    render(<App />)
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Open Implementation Issue #14/i })).toBeInTheDocument()
+    })
+
+    screen.getByRole('button', { name: /Open Implementation Issue #14/i }).click()
+
+    await waitFor(() => {
+      expect(screen.getByText('Implementation Issue Timeline')).toBeInTheDocument()
+    })
+
+    expect(screen.getByText(/Observed lifecycle state, not a perfect audit log/i)).toBeInTheDocument()
+    expect(screen.getByText('Prepared PRD Issue')).toBeInTheDocument()
+    expect(screen.getByText('Claim Setup')).toBeInTheDocument()
+    expect(screen.getByText('Active Claim')).toBeInTheDocument()
+    expect(screen.getByText('Agent Run')).toBeInTheDocument()
+    expect(screen.getByText('Integration Pull Request')).toBeInTheDocument()
+    expect(screen.getByText('Integrated Implementation Issue')).toBeInTheDocument()
+    expect(screen.queryByText('Agent Run Timeline')).not.toBeInTheDocument()
+  })
 })
