@@ -1,16 +1,16 @@
-# Graph Report - bersama  (2026-05-30)
+# Graph Report - bersama  (2026-05-31)
 
 ## Corpus Check
-- 106 files · ~96,024 words
+- 111 files · ~111,172 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 1598 nodes · 3977 edges · 112 communities (93 shown, 19 thin omitted)
-- Extraction: 65% EXTRACTED · 35% INFERRED · 0% AMBIGUOUS · INFERRED: 1374 edges (avg confidence: 0.57)
+- 2016 nodes · 5650 edges · 135 communities (115 shown, 20 thin omitted)
+- Extraction: 61% EXTRACTED · 39% INFERRED · 0% AMBIGUOUS · INFERRED: 2209 edges (avg confidence: 0.56)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `1526712d`
+- Built from commit: `5d8b4e64`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -103,6 +103,7 @@
 - [[_COMMUNITY_Community 85|Community 85]]
 - [[_COMMUNITY_Community 86|Community 86]]
 - [[_COMMUNITY_Community 87|Community 87]]
+- [[_COMMUNITY_Community 90|Community 90]]
 - [[_COMMUNITY_Community 95|Community 95]]
 - [[_COMMUNITY_Community 96|Community 96]]
 - [[_COMMUNITY_Community 98|Community 98]]
@@ -114,48 +115,71 @@
 - [[_COMMUNITY_Community 109|Community 109]]
 - [[_COMMUNITY_Community 110|Community 110]]
 - [[_COMMUNITY_Community 111|Community 111]]
+- [[_COMMUNITY_Community 112|Community 112]]
+- [[_COMMUNITY_Community 113|Community 113]]
+- [[_COMMUNITY_Community 114|Community 114]]
+- [[_COMMUNITY_Community 115|Community 115]]
+- [[_COMMUNITY_Community 116|Community 116]]
+- [[_COMMUNITY_Community 117|Community 117]]
+- [[_COMMUNITY_Community 118|Community 118]]
+- [[_COMMUNITY_Community 119|Community 119]]
+- [[_COMMUNITY_Community 120|Community 120]]
+- [[_COMMUNITY_Community 121|Community 121]]
+- [[_COMMUNITY_Community 122|Community 122]]
+- [[_COMMUNITY_Community 123|Community 123]]
+- [[_COMMUNITY_Community 124|Community 124]]
+- [[_COMMUNITY_Community 125|Community 125]]
+- [[_COMMUNITY_Community 126|Community 126]]
+- [[_COMMUNITY_Community 129|Community 129]]
+- [[_COMMUNITY_Community 131|Community 131]]
+- [[_COMMUNITY_Community 133|Community 133]]
+- [[_COMMUNITY_Community 135|Community 135]]
+- [[_COMMUNITY_Community 136|Community 136]]
+- [[_COMMUNITY_Community 137|Community 137]]
+- [[_COMMUNITY_Community 138|Community 138]]
+- [[_COMMUNITY_Community 141|Community 141]]
 
 ## God Nodes (most connected - your core abstractions)
-1. `GitHubIssue` - 113 edges
-2. `GitHubIssueRecord` - 99 edges
-3. `IntegrationWorkspaceGateway` - 84 edges
-4. `Orchestrator` - 84 edges
-5. `GitHubIssueGateway` - 81 edges
-6. `RepoConfig` - 78 edges
-7. `ImplementationIssue` - 73 edges
-8. `PrdIssue` - 72 edges
-9. `IntegrationService` - 62 edges
-10. `ClaimWorkspaceGateway` - 62 edges
+1. `GitHubIssue` - 159 edges
+2. `GitHubIssueGateway` - 126 edges
+3. `GitHubIssueRecord` - 125 edges
+4. `CommandExecutor` - 114 edges
+5. `RepoConfig` - 114 edges
+6. `ImplementationIssue` - 108 edges
+7. `PrdIssue` - 105 edges
+8. `IntegrationWorkspaceGateway` - 96 edges
+9. `AppConfig` - 95 edges
+10. `Orchestrator` - 92 edges
 
 ## Surprising Connections (you probably didn't know these)
 - `str` --uses--> `ConfigError`  [INFERRED]
-  tests/test_config.py → src/bersama/config.py
-- `MagicMock` --uses--> `ExecutionResult`  [INFERRED]
-  tests/test_orchestrator.py → src/bersama/execution.py
-- `Path` --uses--> `ExecutionResult`  [INFERRED]
-  tests/test_cli.py → src/bersama/execution.py
-- `AppConfig` --uses--> `ExecutionResult`  [INFERRED]
-  tests/test_dashboard.py → src/bersama/execution.py
-- `Path` --uses--> `ExecutionResult`  [INFERRED]
-  tests/test_dashboard.py → src/bersama/execution.py
+  tests/test_config.py → worktrees/issue-61/src/bersama/config.py
+- `FakeGitRunner` --uses--> `UpdateError`  [INFERRED]
+  tests/test_integration.py → src/bersama/integration.py
+- `GitHubIssueRecord` --uses--> `UpdateError`  [INFERRED]
+  tests/test_integration.py → src/bersama/integration.py
+- `Path` --uses--> `UpdateError`  [INFERRED]
+  tests/test_integration.py → src/bersama/integration.py
+- `FakeGitRunner` --uses--> `MergeConflictError`  [INFERRED]
+  tests/test_integration.py → src/bersama/integration.py
 
-## Communities (112 total, 19 thin omitted)
+## Communities (135 total, 20 thin omitted)
 
 ### Community 0 - "Community 0"
-Cohesion: 0.05
-Nodes (104): GitHubIssueRecord, GitRunner, Diagnostic, DiagnosticKind, _extract_issue_references(), GitHubIssue, IssueKind, _missing() (+96 more)
+Cohesion: 0.21
+Nodes (30): _append_warning(), _build_empty_implementation_issue_state(), _build_implementation_issue_state(), _build_implementation_issue_timeline(), _build_timeline_step(), _derive_observed_status(), _fetch_issue_records(), _fetch_repo_labels() (+22 more)
 
 ### Community 1 - "Community 1"
 Cohesion: 0.06
-Nodes (109): Any, ArgumentParser, BackgroundTaskScheduler, BaseException, BaseModel, ClaimWorkspaceGateway, ImplementationClaimService, build_parser() (+101 more)
+Nodes (121): Any, AppConfig, ArgumentParser, BackgroundTaskScheduler, BaseException, BaseModel, build_implementation_branch_name(), ClaimError (+113 more)
 
 ### Community 2 - "Community 2"
-Cohesion: 0.08
-Nodes (65): RepoConfig, Orchestrator, MagicMock, FakeExecutor, PassBasedListIssuesMock, GitHubIssueRecord, When execute_run raises an exception for one issue, other concurrent issues stil, When execute_run raises an exception for one issue, other concurrent issues stil (+57 more)
+Cohesion: 0.12
+Nodes (29): RepoConfig, FakeExecutor, GitHubIssueRecord, The orchestrator tracks dispatched issues as in-memory active runs during execut, The orchestrator tracks dispatched issues as in-memory active runs during execut, The scheduler emits agent_run.start and agent_run.finished events., The orchestrator tracks dispatched issues as in-memory active runs during execut, The orchestrator tracks dispatched issues as in-memory active runs during execut (+21 more)
 
 ### Community 3 - "Community 3"
-Cohesion: 0.18
-Nodes (21): ClaimResult, HarnessConfig, ExecutionResult, IntegrationResult, PrdPreparationResult, ClaimResult, ExecutionResult, IntegrationResult (+13 more)
+Cohesion: 0.09
+Nodes (67): ClaimResult, HarnessConfig, create_dashboard_app(), ExecutionResult, IntegrationResult, PrdPreparationResult, ClaimResult, ExecutionResult (+59 more)
 
 ### Community 4 - "Community 4"
 Cohesion: 0.06
@@ -170,16 +194,16 @@ Cohesion: 0.05
 Nodes (28): ImplementationClaimResponse, ImplementationClaimState, ImplementationIntegrationResponse, ImplementationIntegrationState, ImplementationStartResponse, ImplementationStartState, Issue, LogTail (+20 more)
 
 ### Community 7 - "Community 7"
-Cohesion: 0.05
-Nodes (56): _child_acquire_and_hold(), _child_try_acquire_nonblocking(), FakeGitRunner, str, Tests for the Repository Operation Lock (ADR 0004).  The Repository Operation Lo, A generic fake git runner used across gateway lock tests., A generic fake git runner used across gateway lock tests., When ClaimWorkspaceGateway, GitWorkspaceGateway, and IntegrationWorkspaceGateway (+48 more)
+Cohesion: 0.06
+Nodes (64): _child_acquire_and_hold(), _child_try_acquire_nonblocking(), FakeGitRunner, str, Tests for the Repository Operation Lock (ADR 0004).  The Repository Operation Lo, A generic fake git runner used across gateway lock tests., A generic fake git runner used across gateway lock tests., When ClaimWorkspaceGateway, GitWorkspaceGateway, and IntegrationWorkspaceGateway (+56 more)
 
 ### Community 8 - "Community 8"
 Cohesion: 0.06
 Nodes (30): For --cluster-only, For git commit hook, For /graphify add, For /graphify explain, For /graphify path, For /graphify query, For native CLAUDE.md integration, For --update (incremental re-extraction) (+22 more)
 
 ### Community 9 - "Community 9"
-Cohesion: 0.17
-Nodes (34): GitHubIssueRecord, int, str, timedelta, implementation_issue(), plan(), prd_issue(), GitHubIssueRecord (+26 more)
+Cohesion: 0.12
+Nodes (46): GitHubIssueRecord, int, str, timedelta, implementation_issue(), plan(), prd_issue(), GitHubIssueRecord (+38 more)
 
 ### Community 10 - "Community 10"
 Cohesion: 0.09
@@ -190,16 +214,16 @@ Cohesion: 0.13
 Nodes (21): aliases, components, hooks, lib, ui, utils, iconLibrary, menuAccent (+13 more)
 
 ### Community 12 - "Community 12"
-Cohesion: 0.06
-Nodes (72): _all_checks_pass(), _build_integration_orchestration_body(), _exc_to_failure_type(), _integration_diag_comment(), IntegrationError, IntegrationService, IssueGateway, MergeConflictError (+64 more)
+Cohesion: 0.10
+Nodes (42): FakeGitRunner, get_mock_issues(), get_mock_issues_for_async(), GitHubIssueRecord, Path, poll_integration_pr skips issues without an integration PR., poll_integration_pr skips when checks are still in progress (not yet completed)., poll_integration_pr detects PR conflicts and marks needs-triage. (+34 more)
 
 ### Community 13 - "Community 13"
-Cohesion: 0.26
-Nodes (12): FakeIssueGateway, GitHubIssueRecord, int, str, test_fresh_claim_remains_active(), test_malformed_invalid_state_moves_to_needs_triage(), test_malformed_missing_info_moves_to_needs_info(), test_no_double_label_or_comment_if_already_triaged() (+4 more)
+Cohesion: 0.17
+Nodes (26): ReconciliationService, FakeIssueGateway, GitHubIssueRecord, int, str, Reconciliation detects an unrecognised Claim Status value and moves to needs-tri, A failed claim setup remains reviewable until a human resolves it., An active claim with claim_status=active behaves like any other active claim. (+18 more)
 
 ### Community 14 - "Community 14"
-Cohesion: 0.11
-Nodes (14): AppConfig, extract_last_agent_message(), IssueGateway, CommandRunner, run_subprocess(), GitHubIssueRecord, int, Path (+6 more)
+Cohesion: 0.18
+Nodes (11): _combine_diagnostics(), CommandRunner, _replace_diagnostics(), run_subprocess(), bool, callable, CommandExecutor, CommandResult (+3 more)
 
 ### Community 15 - "Community 15"
 Cohesion: 0.10
@@ -210,8 +234,8 @@ Cohesion: 0.10
 Nodes (18): CLI, Component Docs, Examples, and Usage, Component Selection, Component Structure → [composition.md](./rules/composition.md), Critical Rules, Current Project Context, Detailed References, Forms & Inputs → [forms.md](./rules/forms.md) (+10 more)
 
 ### Community 17 - "Community 17"
-Cohesion: 0.23
-Nodes (13): GitHubIssueRecord, int, str, FakeGitRunner, FakeIssueGateway, GitHubIssueRecord, int, str (+5 more)
+Cohesion: 0.18
+Nodes (20): GitHubIssueRecord, int, str, FakeGitRunner, FakeIssueGateway, GitHubIssueRecord, int, str (+12 more)
 
 ### Community 18 - "Community 18"
 Cohesion: 0.11
@@ -222,12 +246,12 @@ Cohesion: 0.11
 Nodes (17): `add` — Add components, `apply` — Apply a preset to an existing project, `build` — Build a custom registry, Commands, Contents, `diff` — Check for updates, `docs` — Get component documentation URLs, Dry-Run Mode (+9 more)
 
 ### Community 20 - "Community 20"
-Cohesion: 0.18
-Nodes (32): create_dashboard_app(), build_claimed_issue(), build_config(), build_unclaimed_issue(), AppConfig, Path, test_claim_implementation_issue_endpoint_preserves_deliberate_bad_request_errors(), test_claim_implementation_issue_endpoint_requires_agent_run_id() (+24 more)
+Cohesion: 0.05
+Nodes (112): _claim_status_is_recognised(), ClaimStatus, Diagnostic, DiagnosticKind, _extract_issue_references(), GitHubIssue, IssueKind, _missing() (+104 more)
 
 ### Community 21 - "Community 21"
-Cohesion: 0.45
-Nodes (17): main(), Path, str, Path, test_claim_issue_command_reports_branch_and_worktree(), test_claim_issue_command_reports_failures_to_stderr(), test_dashboard_command_starts_server(), test_execute_run_command_failure() (+9 more)
+Cohesion: 0.13
+Nodes (40): _build_command_executor(), build_parser(), _claim_issue_command(), _dashboard_command(), _execute_run_command(), _integrate_run_command(), _prepare_prd_command(), _reconcile_command() (+32 more)
 
 ### Community 22 - "Community 22"
 Cohesion: 0.12
@@ -258,8 +282,8 @@ Cohesion: 0.15
 Nodes (11): Configuring Registries, Setup, `shadcn:get_add_command_for_items`, `shadcn:get_audit_checklist`, `shadcn:get_item_examples_from_registries`, `shadcn:get_project_registries`, `shadcn:list_items_in_registries`, shadcn MCP Server (+3 more)
 
 ### Community 29 - "Community 29"
-Cohesion: 0.15
-Nodes (19): FakeRunner, str, When labels tuple is provided, issues are filtered by OR'd labels via --search., Single-element labels tuple still uses --search for consistency., updated_since adds an updated:>= filter via --search., Both labels and updated_since are combined into a single --search query., Passing both label and labels raises ValueError., test_add_and_remove_labels_edit_issue_lifecycle_state() (+11 more)
+Cohesion: 0.12
+Nodes (22): FakeRunner, When labels tuple is provided, issues are filtered by OR'd labels via --search., Single-element labels tuple still uses --search for consistency., updated_since adds an updated:>= filter via --search., When labels tuple is provided, issues are filtered by OR'd labels via --search., Both labels and updated_since are combined into a single --search query., Single-element labels tuple still uses --search for consistency., updated_since adds an updated:>= filter via --search. (+14 more)
 
 ### Community 30 - "Community 30"
 Cohesion: 0.15
@@ -290,8 +314,8 @@ Cohesion: 0.20
 Nodes (8): Buttons inside inputs use InputGroup + InputGroupAddon, Contents, Field validation and disabled states, FieldSet + FieldLegend for grouping related fields, Forms & Inputs, Forms use FieldGroup + Field, InputGroup requires InputGroupInput/InputGroupTextarea, Option sets (2–7 choices) use ToggleGroup
 
 ### Community 37 - "Community 37"
-Cohesion: 0.47
-Nodes (10): Path, str, Path, str, test_harness_command_template_is_loaded(), test_loads_valid_config(), test_missing_required_repo_field_raises_clear_error(), test_repo_concurrency_defaults_are_applied() (+2 more)
+Cohesion: 0.11
+Nodes (27): IntegrationError, MergeConflictError, PrCreationError, PrMergeError, PushError, Base class for integration workspace errors., Raised when updating the implementation branch against the PRD branch fails., Base class for integration workspace errors. (+19 more)
 
 ### Community 38 - "Community 38"
 Cohesion: 0.29
@@ -314,8 +338,8 @@ Cohesion: 0.29
 Nodes (5): Before exploring, read these, Domain Docs, File structure, Flag ADR conflicts, Use the glossary's vocabulary
 
 ### Community 43 - "Community 43"
-Cohesion: 0.48
-Nodes (5): implementation_branch, issue_number, prd_branch, started_at, status
+Cohesion: 0.33
+Nodes (7): failure_reason, finished_at, implementation_branch, issue_number, prd_branch, started_at, status
 
 ### Community 44 - "Community 44"
 Cohesion: 0.29
@@ -338,7 +362,7 @@ Cohesion: 0.33
 Nodes (4): Conventions, Issue tracker: Local Markdown, When a skill says "fetch the relevant ticket", When a skill says "publish to the issue tracker"
 
 ### Community 49 - "Community 49"
-Cohesion: 0.20
+Cohesion: 0.18
 Nodes (9): Agent skills, Domain docs, Issue tracker, Triage labels, Agent skills, Domain docs, Issue tracker, Knowledge graph (graphify) (+1 more)
 
 ### Community 50 - "Community 50"
@@ -429,6 +453,10 @@ Nodes (4): Common Sticking Points, Pre-Delivery Checklist, Query Strategy, Tips 
 Cohesion: 0.50
 Nodes (4): Must Use, Recommended, Skip, When to Apply
 
+### Community 90 - "Community 90"
+Cohesion: 0.39
+Nodes (20): main(), Path, str, Path, test_claim_issue_command_reports_branch_and_worktree(), test_claim_issue_command_reports_failures_to_stderr(), test_dashboard_command_starts_server(), test_execute_run_command_does_not_construct_command_executor_for_harness_execution() (+12 more)
+
 ### Community 95 - "Community 95"
 Cohesion: 0.25
 Nodes (3): DependencyPipelineProps, PipelineNode, colorMap
@@ -442,44 +470,132 @@ Cohesion: 0.67
 Nodes (3): Available Domains, Available Stacks, Search Reference
 
 ### Community 104 - "Community 104"
-Cohesion: 0.19
-Nodes (10): build_implementation_branch_name(), ClaimError, GitRunner, Raised when claim setup fails., run_git(), upsert_claim_metadata(), _utc_now(), bool (+2 more)
+Cohesion: 0.13
+Nodes (16): CommandResult, _is_transient_failure(), Command-execution abstraction for external orchestration commands.  Classifies c, Execute *command* with phase-aware timeout and retry behaviour.          Paramet, Convenience wrapper — short-hand for ``execute(…, phase=DISCOVERY)``., Convenience wrapper — short-hand for ``execute(…, phase=LIFECYCLE_MUTATION)``., Execute a single subprocess invocation and return a raw result., Structured result of a command execution including diagnostics. (+8 more)
 
 ### Community 105 - "Community 105"
-Cohesion: 0.24
-Nodes (13): FakeIssueGateway, get_mock_issues(), GitHubIssueRecord, int, Path, str, Helper to initialize repository and checkout worktree. Returns (repo_path, workt, setup_test_git_repo() (+5 more)
+Cohesion: 0.56
+Nodes (10): get_mock_issues(), Path, Helper to initialize repository and checkout worktree. Returns (repo_path, workt, setup_test_git_repo(), test_execution_env_context_delivery(), test_execution_failure_by_no_commits(), test_execution_failure_by_non_zero_exit(), test_execution_timeout_kills_process_group() (+2 more)
 
 ### Community 106 - "Community 106"
-Cohesion: 0.25
-Nodes (5): Acquire the exclusive file lock.          Args:             blocking: If ``True`, Return ``True`` if the lock is currently held., Self, bool, float
+Cohesion: 0.22
+Nodes (7): Acquire the exclusive file lock.          Args:             blocking: If ``True`, Return ``True`` if the lock is currently held., Self, bool, float, bool, float
 
 ### Community 107 - "Community 107"
-Cohesion: 0.25
-Nodes (4): FakeDelayingExecutor, bool, Fake executor that runs tasks in separate threads (not the main thread) to simul, Fake executor that runs tasks in separate threads (not the main thread) to simul
+Cohesion: 0.11
+Nodes (12): FakeDelayingExecutor, bool, Exception, RaisingFutureExecutor, Fake executor that runs tasks in separate threads (not the main thread) to simul, Fake executor that runs tasks in separate threads (not the main thread) to simul, Unexpected raised futures must not leak in-memory Agent Run Capacity., Unexpected raised futures must not leak in-memory Agent Run Capacity. (+4 more)
 
 ### Community 108 - "Community 108"
-Cohesion: 0.33
-Nodes (3): BlockingIntegrationGateway, A FakeIssueGateway that can block inside integrate_issue until released. Used to, A FakeIssueGateway that can block inside create_integration_pr until released. U
+Cohesion: 0.25
+Nodes (5): BlockingIntegrationGateway, A FakeIssueGateway that can block inside integrate_issue until released. Used to, A FakeIssueGateway that can block inside create_integration_pr until released. U, A FakeIssueGateway that can block inside create_integration_pr until released. U, A FakeIssueGateway that can block inside create_integration_pr until released. U
+
+### Community 111 - "Community 111"
+Cohesion: 0.12
+Nodes (17): _default_event_emitter(), Continuously drain the integration queue, one issue at a time.         The lock, Claim + Execute only. Successful results enter the serialized integration lane., Claim + Execute only. Successful results enter the serialized integration lane., Claim + Execute only. Successful results enter the serialized integration lane., SchedulerEvent, MagicMock, When issue #3 finishes execution before issue #2 (which is still running),     # (+9 more)
+
+### Community 112 - "Community 112"
+Cohesion: 0.09
+Nodes (28): _all_checks_pass(), _build_integration_orchestration_body(), _exc_to_failure_type(), _integration_diag_comment(), IssueGateway, Format a diagnostic comment for integration failures., Map an exception to a failure_type string., Format a diagnostic comment for integration failures. (+20 more)
+
+### Community 113 - "Community 113"
+Cohesion: 0.38
+Nodes (12): build_config(), _completed(), AppConfig, int, Path, str, test_provider_builds_prd_grouped_implementation_issue_state_capacity_and_warnings(), test_provider_reports_dirty_working_tree_as_warning_not_critical_failure() (+4 more)
+
+### Community 114 - "Community 114"
+Cohesion: 0.17
+Nodes (24): CommandError, CommandPhase, Classification of a command's operational impact., Raised when a command fails after exhausting all retries., GitHubIssueRecord, GitRunner, GitRunner, Protocol (+16 more)
+
+### Community 115 - "Community 115"
+Cohesion: 0.06
+Nodes (16): CommandResult, Tests for command_executor.py — phase-aware command execution abstraction., Non-zero exit from a discovery command is NOT retried (not transient)., Mutation with non-zero exit should NOT retry without safety check., A stderr message matching a transient pattern triggers retries., Even on a transient-looking failure, safety check can block retry., Build a CommandResult with sensible test defaults., Verify that retries introduce a measurable delay. (+8 more)
+
+### Community 116 - "Community 116"
+Cohesion: 0.40
+Nodes (5): When execute_run raises an exception for one issue, other concurrent issues stil, When execute_run raises an exception for one issue, other concurrent issues stil, When execute_run raises an exception for one issue, other concurrent issues stil, When execute_run raises an exception for one issue, other concurrent issues stil, test_execution_exception_does_not_block_concurrent_issues()
+
+### Community 117 - "Community 117"
+Cohesion: 0.40
+Nodes (5): Agent Run Capacity must be freed when execution completes, not when integration, Agent Run Capacity must be freed when execution completes, not when integration, Agent Run Capacity must be freed when execution completes, not when integration, Agent Run Capacity must be freed when execution completes, not when integration, test_agent_run_capacity_freed_after_execution_not_after_integration()
+
+### Community 118 - "Community 118"
+Cohesion: 0.11
+Nodes (24): BranchPreparationError, build_prd_branch_name(), Raised when git branch setup fails., Raised when git branch setup fails., run_git(), upsert_prd_branch_metadata(), GitHubIssueRecord, int (+16 more)
+
+### Community 119 - "Community 119"
+Cohesion: 0.10
+Nodes (20): 1. Architectural Telemetry Strategy (Database-Driven), 2. PRD-Level Metrics (The "Macro" View), 3. Issue / Run-Level Metrics (The "Micro" View), 4. UI/UX Rules & Styling Tokens, A. Accessibility & Semantic Styling (No-Color-Only), A. Recommended Relational Database Schema, A. Run Phase Duration Chart (Stacked Bar), A. Segmented Progress Bar (Recharts Stacked Bar) (+12 more)
+
+### Community 120 - "Community 120"
+Cohesion: 0.16
+Nodes (10): Orchestrator, Create a system-wide RepoLock bound to *repo_path* and inject it         into th, Create a system-wide RepoLock bound to *repo_path* and inject it         into th, Start the serialized integration worker thread if not already running., Wait for all pending integrations to complete. Called before shutdown., Poll integration PRs whose status is ``pending_validation``.          Called fro, Continuous drain scheduling for dependency waves.          Reconciliation runs a, Poll integration PRs whose status is ``pending_validation``.          Called fro (+2 more)
+
+### Community 121 - "Community 121"
+Cohesion: 0.40
+Nodes (5): Continuous mode must not exit while integrations are still pending,     because, Continuous mode must not exit while integrations are still pending,     because, Continuous mode must not exit while integrations are still pending,     because, Continuous mode must not exit while integrations are still pending,     because, test_continuous_mode_does_not_exit_early_while_integrations_pending()
+
+### Community 122 - "Community 122"
+Cohesion: 0.13
+Nodes (13): PassBasedListIssuesMock, str, In continuous mode, in-memory active runs are passed to the planner on subsequen, In continuous mode, in-memory active runs are passed to the planner on subsequen, In continuous mode, in-memory active runs are passed to the planner on subsequen, In continuous mode, in-memory active runs are passed to the planner on subsequen, When an issue integrates and closes, a previously-blocked dependent     issue sh, When an issue integrates and closes, a previously-blocked dependent     issue sh (+5 more)
+
+### Community 123 - "Community 123"
+Cohesion: 0.50
+Nodes (4): When an implementation issue is blocked by another issue that falls     outside, When an implementation issue is blocked by another issue that falls     outside, When an implementation issue is blocked by another issue that falls     outside, test_plan_actions_resolves_missing_blocker_via_view_issue_when_closed()
+
+### Community 124 - "Community 124"
+Cohesion: 0.50
+Nodes (4): When view_issue() fails for a missing blocker (e.g. deleted issue),     the plan, When view_issue() fails for a missing blocker (e.g. deleted issue),     the plan, When view_issue() fails for a missing blocker (e.g. deleted issue),     the plan, test_plan_actions_view_issue_failure_still_produces_diagnostic()
+
+### Community 125 - "Community 125"
+Cohesion: 0.50
+Nodes (4): The orchestrator fetches open issues without a time window     and closed issues, The orchestrator fetches open issues without a time window     and closed issues, The orchestrator fetches open issues without a time window     and closed issues, test_plan_actions_with_sliding_window_passes_labels_and_updated_since()
+
+### Community 126 - "Community 126"
+Cohesion: 0.25
+Nodes (4): Discovery timeout is transient — should be retried., Mutation timeout — no retry without safety check., Mutation timeout IS retried when safety check passes., TestTimeout
+
+### Community 129 - "Community 129"
+Cohesion: 0.40
+Nodes (4): 👔 LinkedIn Post (Option 2: The "Builder's Insight" Style), 💡 Recommendations for Posting, Social Media Post Drafts for Bersama / Rangkai, 🐦 X / Threads Draft (Casual English Builder Style)
+
+### Community 133 - "Community 133"
+Cohesion: 0.40
+Nodes (5): When two Agent Runs succeed at roughly the same time,     their integrations mus, When two Agent Runs succeed at roughly the same time,     their integrations mus, When two Agent Runs succeed at roughly the same time,     their integrations mus, When two Agent Runs succeed at roughly the same time,     their integrations mus, test_integration_is_serialized_when_multiple_agent_runs_finish_together()
+
+### Community 135 - "Community 135"
+Cohesion: 0.40
+Nodes (5): When integration fails, the issue should get needs-triage label and not be retri, When integration fails, the issue should get needs-triage label and not be retri, When integration fails, the issue should get needs-triage label and not be retri, When integration fails, the issue should get needs-triage label and not be retri, test_integration_failure_leaves_issue_for_human_review_in_orchestrator_context()
+
+### Community 136 - "Community 136"
+Cohesion: 0.40
+Nodes (5): Continuous mode stops when no claimable issues, no active Agent Runs,     and no, Continuous mode stops when no claimable issues, no active Agent Runs,     and no, Continuous mode stops when no claimable issues, no active Agent Runs,     and no, Continuous mode stops when no claimable issues, no active Agent Runs,     and no, test_continuous_mode_stops_when_truly_idle()
+
+### Community 137 - "Community 137"
+Cohesion: 0.40
+Nodes (5): The scheduler emits integration.start and integration.finished events., The scheduler emits integration.pr_created event after successful execution., The scheduler emits integration.pr_created event after successful execution., The scheduler emits integration.pr_created event after successful execution., test_scheduler_emits_integration_events()
+
+### Community 138 - "Community 138"
+Cohesion: 0.40
+Nodes (5): Failure events at any stage (claim, execution, integration) emit     per-issue e, Failure events at any stage (claim, execution, integration) emit     per-issue e, Failure events at any stage (claim, execution, integration) emit     per-issue e, Failure events at any stage (claim, execution, integration) emit     per-issue e, test_per_issue_failure_events_include_rich_context()
 
 ## Knowledge Gaps
-- **427 isolated node(s):** `Language`, `Pull Request Integration and Scalable Polling`, `Bound external orchestration commands`, `GitHubIssueRecord`, `AppConfig` (+422 more)
+- **445 isolated node(s):** `source`, `sourceType`, `skillPath`, `computedHash`, `source` (+440 more)
   These have ≤1 connection - possible missing edges or undocumented components.
-- **19 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **20 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `GitHubIssueRecord` connect `Community 0` to `Community 1`, `Community 2`, `Community 3`, `Community 105`, `Community 9`, `Community 107`, `Community 12`, `Community 108`, `Community 14`, `Community 13`, `Community 17`, `Community 20`, `Community 29`?**
-  _High betweenness centrality (0.071) - this node is a cross-community bridge._
-- **Why does `Orchestrator` connect `Community 2` to `Community 0`, `Community 1`, `Community 3`, `Community 7`, `Community 107`, `Community 12`, `Community 108`, `Community 111`?**
-  _High betweenness centrality (0.047) - this node is a cross-community bridge._
-- **Why does `datetime` connect `Community 0` to `Community 1`, `Community 4`, `Community 104`, `Community 9`, `Community 13`?**
-  _High betweenness centrality (0.045) - this node is a cross-community bridge._
-- **Are the 110 inferred relationships involving `GitHubIssue` (e.g. with `Any` and `BackgroundTaskScheduler`) actually correct?**
-  _`GitHubIssue` has 110 INFERRED edges - model-reasoned connections that need verification._
-- **Are the 94 inferred relationships involving `GitHubIssueRecord` (e.g. with `ExecutionResult` and `HarnessExecutionService`) actually correct?**
-  _`GitHubIssueRecord` has 94 INFERRED edges - model-reasoned connections that need verification._
-- **Are the 74 inferred relationships involving `IntegrationWorkspaceGateway` (e.g. with `Any` and `ArgumentParser`) actually correct?**
-  _`IntegrationWorkspaceGateway` has 74 INFERRED edges - model-reasoned connections that need verification._
-- **Are the 68 inferred relationships involving `Orchestrator` (e.g. with `ArgumentParser` and `_run_command()`) actually correct?**
-  _`Orchestrator` has 68 INFERRED edges - model-reasoned connections that need verification._
+- **Why does `GitHubIssue` connect `Community 20` to `Community 0`, `Community 1`, `Community 3`, `Community 37`, `Community 13`, `Community 111`, `Community 112`, `Community 114`, `Community 118`, `Community 120`?**
+  _High betweenness centrality (0.076) - this node is a cross-community bridge._
+- **Why does `GitHubIssueRecord` connect `Community 114` to `Community 1`, `Community 2`, `Community 3`, `Community 9`, `Community 12`, `Community 13`, `Community 14`, `Community 17`, `Community 20`, `Community 29`, `Community 37`, `Community 104`, `Community 105`, `Community 107`, `Community 108`, `Community 111`, `Community 112`, `Community 118`, `Community 122`?**
+  _High betweenness centrality (0.060) - this node is a cross-community bridge._
+- **Why does `datetime` connect `Community 20` to `Community 0`, `Community 1`, `Community 4`, `Community 9`, `Community 13`, `Community 114`?**
+  _High betweenness centrality (0.044) - this node is a cross-community bridge._
+- **Are the 156 inferred relationships involving `GitHubIssue` (e.g. with `Any` and `BackgroundTaskScheduler`) actually correct?**
+  _`GitHubIssue` has 156 INFERRED edges - model-reasoned connections that need verification._
+- **Are the 111 inferred relationships involving `GitHubIssueGateway` (e.g. with `Any` and `ArgumentParser`) actually correct?**
+  _`GitHubIssueGateway` has 111 INFERRED edges - model-reasoned connections that need verification._
+- **Are the 120 inferred relationships involving `GitHubIssueRecord` (e.g. with `ExecutionResult` and `HarnessExecutionService`) actually correct?**
+  _`GitHubIssueRecord` has 120 INFERRED edges - model-reasoned connections that need verification._
+- **Are the 106 inferred relationships involving `CommandExecutor` (e.g. with `ArgumentParser` and `BackgroundTaskScheduler`) actually correct?**
+  _`CommandExecutor` has 106 INFERRED edges - model-reasoned connections that need verification._

@@ -121,6 +121,7 @@ def test_scheduler_emits_claim_attempt_events() -> None:
     orchestrator = Orchestrator(
         issues_gateway=issues_gateway,
         now_provider=lambda: "2026-05-29T17:00:00Z",
+        executor=FakeExecutor(),
         event_emitter=events.append,
     )
     orchestrator.reconciliation_service = MagicMock()
@@ -228,6 +229,7 @@ def test_scheduler_emits_agent_run_start_and_finish_events() -> None:
     orchestrator = Orchestrator(
         issues_gateway=issues_gateway,
         now_provider=lambda: "2026-05-29T17:00:00Z",
+        executor=FakeExecutor(),
         event_emitter=events.append,
     )
     orchestrator.reconciliation_service = MagicMock()

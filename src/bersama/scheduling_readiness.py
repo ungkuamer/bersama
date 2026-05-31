@@ -1,0 +1,995 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
+import json
+from pathlib import Path
+import os
+import shutil
+import subprocess
+
+from bersama.config import AppConfig, ConfigError, RepoConfig
+from bersama.issues import (
+    ClaimStatus,
+    GitHubIssue,
+    ImplementationIssue,
+    PrdIssue,
+    parse_claim_status,
+    parse_issue,
+)
+
+
+REQUIRED_LABELS = (
+    "prd",
+    "implementation",
+    "ready-for-agent",
+    "claimed",
+    "needs-info",
+    "needs-triage",
+    "ready-for-human",
+    "wontfix",
+)
+
+
+@dataclass(frozen=True)
+class ReadinessCheck:
+    message: str
+    remediation: str
+    details: dict[str, object]
+
+
+@dataclass(frozen=True)
+class CheckProviderContext:
+    repo_name: str
+    repo: RepoConfig | None
+    config: AppConfig
+    harness_name: str | None
+    harness_configured: bool
+    harness_command: str | None
+
+
+class ReadinessCheckProvider:
+    def evaluate(self, context: CheckProviderContext) -> tuple[list[ReadinessCheck], list[ReadinessCheck]]:
+        raise NotImplementedError
+
+
+@dataclass(frozen=True)
+class SchedulingReadinessProvider:
+    config: AppConfig
+    check_providers: tuple[ReadinessCheckProvider, ...] = ()
+
+    def __post_init__(self) -> None:
+        if not self.check_providers:
+            object.__setattr__(
+                self,
+                "check_providers",
+                (
+                    ConfigReadinessCheckProvider(),
+                    RepositoryReadinessCheckProvider(),
+                    GitHubReadinessCheckProvider(),
+                    HarnessReadinessCheckProvider(),
+                ),
+            )
+
+    def build_snapshot(self, repo_name: str) -> dict[str, object]:
+        observed_at = (
+            datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+        )
+        repo, repo_error = _safe_repo_lookup(self.config, repo_name)
+        harness_name = repo.default_harness if repo is not None else None
+        harness_configured = _has_harness(self.config, harness_name)
+        harness_command = _safe_harness_command(self.config, harness_name)
+        checks = self._evaluate_checks(
+            CheckProviderContext(
+                repo_name=repo_name,
+                repo=repo,
+                config=self.config,
+                harness_name=harness_name,
+                harness_configured=harness_configured,
+                harness_command=harness_command,
+            )
+        )
+
+        if repo_error is not None:
+            checks["critical_failures"].insert(
+                0,
+                ReadinessCheck(
+                    message="Scheduling configuration is invalid.",
+                    remediation="Review the repository configuration and correct the missing or invalid setting.",
+                    details={
+                        "code": "invalid-config",
+                        "error": str(repo_error),
+                    },
+                ),
+            )
+
+        implementation_issue_state = _build_implementation_issue_state(repo)
+        checks["warnings"].extend(
+            ReadinessCheck(
+                message=str(warning["message"]),
+                remediation=str(warning["remediation"]),
+                details=dict(warning["details"]),
+            )
+            for warning in implementation_issue_state.get("derived_warnings", [])
+        )
+
+        return {
+            "repo": _serialize_repo(repo_name, repo),
+            "snapshot": {
+                "observed_at": observed_at,
+                "config_provenance": {
+                    "source": "app-config",
+                    "default_harness": {
+                        "name": harness_name,
+                        "timeout_seconds": _safe_harness_timeout(self.config, harness_name),
+                    },
+                },
+                "harness_summary": {
+                    "default_harness": harness_name,
+                    "timeout_seconds": _safe_harness_timeout(self.config, harness_name),
+                },
+                "readiness_checks": {
+                    "critical_failures": [check.__dict__ for check in checks["critical_failures"]],
+                    "warnings": [check.__dict__ for check in checks["warnings"]],
+                },
+                "implementation_issue_state": {
+                    key: value
+                    for key, value in implementation_issue_state.items()
+                    if key != "derived_warnings"
+                },
+            },
+        }
+
+    def _evaluate_checks(self, context: CheckProviderContext) -> dict[str, list[ReadinessCheck]]:
+        critical_failures: list[ReadinessCheck] = []
+        warnings: list[ReadinessCheck] = []
+        for provider in self.check_providers:
+            provider_critical, provider_warnings = provider.evaluate(context)
+            critical_failures.extend(provider_critical)
+            warnings.extend(provider_warnings)
+        return {
+            "critical_failures": critical_failures,
+            "warnings": warnings,
+        }
+
+
+class ConfigReadinessCheckProvider(ReadinessCheckProvider):
+    def evaluate(self, context: CheckProviderContext) -> tuple[list[ReadinessCheck], list[ReadinessCheck]]:
+        if context.repo is not None:
+            return ([], [])
+        return (
+            [
+                ReadinessCheck(
+                    message="Scheduling configuration is invalid.",
+                    remediation="Review the repository configuration and correct the missing or invalid setting.",
+                    details={
+                        "code": "invalid-config",
+                    },
+                )
+            ],
+            [],
+        )
+
+
+class RepositoryReadinessCheckProvider(ReadinessCheckProvider):
+    def evaluate(self, context: CheckProviderContext) -> tuple[list[ReadinessCheck], list[ReadinessCheck]]:
+        if context.repo is None:
+            return ([], [])
+
+        critical_failures: list[ReadinessCheck] = []
+        warnings: list[ReadinessCheck] = []
+
+        repo_path = context.repo.repo_path
+        if not repo_path.exists():
+            critical_failures.append(
+                ReadinessCheck(
+                    message="Target repository path does not exist.",
+                    remediation="Point the repo configuration at an existing local checkout.",
+                    details={
+                        "code": "missing-target-repo",
+                        "path": str(repo_path),
+                    },
+                )
+            )
+            return (critical_failures, warnings)
+
+        if not (repo_path / ".git").exists():
+            critical_failures.append(
+                ReadinessCheck(
+                    message="Target repository is not a Git repository.",
+                    remediation="Use a repository checkout with Git metadata available.",
+                    details={
+                        "code": "non-git-target-repo",
+                        "path": str(repo_path),
+                    },
+                )
+            )
+            return (critical_failures, warnings)
+
+        worktree_root = context.repo.worktree_root
+        if not os.access(worktree_root, os.W_OK):
+            critical_failures.append(
+                ReadinessCheck(
+                    message="Worktree root is not writable.",
+                    remediation="Choose a writable worktree root before running scheduling.",
+                    details={
+                        "code": "worktree-root-not-writable",
+                        "path": str(worktree_root),
+                    },
+                )
+            )
+
+        permission = _git_permission(context.repo.repo_path)
+        if permission is None:
+            critical_failures.append(
+                ReadinessCheck(
+                    message="Repository permissions could not be determined.",
+                    remediation="Verify repository access and GitHub visibility before running scheduling.",
+                    details={
+                        "code": "repo-permission-unknown",
+                    },
+                )
+            )
+        elif not permission.get("push", False):
+            critical_failures.append(
+                ReadinessCheck(
+                    message="Repository does not allow push access.",
+                    remediation="Use a repository where the scheduler can write branches when needed.",
+                    details={
+                        "code": "repo-push-forbidden",
+                        "permissions": permission,
+                    },
+                )
+            )
+
+        labels = _fetch_repo_labels(context.repo.repo_path)
+        if labels is None:
+            critical_failures.append(
+                ReadinessCheck(
+                    message="Repository labels could not be read from GitHub.",
+                    remediation="Verify GitHub access for the target repository.",
+                    details={
+                        "code": "labels-unreadable",
+                    },
+                )
+            )
+        else:
+            missing = sorted(label for label in REQUIRED_LABELS if label not in labels)
+            if missing:
+                critical_failures.append(
+                    ReadinessCheck(
+                        message="Required repository labels are missing.",
+                        remediation="Add the required labels in GitHub before running scheduling.",
+                        details={
+                            "code": "missing-required-labels",
+                            "missing_labels": missing,
+                        },
+                    )
+                )
+
+        if _working_tree_dirty(context.repo.repo_path):
+            warnings.append(
+                ReadinessCheck(
+                    message="Working tree has local changes.",
+                    remediation="Review local changes before running scheduling.",
+                    details={
+                        "code": "working-tree-dirty",
+                    },
+                )
+            )
+
+        return (critical_failures, warnings)
+
+
+class GitHubReadinessCheckProvider(ReadinessCheckProvider):
+    def evaluate(self, context: CheckProviderContext) -> tuple[list[ReadinessCheck], list[ReadinessCheck]]:
+        if context.repo is None:
+            return ([], [])
+        if not context.repo.repo_path.exists() or not (context.repo.repo_path / ".git").exists():
+            return ([], [])
+
+        critical_failures: list[ReadinessCheck] = []
+
+        if shutil.which("gh") is None:
+            critical_failures.append(
+                ReadinessCheck(
+                    message="GitHub CLI is not available.",
+                    remediation="Install GitHub CLI where the scheduler runs.",
+                    details={
+                        "code": "gh-cli-missing",
+                    },
+                )
+            )
+            return (critical_failures, [])
+
+        auth_status = _run_command(("gh", "auth", "status"), cwd=context.repo.repo_path)
+        if auth_status.returncode != 0:
+            critical_failures.append(
+                ReadinessCheck(
+                    message="GitHub CLI is not authenticated.",
+                    remediation="Sign in to GitHub CLI for the scheduler environment.",
+                    details={
+                        "code": "gh-auth-missing",
+                        "stderr": auth_status.stderr.strip(),
+                    },
+                )
+            )
+            return (critical_failures, [])
+
+        repo_view = _run_command(("gh", "repo", "view", "--json", "name"), cwd=context.repo.repo_path)
+        if repo_view.returncode != 0:
+            critical_failures.append(
+                ReadinessCheck(
+                    message="Target repository could not be read from GitHub.",
+                    remediation="Verify repository visibility and API access before running scheduling.",
+                    details={
+                        "code": "github-repo-unreadable",
+                        "stderr": repo_view.stderr.strip(),
+                    },
+                )
+            )
+
+        return (critical_failures, [])
+
+
+class HarnessReadinessCheckProvider(ReadinessCheckProvider):
+    def evaluate(self, context: CheckProviderContext) -> tuple[list[ReadinessCheck], list[ReadinessCheck]]:
+        if context.harness_name is None:
+            return (
+                [
+                    ReadinessCheck(
+                        message="Default harness configuration is missing.",
+                        remediation="Set a valid default harness for the repository.",
+                        details={
+                            "code": "missing-default-harness",
+                        },
+                    )
+                ],
+                [],
+            )
+
+        if not context.harness_configured:
+            return (
+                [
+                    ReadinessCheck(
+                        message="Default harness configuration is missing.",
+                        remediation="Set a valid default harness for the repository.",
+                        details={
+                            "code": "missing-default-harness",
+                        },
+                    )
+                ],
+                [],
+            )
+
+        if context.harness_command is None:
+            return (
+                [
+                    ReadinessCheck(
+                        message="Configured harness command is not available.",
+                        remediation="Install the configured harness command or update the harness configuration.",
+                        details={
+                            "code": "harness-command-missing",
+                            "harness": context.harness_name,
+                        },
+                    )
+                ],
+                [],
+            )
+
+        if shutil.which(context.harness_command) is None:
+            return (
+                [
+                    ReadinessCheck(
+                        message="Configured harness command is not available.",
+                        remediation="Install the configured harness command or update the harness configuration.",
+                        details={
+                            "code": "harness-command-missing",
+                            "harness": context.harness_name,
+                        },
+                    )
+                ],
+                [],
+            )
+
+        return ([], [])
+
+
+def _serialize_repo(repo_name: str, repo: RepoConfig | None) -> dict[str, str | None]:
+    if repo is None:
+        return {
+            "name": repo_name,
+            "path": None,
+            "main_branch": None,
+            "worktree_root": None,
+        }
+    return {
+        "name": repo.name,
+        "path": str(repo.repo_path),
+        "main_branch": repo.main_branch,
+        "worktree_root": str(repo.worktree_root),
+    }
+
+
+def _build_empty_implementation_issue_state() -> dict[str, object]:
+    return {
+        "items": [],
+        "groups": [],
+        "agent_run_capacity": {
+            "used": 0,
+            "total": 0,
+        },
+        "derived_warnings": [],
+        "summary": {
+            "ready": 0,
+            "blocked": 0,
+            "claimed": 0,
+            "running": 0,
+            "failed": 0,
+            "succeeded": 0,
+            "other": 0,
+        },
+    }
+
+
+def _normalize_run_summary(run_state: dict[str, object] | None, issue: ImplementationIssue) -> dict[str, object]:
+    return {
+        "status": str(run_state.get("status")) if run_state is not None and run_state.get("status") is not None else None,
+        "agent_run_id": issue.orchestration.agent_run_id,
+        "started_at": str(run_state.get("started_at")) if run_state is not None and run_state.get("started_at") is not None else None,
+        "finished_at": str(run_state.get("finished_at")) if run_state is not None and run_state.get("finished_at") is not None else None,
+        "failure_reason": str(run_state.get("failure_reason")) if run_state is not None and run_state.get("failure_reason") is not None else None,
+    }
+
+
+def _normalize_claim_summary(issue: ImplementationIssue) -> dict[str, object]:
+    return {
+        "status": issue.orchestration.claim_status,
+        "claimed_at": issue.orchestration.claimed_at,
+        "implementation_branch": issue.orchestration.implementation_branch,
+    }
+
+
+def _normalize_integration_summary(issue: ImplementationIssue) -> dict[str, object]:
+    return {
+        "pull_request": issue.orchestration.integration_pr,
+        "status": issue.orchestration.integration_status,
+    }
+
+
+def _build_timeline_step(
+    *,
+    key: str,
+    label: str,
+    status: str,
+    observed_at: str | None,
+    detail: str,
+) -> dict[str, object]:
+    return {
+        "key": key,
+        "label": label,
+        "status": status,
+        "observed_at": observed_at,
+        "detail": detail,
+    }
+
+
+def _build_implementation_issue_timeline(
+    issue: ImplementationIssue,
+    *,
+    parent_prd: PrdIssue | None,
+    observed_status: str,
+    run_summary: dict[str, object],
+    claim_summary: dict[str, object],
+    integration_summary: dict[str, object],
+) -> dict[str, object]:
+    prepared = bool(parent_prd and parent_prd.orchestration.prd_branch)
+    claim_status = parse_claim_status(issue.orchestration.claim_status)
+    integration_status = str(integration_summary["status"]) if integration_summary["status"] is not None else None
+    integration_pr = integration_summary["pull_request"]
+    run_status = run_summary["status"]
+
+    prepared_step_status = "completed" if prepared else "pending"
+    claim_setup_status = "completed" if issue.orchestration.implementation_branch else "pending"
+    active_claim_status = "pending"
+    if claim_status is ClaimStatus.ACTIVE and run_status in {"running", "failed", "succeeded"}:
+        active_claim_status = "completed"
+    elif claim_status is ClaimStatus.ACTIVE:
+        active_claim_status = "active"
+    elif claim_status is ClaimStatus.SETTING_UP:
+        active_claim_status = "active"
+    elif claim_status is ClaimStatus.FAILED:
+        active_claim_status = "failed"
+
+    agent_run_status = "pending"
+    if run_status == "running":
+        agent_run_status = "active"
+    elif run_status == "failed":
+        agent_run_status = "failed"
+    elif run_status == "succeeded":
+        agent_run_status = "completed"
+
+    integration_step_status = "pending"
+    if integration_pr is not None and integration_status == "merged":
+        integration_step_status = "completed"
+    elif integration_pr is not None:
+        integration_step_status = "active"
+
+    integrated_step_status = "completed" if integration_status == "merged" else "pending"
+
+    observed_state = {
+        "running": "running-agent-run",
+        "failed": "failed-agent-run",
+        "succeeded": "pending-integration",
+        "claimed": "claimed-issue",
+        "ready": "unclaimed-issue",
+        "blocked": "blocked-issue",
+        "unready": "unprepared-or-needs-info",
+    }.get(observed_status, observed_status)
+
+    return {
+        "observed_state": observed_state,
+        "is_observed": True,
+        "steps": [
+            _build_timeline_step(
+                key="prepared_prd_issue",
+                label="Prepared PRD Issue",
+                status=prepared_step_status,
+                observed_at=None,
+                detail=(
+                    "Observed PRD branch metadata."
+                    if prepared
+                    else "No observed PRD branch metadata yet."
+                ),
+            ),
+            _build_timeline_step(
+                key="claim_setup",
+                label="Claim Setup",
+                status=claim_setup_status,
+                observed_at=issue.orchestration.claimed_at,
+                detail=(
+                    "Observed implementation branch metadata."
+                    if issue.orchestration.implementation_branch
+                    else "No observed implementation branch metadata yet."
+                ),
+            ),
+            _build_timeline_step(
+                key="active_claim",
+                label="Active Claim",
+                status=active_claim_status,
+                observed_at=issue.orchestration.claimed_at,
+                detail=(
+                    "Observed active claim metadata."
+                    if claim_status is ClaimStatus.ACTIVE
+                    else "Claim metadata not observed as active."
+                ),
+            ),
+            _build_timeline_step(
+                key="agent_run",
+                label="Agent Run",
+                status=agent_run_status,
+                observed_at=run_summary["started_at"] if isinstance(run_summary["started_at"], str) else None,
+                detail=(
+                    "Observed Agent Run state from normalized backend fields."
+                    if run_status in {"running", "failed", "succeeded"}
+                    else "No observed Agent Run state yet."
+                ),
+            ),
+            _build_timeline_step(
+                key="integration_pull_request",
+                label="Integration Pull Request",
+                status=integration_step_status,
+                observed_at=None,
+                detail=(
+                    "Observed Integration Pull Request metadata."
+                    if integration_pr is not None
+                    else "No observed Integration Pull Request metadata yet."
+                ),
+            ),
+            _build_timeline_step(
+                key="integrated_implementation_issue",
+                label="Integrated Implementation Issue",
+                status=integrated_step_status,
+                observed_at=None,
+                detail=(
+                    "Observed merged Integration Pull Request metadata."
+                    if integration_status == "merged"
+                    else "Implementation Issue remains open."
+                ),
+            ),
+        ],
+        "run": run_summary,
+        "claim": claim_summary,
+        "integration": integration_summary,
+    }
+
+
+def _safe_repo_lookup(config: AppConfig, repo_name: str) -> tuple[RepoConfig | None, ConfigError | None]:
+    try:
+        return (config.repo(repo_name), None)
+    except ConfigError as exc:
+        return (None, exc)
+
+
+def _safe_harness_timeout(config: AppConfig, harness_name: str | None) -> int | None:
+    if harness_name is None:
+        return None
+    try:
+        return config.harness(harness_name).timeout_seconds
+    except ConfigError:
+        return None
+
+
+def _safe_harness_command(config: AppConfig, harness_name: str | None) -> str | None:
+    if harness_name is None:
+        return None
+    try:
+        return config.harness(harness_name).command
+    except ConfigError:
+        return None
+
+
+def _has_harness(config: AppConfig, harness_name: str | None) -> bool:
+    if harness_name is None:
+        return False
+    try:
+        config.harness(harness_name)
+    except ConfigError:
+        return False
+    return True
+
+
+def _run_command(command: tuple[str, ...], *, cwd: Path) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        command,
+        cwd=cwd,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+
+def _fetch_repo_labels(repo_path: Path) -> set[str] | None:
+    result = _run_command(
+        ("gh", "label", "list", "--json", "name", "--jq", ".[].name"),
+        cwd=repo_path,
+    )
+    if result.returncode != 0:
+        return None
+    return {line.strip() for line in result.stdout.splitlines() if line.strip()}
+
+
+def _build_implementation_issue_state(repo: RepoConfig | None) -> dict[str, object]:
+    empty = _build_empty_implementation_issue_state()
+    if repo is None:
+        return empty
+
+    empty["agent_run_capacity"]["total"] = repo.global_concurrency
+    records = _fetch_issue_records(repo.repo_path)
+    if records is None:
+        return empty
+
+    prds_by_number: dict[int, PrdIssue] = {}
+    open_implementation_issues: list[ImplementationIssue] = []
+    open_impl_numbers: set[int] = set()
+
+    for record in records:
+        parsed = parse_issue(
+            GitHubIssue(
+                number=record["number"],
+                title=record["title"],
+                body=record["body"],
+                labels=tuple(record["labels"]),
+            )
+        )
+        if isinstance(parsed, PrdIssue):
+            prds_by_number[parsed.issue.number] = parsed
+            continue
+        if isinstance(parsed, ImplementationIssue) and record["state"] == "open":
+            open_implementation_issues.append(parsed)
+            open_impl_numbers.add(parsed.issue.number)
+
+    items: list[dict[str, object]] = []
+    warnings: list[dict[str, object]] = []
+    warning_keys: set[tuple[str, int | None]] = set()
+    capacity_used = 0
+
+    for issue in sorted(open_implementation_issues, key=lambda item: item.issue.number):
+        parent_prd = prds_by_number.get(issue.parent_prd_number or -1)
+        run_state = _read_run_state(repo.worktree_root / f"issue-{issue.issue.number}" / "run-state.json")
+        status, is_stale = _derive_observed_status(
+            issue,
+            repo=repo,
+            open_impl_numbers=open_impl_numbers,
+        )
+        run_summary = _normalize_run_summary(run_state, issue)
+        claim_summary = _normalize_claim_summary(issue)
+        integration_summary = _normalize_integration_summary(issue)
+        item = {
+            "issue_number": issue.issue.number,
+            "title": issue.issue.title,
+            "status": status,
+            "parent_prd_number": issue.parent_prd_number,
+            "blocked_by": list(issue.blocked_by),
+            "active_blockers": [
+                blocker for blocker in issue.blocked_by if blocker in open_impl_numbers
+            ],
+            "timeline": _build_implementation_issue_timeline(
+                issue,
+                parent_prd=parent_prd,
+                observed_status=status,
+                run_summary=run_summary,
+                claim_summary=claim_summary,
+                integration_summary=integration_summary,
+            ),
+        }
+        items.append(item)
+
+        if status in {"claimed", "running"} and not is_stale:
+            capacity_used += 1
+
+        if parent_prd is None or not parent_prd.orchestration.prd_branch:
+            _append_warning(
+                warnings,
+                warning_keys,
+                code="unprepared-prd-issue",
+                message="Implementation Issues are attached to an unprepared PRD Issue.",
+                remediation="Prepare the Parent PRD before relying on Scheduling Readiness for its child work.",
+                issue_number=issue.issue.number,
+                parent_prd_number=issue.parent_prd_number,
+            )
+
+        if status == "blocked":
+            _append_warning(
+                warnings,
+                warning_keys,
+                code="blocked-implementation-issue",
+                message="Blocked Implementation Issues are reducing Scheduling Readiness.",
+                remediation="Resolve the open Blocking Dependency or close the blocked issue.",
+                issue_number=issue.issue.number,
+                parent_prd_number=issue.parent_prd_number,
+            )
+
+        if status == "failed":
+            _append_warning(
+                warnings,
+                warning_keys,
+                code="failed-implementation-issue",
+                message="Failed Implementation Issues require human review.",
+                remediation="Inspect the failed Agent Run or integration outcome before scheduling more work.",
+                issue_number=issue.issue.number,
+                parent_prd_number=issue.parent_prd_number,
+            )
+
+        if is_stale:
+            _append_warning(
+                warnings,
+                warning_keys,
+                code="stale-claim",
+                message="Stale Claims are present in open Implementation Issues.",
+                remediation="Reconcile or release stale claims before counting available Agent Run Capacity.",
+                issue_number=issue.issue.number,
+                parent_prd_number=issue.parent_prd_number,
+            )
+
+        if "needs-info" in issue.issue.labels:
+            _append_warning(
+                warnings,
+                warning_keys,
+                code="needs-info-implementation-issue",
+                message="Some Implementation Issues are waiting on more information.",
+                remediation="Resolve needs-info issues before expecting them to become Ready Implementation Issues.",
+                issue_number=issue.issue.number,
+                parent_prd_number=issue.parent_prd_number,
+            )
+
+    summary = {
+        "ready": sum(1 for item in items if item["status"] == "ready"),
+        "blocked": sum(1 for item in items if item["status"] == "blocked"),
+        "claimed": sum(1 for item in items if item["status"] == "claimed"),
+        "running": sum(1 for item in items if item["status"] == "running"),
+        "failed": sum(1 for item in items if item["status"] == "failed"),
+        "succeeded": sum(1 for item in items if item["status"] == "succeeded"),
+        "other": sum(
+            1
+            for item in items
+            if item["status"] not in {"ready", "blocked", "claimed", "running", "failed", "succeeded"}
+        ),
+    }
+
+    if summary["ready"] == 0 and items:
+        _append_warning(
+            warnings,
+            warning_keys,
+            code="no-ready-implementation-issues",
+            message="No Ready Implementation Issues are currently observed.",
+            remediation="Prepare more child work or unblock existing issues before the next Scheduling Pass.",
+            issue_number=None,
+            parent_prd_number=None,
+        )
+
+    groups_by_prd: dict[int, dict[str, object]] = {}
+    for item in items:
+        parent_prd_number = int(item["parent_prd_number"])
+        parent_prd = prds_by_number.get(parent_prd_number)
+        if parent_prd is None:
+            parent_title = f"PRD #{parent_prd_number}"
+            prepared = False
+        else:
+            parent_title = parent_prd.issue.title
+            prepared = bool(parent_prd.orchestration.prd_branch)
+        groups_by_prd.setdefault(
+            parent_prd_number,
+            {
+                "parent_prd": {
+                    "issue_number": parent_prd_number,
+                    "title": parent_title,
+                    "prepared": prepared,
+                },
+                "items": [],
+            },
+        )["items"].append(
+            {
+                "issue_number": item["issue_number"],
+                "title": item["title"],
+                "status": item["status"],
+                "blocked_by": list(item["blocked_by"]),
+                "active_blockers": list(item["active_blockers"]),
+                "timeline": dict(item["timeline"]),
+            }
+        )
+
+    empty["items"] = items
+    empty["groups"] = [groups_by_prd[number] for number in sorted(groups_by_prd)]
+    empty["summary"] = summary
+    empty["agent_run_capacity"] = {
+        "used": capacity_used,
+        "total": repo.global_concurrency,
+    }
+    empty["derived_warnings"] = warnings
+    return empty
+
+
+def _fetch_issue_records(repo_path: Path) -> list[dict[str, object]] | None:
+    result = _run_command(
+        (
+            "gh",
+            "issue",
+            "list",
+            "--state",
+            "all",
+            "--json",
+            "number,title,body,labels,state",
+            "--search",
+            "label:prd,implementation",
+        ),
+        cwd=repo_path,
+    )
+    if result.returncode != 0:
+        return None
+    payload = json.loads(result.stdout or "[]")
+    issue_records: list[dict[str, object]] = []
+    for item in payload:
+        issue_records.append(
+            {
+                "number": int(item["number"]),
+                "title": str(item["title"]),
+                "body": str(item["body"]),
+                "labels": tuple(
+                    label["name"] if isinstance(label, dict) else str(label)
+                    for label in item.get("labels", [])
+                ),
+                "state": str(item["state"]).lower(),
+            }
+        )
+    return issue_records
+
+
+def _derive_observed_status(
+    issue: ImplementationIssue,
+    *,
+    repo: RepoConfig,
+    open_impl_numbers: set[int],
+) -> tuple[str, bool]:
+    run_state = _read_run_state(repo.worktree_root / f"issue-{issue.issue.number}" / "run-state.json")
+    if run_state is not None:
+        run_status = str(run_state.get("status", "unknown"))
+        if run_status in {"running", "failed", "succeeded"}:
+            return run_status, _is_stale_claim(issue)
+        return "unknown", _is_stale_claim(issue)
+
+    stale = _is_stale_claim(issue)
+    claim_status = parse_claim_status(issue.orchestration.claim_status)
+    if claim_status is ClaimStatus.FAILED:
+        return "failed", stale
+    if (
+        issue.orchestration.integration_status == "pending_validation"
+        or issue.orchestration.integration_status == "merged"
+    ):
+        return "succeeded", stale
+    if _has_claim_metadata(issue):
+        return "claimed", stale
+    if "ready-for-agent" in issue.issue.labels:
+        if any(blocker in open_impl_numbers for blocker in issue.blocked_by):
+            return "blocked", stale
+        return "ready", stale
+    return "unready", stale
+
+
+def _read_run_state(run_state_path: Path) -> dict[str, object] | None:
+    if not run_state_path.exists():
+        return None
+    try:
+        return json.loads(run_state_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return None
+
+
+def _has_claim_metadata(issue: ImplementationIssue) -> bool:
+    orchestration = issue.orchestration
+    return any(
+        (
+            orchestration.agent_run_id,
+            orchestration.claimed_at,
+            orchestration.implementation_branch,
+        )
+    )
+
+
+def _is_stale_claim(issue: ImplementationIssue) -> bool:
+    claimed_at = issue.orchestration.claimed_at
+    if not claimed_at:
+        return False
+    try:
+        claimed_at_dt = datetime.fromisoformat(claimed_at.replace("Z", "+00:00"))
+    except ValueError:
+        return False
+    return datetime.now(timezone.utc) - claimed_at_dt > timedelta(hours=2)
+
+
+def _append_warning(
+    warnings: list[dict[str, object]],
+    warning_keys: set[tuple[str, int | None]],
+    *,
+    code: str,
+    message: str,
+    remediation: str,
+    issue_number: int | None,
+    parent_prd_number: int | None,
+) -> None:
+    key = (code, issue_number)
+    if key in warning_keys:
+        return
+    warning_keys.add(key)
+    warnings.append(
+        {
+            "message": message,
+            "remediation": remediation,
+            "details": {
+                "code": code,
+                "issue_number": issue_number,
+                "parent_prd_number": parent_prd_number,
+            },
+        }
+    )
+
+
+def _git_permission(repo_path: Path) -> dict[str, object] | None:
+    result = _run_command(
+        ("gh", "repo", "view", "--json", "viewerPermission"),
+        cwd=repo_path,
+    )
+    if result.returncode != 0:
+        return None
+    permission = result.stdout.strip()
+    if not permission:
+        return None
+    return {
+        "viewer_permission": permission,
+        "push": permission in {"ADMIN", "MAINTAIN", "WRITE"},
+    }
+
+
+def _working_tree_dirty(repo_path: Path) -> bool:
+    result = _run_command(("git", "status", "--porcelain"), cwd=repo_path)
+    return result.returncode == 0 and bool(result.stdout.strip())

@@ -273,7 +273,7 @@ class Orchestrator:
             now=now_dt,
             active_agent_run_issue_numbers=frozenset(self._active_agent_run_issue_numbers),
         )
-        state["claimable_issues"] = list(planner_result.claimable_issue_numbers)
+        state["claimable_issues"] = sorted(planner_result.claimable_issue_numbers)
 
         # Poll pending integration PRs asynchronously during scheduling.
         self._poll_pending_integrations(state)

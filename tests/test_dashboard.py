@@ -100,6 +100,16 @@ class FakeIssueGateway:
         return self.issues[number]
 
 
+class FakeSchedulingReadinessProvider:
+    def __init__(self, snapshot: dict[str, object]) -> None:
+        self.calls: list[str] = []
+        self._snapshot = snapshot
+
+    def build_snapshot(self, repo_name: str) -> dict[str, object]:
+        self.calls.append(repo_name)
+        return self._snapshot
+
+
 def build_config() -> AppConfig:
     return AppConfig(
         repos={
@@ -1318,4 +1328,265 @@ def test_get_run_log_endpoint_returns_actionable_diagnostics_for_read_failure(
             "issue_number": 18,
             "log_path": str(log_path),
         }
+    }
+
+
+def test_get_scheduling_readiness_snapshot_returns_normalized_repo_snapshot() -> None:
+    provider = FakeSchedulingReadinessProvider(
+        {
+            "repo": {
+                "name": "demo",
+                "path": "/repos/demo",
+                "main_branch": "main",
+                "worktree_root": "/worktrees/demo",
+            },
+            "snapshot": {
+                "observed_at": "2026-05-31T19:00:00Z",
+                "config_provenance": {
+                    "source": "app-config",
+                    "default_harness": {
+                        "name": "local",
+                        "timeout_seconds": None,
+                    },
+                },
+                "harness_summary": {
+                    "default_harness": "local",
+                    "timeout_seconds": None,
+                },
+                "readiness_checks": {
+                    "critical_failures": [],
+                    "warnings": [],
+                },
+                "implementation_issue_state": {
+                    "items": [],
+                    "summary": {
+                        "ready": 0,
+                        "blocked": 0,
+                        "claimed": 0,
+                        "running": 0,
+                        "failed": 0,
+                        "succeeded": 0,
+                        "other": 0,
+                    },
+                },
+            },
+        }
+    )
+    app = create_dashboard_app(config=build_config(), scheduling_readiness_provider=provider)
+
+    # Note: Using '/demo' path as mapped in dashboard app
+    response = TestClient(app).get("/api/scheduling-readiness/demo")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "repo": {
+            "name": "demo",
+            "path": "/repos/demo",
+            "main_branch": "main",
+            "worktree_root": "/worktrees/demo",
+        },
+        "snapshot": {
+            "observed_at": response.json()["snapshot"]["observed_at"],
+            "config_provenance": {
+                "source": "app-config",
+                "default_harness": {
+                    "name": "local",
+                    "timeout_seconds": None,
+                },
+            },
+            "harness_summary": {
+                "default_harness": "local",
+                "timeout_seconds": None,
+            },
+            "readiness_checks": {
+                "critical_failures": [],
+                "warnings": [],
+            },
+            "implementation_issue_state": {
+                "items": [],
+                "summary": {
+                    "ready": 0,
+                    "blocked": 0,
+                    "claimed": 0,
+                    "running": 0,
+                    "failed": 0,
+                    "succeeded": 0,
+                    "other": 0,
+                },
+            },
+        },
+    }
+
+
+def test_get_scheduling_readiness_snapshot_includes_harness_timeout_when_configured() -> None:
+    config = AppConfig(
+        repos={
+            "demo": RepoConfig(
+                name="demo",
+                repo_path=Path("/repos/demo"),
+                main_branch="main",
+                worktree_root=Path("/worktrees/demo"),
+                global_concurrency=1,
+                per_prd_concurrency=1,
+                default_harness="local",
+            )
+        },
+        harnesses={
+            "local": HarnessConfig(
+                name="local",
+                command="codex",
+                args_template=(),
+                timeout_seconds=900,
+            )
+        },
+    )
+    provider = FakeSchedulingReadinessProvider(
+        {
+            "repo": {
+                "name": "demo",
+                "path": "/repos/demo",
+                "main_branch": "main",
+                "worktree_root": "/worktrees/demo",
+            },
+            "snapshot": {
+                "observed_at": "2026-05-31T19:00:00Z",
+                "config_provenance": {
+                    "source": "app-config",
+                    "default_harness": {
+                        "name": "local",
+                        "timeout_seconds": 900,
+                    },
+                },
+                "harness_summary": {
+                    "default_harness": "local",
+                    "timeout_seconds": 900,
+                },
+                "readiness_checks": {
+                    "critical_failures": [],
+                    "warnings": [],
+                },
+                "implementation_issue_state": {
+                    "items": [],
+                    "summary": {
+                        "ready": 0,
+                        "blocked": 0,
+                        "claimed": 0,
+                        "running": 0,
+                        "failed": 0,
+                        "succeeded": 0,
+                        "other": 0,
+                    },
+                },
+            },
+        }
+    )
+    app = create_dashboard_app(config=config, scheduling_readiness_provider=provider)
+
+    response = TestClient(app).get("/api/scheduling-readiness/demo")
+
+    assert response.status_code == 200
+    assert response.json()["snapshot"]["harness_summary"] == {
+        "default_harness": "local",
+        "timeout_seconds": 900,
+    }
+
+
+def test_get_scheduling_readiness_snapshot_returns_actionable_not_found_for_unknown_repo() -> None:
+    app = create_dashboard_app(config=build_config())
+
+    response = TestClient(app).get("/api/scheduling-readiness/missing")
+
+    assert response.status_code == 404
+    assert response.json() == {
+        "detail": "Unknown repo 'missing'. Available repos: demo."
+    }
+
+
+def test_get_scheduling_readiness_snapshot_reports_critical_failures_separately_from_warnings() -> None:
+    provider = FakeSchedulingReadinessProvider(
+        {
+            "repo": {
+                "name": "demo",
+                "path": "/repos/demo",
+                "main_branch": "main",
+                "worktree_root": "/worktrees/demo",
+            },
+            "snapshot": {
+                "observed_at": "2026-05-31T19:00:00Z",
+                "config_provenance": {
+                    "source": "app-config",
+                    "default_harness": {
+                        "name": "local",
+                        "timeout_seconds": None,
+                    },
+                },
+                "harness_summary": {
+                    "default_harness": "local",
+                    "timeout_seconds": None,
+                },
+                "readiness_checks": {
+                    "critical_failures": [
+                        {
+                            "message": "Required repository labels are missing.",
+                            "remediation": "Add the required labels in GitHub before running scheduling.",
+                            "details": {
+                                "code": "missing-required-labels",
+                                "missing_labels": ["claimed", "prd"],
+                            },
+                        }
+                    ],
+                    "warnings": [
+                        {
+                            "message": "Working tree has local changes.",
+                            "remediation": "Review local changes before running scheduling.",
+                            "details": {
+                                "code": "working-tree-dirty",
+                            },
+                        }
+                    ],
+                },
+                "implementation_issue_state": {
+                    "items": [],
+                    "summary": {
+                        "ready": 0,
+                        "blocked": 0,
+                        "claimed": 0,
+                        "running": 0,
+                        "failed": 0,
+                        "succeeded": 0,
+                        "other": 0,
+                    },
+                },
+            },
+        }
+    )
+    app = create_dashboard_app(
+        config=build_config(),
+        scheduling_readiness_provider=provider,
+    )
+
+    response = TestClient(app).get("/api/scheduling-readiness/demo")
+
+    assert response.status_code == 200
+    assert provider.calls == ["demo"]
+    assert response.json()["snapshot"]["readiness_checks"] == {
+        "critical_failures": [
+            {
+                "message": "Required repository labels are missing.",
+                "remediation": "Add the required labels in GitHub before running scheduling.",
+                "details": {
+                    "code": "missing-required-labels",
+                    "missing_labels": ["claimed", "prd"],
+                },
+            }
+        ],
+        "warnings": [
+            {
+                "message": "Working tree has local changes.",
+                "remediation": "Review local changes before running scheduling.",
+                "details": {
+                    "code": "working-tree-dirty",
+                },
+            }
+        ],
     }
