@@ -136,9 +136,9 @@ export default function SideDrawer({
 
   useEffect(() => {
     if (open) {
-      setActiveTab('overview');
+      setActiveTab(readOnly ? 'overview' : 'operations');
     }
-  }, [open]);
+  }, [open, readOnly]);
 
   useEffect(() => {
     if (readOnly && activeTab === 'operations') {

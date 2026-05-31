@@ -1680,6 +1680,11 @@ describe('Bersama Dashboard Frontend', () => {
 
       await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument());
 
+      const dialog = screen.getByRole('dialog');
+      // Switch to Overview tab (since it defaults to Operations in Operator view)
+      const overviewTab = within(dialog).getByRole('button', { name: /Overview/i });
+      fireEvent.click(overviewTab);
+
       // Overview tab should show state and kind metadata
       expect(screen.getByText(/Status & Metadata/i)).toBeInTheDocument();
       expect(screen.getByText(/Blocking Dependencies/i)).toBeInTheDocument();
@@ -2031,6 +2036,51 @@ describe('Bersama Dashboard Frontend', () => {
       // Operations tab should be completely hidden (readOnly)
       expect(screen.queryByText('Operations')).not.toBeInTheDocument();
     });
+
+    it('opens side drawer in operations mode by default when clicking an issue in Operator Console view', async () => {
+      mockFetch.mockImplementation((url: string) => {
+        if (url.endsWith('/api/repos')) {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve(mockRepos) });
+        }
+        if (url.includes('/api/issues')) {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve(mockIssues) });
+        }
+        if (url.includes('/api/runs')) {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
+        }
+        return Promise.reject(new Error(`Unhandled mock fetch for ${url}`));
+      });
+
+      render(<App />);
+
+      // Operator Console is active initially
+      expect(await screen.findByText(/Product Roadmap & Implementation Lifecycle/i)).toBeInTheDocument();
+
+      // Find and click the implementation issue in the list
+      const issueLinks = await screen.findAllByText(/Child implementation issue/i);
+      const issueLink = issueLinks.find(el => el.tagName === 'SPAN')!;
+      fireEvent.click(issueLink);
+
+      // Drawer should open
+      await waitFor(() => {
+        expect(screen.getByRole('dialog')).toBeInTheDocument();
+      });
+
+      const dialog = screen.getByRole('dialog');
+
+      // Verify that the Operations tab button is visible
+      const operationsButton = within(dialog).getByRole('button', { name: /Operations/i });
+      expect(operationsButton).toBeInTheDocument();
+
+      // Since we expect it to be active by default, it should have the active tab styling class
+      expect(operationsButton).toHaveClass('border-teal-400');
+
+      // Overview button should not be active
+      const overviewButton = within(dialog).getByRole('button', { name: /Overview/i });
+      expect(overviewButton).not.toHaveClass('border-teal-400');
+
+      // Operations tab content (Git Parameters) should be rendered
+      expect(within(dialog).getByText('Git Parameters')).toBeInTheDocument();
+    });
   });
 });
-
