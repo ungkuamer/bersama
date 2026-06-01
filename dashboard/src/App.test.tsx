@@ -2083,4 +2083,48 @@ describe('Bersama Dashboard Frontend', () => {
       expect(within(dialog).getByText('Git Parameters')).toBeInTheDocument();
     });
   });
+
+  describe('Theme Toggler', () => {
+    it('toggles theme between dark and light modes and persists to localStorage', async () => {
+      mockFetch.mockImplementation((url: string) => {
+        if (url.includes('/api/repos')) {
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve(mockRepos),
+          });
+        }
+        if (url.includes('/api/issues')) {
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve(mockIssues),
+          });
+        }
+        if (url.includes('/api/runs')) {
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve([]),
+          });
+        }
+        return Promise.reject(new Error(`Unhandled mock fetch for ${url}`));
+      });
+
+      localStorage.clear();
+
+      render(<App />);
+
+      expect(document.documentElement.classList.contains('dark')).toBe(true);
+
+      const themeBtn = await screen.findByTitle('Switch to Light Mode');
+      expect(themeBtn).toBeInTheDocument();
+
+      fireEvent.click(themeBtn);
+
+      expect(document.documentElement.classList.contains('dark')).toBe(false);
+      expect(localStorage.getItem('theme')).toBe('light');
+
+      fireEvent.click(themeBtn);
+      expect(document.documentElement.classList.contains('dark')).toBe(true);
+      expect(localStorage.getItem('theme')).toBe('dark');
+    });
+  });
 });

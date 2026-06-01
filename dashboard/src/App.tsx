@@ -179,6 +179,26 @@ export default function App() {
   const [drawerReadOnly, setDrawerReadOnly] = useState<boolean>(false);
   const [activeTab, setActiveTab] = useState<'readiness' | 'operator'>(isTestEnv ? 'operator' : 'readiness');
   const [isCollapsed, setIsCollapsed] = useState<boolean>(false);
+
+  // Theme State
+  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
+    const saved = localStorage.getItem('theme');
+    if (saved === 'light' || saved === 'dark') return saved;
+    return 'dark';
+  });
+
+  useEffect(() => {
+    if (theme === 'dark') {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+    localStorage.setItem('theme', theme);
+  }, [theme]);
+
+  const toggleTheme = () => {
+    setTheme(prev => prev === 'dark' ? 'light' : 'dark');
+  };
   
   const terminalViewportRef = useRef<HTMLDivElement>(null);
   const previousLogContentRef = useRef<string | null>(null);
@@ -741,27 +761,29 @@ export default function App() {
           fetchData={fetchData}
           error={error}
           onRetryConnection={() => { fetchRepos(); if(selectedRepo) fetchData(true); }}
+          theme={theme}
+          toggleTheme={toggleTheme}
         />
 
         {/* Premium Grid of Stat Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 px-6 pt-6 select-none animate-fade-in shrink-0">
           {/* Card 1: Active Runs */}
-          <Card className="dashboard-glass-panel border border-zinc-800 bg-[#0d0d0f]/85 flex flex-col justify-between shadow-[0_4px_20px_rgba(0,0,0,0.4)]">
+          <Card className="dashboard-glass-panel border border-zinc-200 dark:border-zinc-800 bg-white/85 dark:bg-[#0d0d0f]/85 flex flex-col justify-between shadow-[0_4px_20px_rgba(0,0,0,0.05)] dark:shadow-[0_4px_20px_rgba(0,0,0,0.4)]">
             <CardHeader className="py-3 px-4 flex flex-row items-center justify-between">
               <div className="flex items-center gap-2">
                 <Activity className="size-4 text-amber-500 shrink-0" />
-                <CardTitle className="text-xs font-bold uppercase tracking-wider text-zinc-200">Active Runs</CardTitle>
+                <CardTitle className="text-xs font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-200">Active Runs</CardTitle>
               </div>
               <CardAction>
-                <Badge variant="outline" className="font-mono text-[9px] text-zinc-400 bg-zinc-950 border-zinc-800 px-1.5 py-0">
+                <Badge variant="outline" className="font-mono text-[9px] text-zinc-500 dark:text-zinc-400 bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 px-1.5 py-0">
                   {capacityUtilization}% util
                 </Badge>
               </CardAction>
             </CardHeader>
             <CardContent className="px-4 pb-4.5 pt-1">
               <div className="flex items-baseline gap-1.5">
-                <span className="text-3xl font-bold font-mono tracking-tight text-white">{activeRunsCount}</span>
-                <span className="text-xs font-mono text-zinc-500">/ {capacity} capacity</span>
+                <span className="text-3xl font-bold font-mono tracking-tight text-zinc-900 dark:text-white">{activeRunsCount}</span>
+                <span className="text-xs font-mono text-zinc-555 dark:text-zinc-500">/ {capacity} capacity</span>
               </div>
               <CardDescription className="text-[10px] text-zinc-500 mt-2 font-sans">
                 Active runner execution slots currently occupied
@@ -770,15 +792,15 @@ export default function App() {
           </Card>
 
           {/* Card 2: Ready Issues */}
-          <Card className="dashboard-glass-panel border border-zinc-800 bg-[#0d0d0f]/85 flex flex-col justify-between shadow-[0_4px_20px_rgba(0,0,0,0.4)]">
+          <Card className="dashboard-glass-panel border border-zinc-200 dark:border-zinc-800 bg-white/85 dark:bg-[#0d0d0f]/85 flex flex-col justify-between shadow-[0_4px_20px_rgba(0,0,0,0.05)] dark:shadow-[0_4px_20px_rgba(0,0,0,0.4)]">
             <CardHeader className="py-3 px-4 flex flex-row items-center justify-between">
               <div className="flex items-center gap-2">
                 <Layers className="size-4 text-blue-500 shrink-0" />
-                <CardTitle className="text-xs font-bold uppercase tracking-wider text-zinc-200">Ready Issues</CardTitle>
+                <CardTitle className="text-xs font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-200">Ready Issues</CardTitle>
               </div>
             </CardHeader>
             <CardContent className="px-4 pb-4.5 pt-1">
-              <div className="text-3xl font-bold font-mono tracking-tight text-white">
+              <div className="text-3xl font-bold font-mono tracking-tight text-zinc-900 dark:text-white">
                 {getReadyIssuesCount()}
               </div>
               <CardDescription className="text-[10px] text-zinc-500 mt-2 font-sans">
@@ -788,15 +810,15 @@ export default function App() {
           </Card>
 
           {/* Card 3: Failed Runs */}
-          <Card className="dashboard-glass-panel border border-[#ff0000]/15 bg-[#0d0d0f]/85 flex flex-col justify-between shadow-[0_4px_20px_rgba(0,0,0,0.4)]">
+          <Card className="dashboard-glass-panel border border-red-200 dark:border-[#ff0000]/15 bg-white/85 dark:bg-[#0d0d0f]/85 flex flex-col justify-between shadow-[0_4px_20px_rgba(0,0,0,0.05)] dark:shadow-[0_4px_20px_rgba(0,0,0,0.4)]">
             <CardHeader className="py-3 px-4 flex flex-row items-center justify-between">
               <div className="flex items-center gap-2">
                 <AlertCircle className="size-4 text-red-500 shrink-0" />
-                <CardTitle className="text-xs font-bold uppercase tracking-wider text-zinc-200">Failed Runs</CardTitle>
+                <CardTitle className="text-xs font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-200">Failed Runs</CardTitle>
               </div>
             </CardHeader>
             <CardContent className="px-4 pb-4.5 pt-1">
-              <div className={`text-3xl font-bold font-mono tracking-tight ${getFailedRunsCount() > 0 ? 'text-red-500 animate-pulse' : 'text-white'}`}>
+              <div className={`text-3xl font-bold font-mono tracking-tight ${getFailedRunsCount() > 0 ? 'text-red-500 dark:text-red-400 animate-pulse' : 'text-zinc-900 dark:text-white'}`}>
                 {getFailedRunsCount()}
               </div>
               <CardDescription className="text-[10px] text-zinc-500 mt-2 font-sans">
@@ -806,21 +828,21 @@ export default function App() {
           </Card>
 
           {/* Card 4: Registered Repos */}
-          <Card className="dashboard-glass-panel border border-zinc-800 bg-[#0d0d0f]/85 flex flex-col justify-between shadow-[0_4px_20px_rgba(0,0,0,0.4)]">
+          <Card className="dashboard-glass-panel border border-zinc-200 dark:border-zinc-800 bg-white/85 dark:bg-[#0d0d0f]/85 flex flex-col justify-between shadow-[0_4px_20px_rgba(0,0,0,0.05)] dark:shadow-[0_4px_20px_rgba(0,0,0,0.4)]">
             <CardHeader className="py-3 px-4 flex flex-row items-center justify-between">
               <div className="flex items-center gap-2">
                 <Database className="size-4 text-emerald-500 shrink-0" />
-                <CardTitle className="text-xs font-bold uppercase tracking-wider text-zinc-200">Registered Repos</CardTitle>
+                <CardTitle className="text-xs font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-200">Registered Repos</CardTitle>
               </div>
               <CardAction>
                 <div className="flex items-center gap-1.5">
                   <span className="size-1.5 rounded-full bg-emerald-500 animate-pulse shrink-0"></span>
-                  <span className="text-[9px] font-mono text-emerald-450 uppercase tracking-wider font-semibold">Active</span>
+                  <span className="text-[9px] font-mono text-emerald-600 dark:text-emerald-450 uppercase tracking-wider font-semibold">Active</span>
                 </div>
               </CardAction>
             </CardHeader>
             <CardContent className="px-4 pb-4.5 pt-1">
-              <div className="text-3xl font-bold font-mono tracking-tight text-white">
+              <div className="text-3xl font-bold font-mono tracking-tight text-zinc-900 dark:text-white">
                 {repos.length}
               </div>
               <CardDescription className="text-[10px] text-zinc-500 mt-2 font-sans">

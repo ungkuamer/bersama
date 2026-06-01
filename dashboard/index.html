@@ -6,6 +6,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Bersama Agent Orchestration Dashboard</title>
     <meta name="description" content="Local read-only status and logs dashboard for the Bersama config-driven agent orchestration framework." />
+    <script>
+      (function() {
+        const savedTheme = localStorage.getItem('theme');
+        if (savedTheme === 'light') {
+          document.documentElement.classList.remove('dark');
+        } else {
+          document.documentElement.classList.add('dark');
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
