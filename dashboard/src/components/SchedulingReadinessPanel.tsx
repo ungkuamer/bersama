@@ -2,8 +2,28 @@ import { useEffect, useState } from 'react';
 import { ShimmerCard } from '@/components/Shimmer';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { AlertCircle, AlertTriangle, CheckCircle2, Clock, GitBranch, Server, Layers, HardDrive, Shield } from 'lucide-react';
-import DependencyPipeline from '@/components/DependencyPipeline';
+import { Button } from '@/components/ui/button';
+import { 
+  Table, 
+  TableBody, 
+  TableCell, 
+  TableHead, 
+  TableHeader, 
+  TableRow 
+} from '@/components/ui/table';
+import { 
+  AlertCircle, 
+  AlertTriangle, 
+  CheckCircle2, 
+  Clock, 
+  GitBranch, 
+  Server, 
+  Layers, 
+  HardDrive, 
+  Shield,
+  Search,
+  ChevronRight
+} from 'lucide-react';
 
 export interface SchedulingReadinessPanelProps {
   repoName: string;
@@ -15,6 +35,8 @@ export default function SchedulingReadinessPanel({ repoName, apiBase, onIssueCli
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState<string>('');
+  const [activeFilterTab, setActiveFilterTab] = useState<string>('all');
 
   useEffect(() => {
     let active = true;
@@ -87,22 +109,45 @@ export default function SchedulingReadinessPanel({ repoName, apiBase, onIssueCli
   const groups = issueState?.groups || [];
 
   const getStatusBadge = (status: string) => {
+    const baseClass = "inline-flex items-center gap-1 font-mono text-[9px] uppercase font-bold tracking-wider px-2 py-0.5 rounded border bg-neutral-100 text-neutral-800 dark:bg-neutral-800 dark:text-neutral-200 border-neutral-200 dark:border-neutral-700";
+    
+    let dotColor = "bg-neutral-400";
+    let isPulse = false;
+
     switch (status) {
       case 'ready':
-        return <Badge className="bg-blue-950/80 border-blue-900 text-blue-400 font-mono text-[9px] uppercase">Ready</Badge>;
+        dotColor = "bg-blue-500";
+        break;
       case 'claimed':
-        return <Badge className="bg-cyan-950/80 border-cyan-900 text-cyan-400 font-mono text-[9px] uppercase">Claimed</Badge>;
+        dotColor = "bg-cyan-500";
+        break;
       case 'running':
-        return <Badge className="bg-amber-950/80 border-amber-900 text-amber-400 font-mono text-[9px] uppercase animate-pulse">Running</Badge>;
+        dotColor = "bg-amber-500 animate-pulse";
+        isPulse = true;
+        break;
       case 'succeeded':
-        return <Badge className="bg-emerald-950/80 border-emerald-900 text-emerald-400 font-mono text-[9px] uppercase">Succeeded</Badge>;
+      case 'prepared':
+        dotColor = "bg-emerald-500";
+        break;
       case 'failed':
-        return <Badge className="bg-red-950/80 border-red-900 text-red-400 font-mono text-[9px] uppercase">Failed</Badge>;
+        dotColor = "bg-red-500";
+        break;
       case 'blocked':
-        return <Badge className="bg-orange-950/80 border-orange-900 text-orange-400 font-mono text-[9px] uppercase">Blocked</Badge>;
+        dotColor = "bg-orange-500";
+        break;
+      case 'unprepared':
+        dotColor = "bg-zinc-500";
+        break;
       default:
-        return <Badge className="bg-zinc-950/80 border-zinc-900 text-zinc-400 font-mono text-[9px] uppercase">{status}</Badge>;
+        dotColor = "bg-zinc-400";
     }
+
+    return (
+      <Badge className={`${baseClass} ${isPulse ? 'animate-pulse' : ''}`} variant="outline">
+        <span className={`size-1.5 rounded-full ${dotColor}`} />
+        {status}
+      </Badge>
+    );
   };
 
   return (
@@ -321,126 +366,231 @@ export default function SchedulingReadinessPanel({ repoName, apiBase, onIssueCli
           </CardContent>
         </Card>
 
-        {/* Grouped Issues Card */}
+        {/* Repository Issues Matrix */}
         <Card className="dashboard-glass-panel border border-zinc-800 bg-[#0d0d0f]/80">
-          <CardHeader className="py-4 border-b border-zinc-900/60 px-5">
-            <CardTitle className="text-xs font-bold uppercase tracking-wider text-white flex items-center gap-2">
-              <Layers className="size-4 text-teal-400" />
-              Open Issues Grouped by Parent PRD
-            </CardTitle>
-            <CardDescription className="text-[10px] text-zinc-500">
-              Visual dependency topological ordering and status alignment
-            </CardDescription>
+          <CardHeader className="py-4 border-b border-zinc-900/60 px-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <CardTitle className="text-xs font-bold uppercase tracking-wider text-white flex items-center gap-2">
+                <Layers className="size-4 text-teal-400" />
+                Repository Issues Matrix
+              </CardTitle>
+              <CardDescription className="text-[10px] text-zinc-500 mt-0.5">
+                High-density, multi-type repository issue database and scheduler control
+              </CardDescription>
+            </div>
+            
+            {/* Search filter input */}
+            <div className="relative w-full md:w-[260px]">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3 text-zinc-500" />
+              <input
+                type="text"
+                placeholder="Search by title or #ID..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-8 pr-3 py-1 text-xs bg-zinc-950 border border-zinc-900 rounded text-zinc-300 placeholder-zinc-500 focus:outline-none focus:border-teal-500 transition-all font-mono"
+              />
+            </div>
           </CardHeader>
-          <CardContent className="p-5">
-            {groups.length === 0 ? (
-              <div className="text-center py-12 text-zinc-600 font-mono text-xs">
-                No open implementation issue groups registered.
-              </div>
-            ) : (
-              <div className="space-y-6">
-                {groups.map((group: any) => {
-                  const prd = group.parent_prd;
-                  const items = group.items || [];
-                  const pipelineNodes = items.map((item: any) => ({
-                    number: item.issue_number,
+          
+          <div className="px-5 py-3 border-b border-zinc-900/40 bg-black/20 flex flex-wrap items-center gap-1.5">
+            {[
+              { id: 'all', label: 'All' },
+              { id: 'all_prds', label: 'All PRDs' },
+              { id: 'ready', label: 'Ready for Execution' },
+              { id: 'active', label: 'Active Claims' },
+              { id: 'failed', label: 'Failed Runs' },
+              { id: 'integrated', label: 'Integrated' }
+            ].map((tab) => {
+              const isActive = activeFilterTab === tab.id;
+              return (
+                <Button
+                  key={tab.id}
+                  variant={isActive ? "default" : "outline"}
+                  size="xs"
+                  onClick={() => setActiveFilterTab(tab.id)}
+                  className={`text-[9.5px] uppercase font-bold tracking-wider px-2 h-7 transition-all ${
+                    isActive 
+                      ? 'bg-zinc-100 text-zinc-950 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-white dark:hover:bg-zinc-700' 
+                      : 'text-zinc-500 border-zinc-900 bg-zinc-950 hover:text-zinc-300 hover:bg-zinc-900/40'
+                  }`}
+                >
+                  {tab.label}
+                </Button>
+              );
+            })}
+          </div>
+
+          <CardContent className="p-0">
+            {(() => {
+              const allRows: any[] = [];
+              groups.forEach((group: any) => {
+                const prd = group.parent_prd;
+                allRows.push({
+                  id: prd.issue_number,
+                  title: prd.title,
+                  type: 'PRD',
+                  status: prd.prepared ? 'prepared' : 'unprepared',
+                  rawData: prd
+                });
+                
+                const items = group.items || [];
+                items.forEach((item: any) => {
+                  allRows.push({
+                    id: item.issue_number,
+                    title: item.title,
+                    type: 'Implementation',
                     status: item.status,
-                    blocked_by: item.blocked_by,
-                    active_blockers: item.active_blockers
-                  }));
+                    branch: item.implementation_branch,
+                    parentPrdNumber: prd.issue_number,
+                    parentPrdTitle: prd.title,
+                    blockedBy: item.blocked_by,
+                    activeBlockers: item.active_blockers,
+                    rawData: item
+                  });
+                });
+              });
 
-                  return (
-                    <div 
-                      key={prd.issue_number}
-                      className="border border-zinc-900 bg-black/30 rounded-lg overflow-hidden"
-                    >
-                      {/* Parent PRD Header */}
-                      <div className="bg-[#121215]/80 px-4 py-3 border-b border-zinc-900 flex flex-col md:flex-row md:items-center justify-between gap-2 font-mono text-xs">
-                        <div className="flex items-center gap-2">
-                          <span className="bg-zinc-900 border border-zinc-800 text-zinc-400 px-1.5 py-0.5 rounded font-bold">
-                            PRD #{prd.issue_number}
-                          </span>
-                          <span 
-                            onClick={() => onIssueClick?.(prd.issue_number)}
-                            className="text-white font-bold font-sans truncate max-w-[280px] cursor-pointer hover:text-teal-400 transition-colors" 
-                            title={prd.title}
-                          >
-                            {prd.title}
-                          </span>
-                        </div>
-                        <div>
-                          {prd.prepared ? (
-                            <Badge className="bg-emerald-950/60 border-emerald-900 text-emerald-400 font-semibold font-mono uppercase text-[9px] tracking-wider">Prepared</Badge>
-                          ) : (
-                            <Badge className="bg-zinc-950/80 border-zinc-955 text-zinc-500 font-semibold font-mono uppercase text-[9px] tracking-wider">Unprepared</Badge>
-                          )}
-                        </div>
-                      </div>
+              const filteredRows = allRows.filter(row => {
+                // Search filter
+                const matchesSearch = row.title.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                                      `#${row.id}`.includes(searchTerm);
+                if (!matchesSearch) return false;
 
-                      {/* Dependency Pipeline Map */}
-                      {pipelineNodes.length > 0 && (
-                        <div className="px-4 py-2 border-b border-zinc-900/60 bg-black/10">
-                          <DependencyPipeline children={pipelineNodes} />
-                        </div>
-                      )}
+                // Tab filter
+                if (activeFilterTab === 'all') return true;
+                if (activeFilterTab === 'all_prds') return row.type === 'PRD';
+                if (activeFilterTab === 'ready') return row.type === 'Implementation' && row.status === 'ready';
+                if (activeFilterTab === 'active') return row.type === 'Implementation' && (row.status === 'claimed' || row.status === 'running');
+                if (activeFilterTab === 'failed') return row.type === 'Implementation' && row.status === 'failed';
+                if (activeFilterTab === 'integrated') return row.type === 'Implementation' && row.status === 'succeeded';
+                
+                return true;
+              });
 
-                      {/* Child Slices List */}
-                      <div className="divide-y divide-zinc-900 bg-black/40 font-mono text-xs">
-                        {items.length === 0 ? (
-                          <div className="p-4 text-center text-[10px] text-zinc-600">
-                            No implementation issue slices listed under this PRD.
-                          </div>
-                        ) : (
-                          items.map((c: any) => (
-                            <div key={c.issue_number} className="p-3.5 flex flex-col sm:flex-row sm:items-start justify-between gap-3">
-                              <div className="space-y-1.5 max-w-[480px]">
-                                <div className="flex items-baseline gap-2">
-                                  <span className="text-zinc-500 font-bold">#{c.issue_number}</span>
-                                  <span 
-                                    onClick={() => onIssueClick?.(c.issue_number)}
-                                    className="text-zinc-300 font-semibold font-sans cursor-pointer hover:text-teal-400 transition-colors"
-                                  >
-                                    {c.title}
-                                  </span>
-                                </div>
-                                
-                                {/* Blocking Dependencies display */}
-                                {c.blocked_by && c.blocked_by.length > 0 && (
-                                  <div className="flex flex-wrap items-center gap-1.5 text-[9.5px]">
-                                    <span className="text-zinc-500 uppercase font-bold tracking-wider">Blocked By:</span>
-                                    <div className="flex flex-wrap gap-1">
-                                      {c.blocked_by.map((blockerNum: number) => {
-                                        const isActiveBlocker = c.active_blockers?.includes(blockerNum);
-                                        return (
-                                          <span 
-                                            key={blockerNum} 
-                                            className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded border text-[9px] font-bold ${
-                                              isActiveBlocker 
-                                                ? 'bg-orange-950/20 border-orange-900/40 text-orange-400' 
-                                                : 'bg-zinc-950 border-zinc-900 text-zinc-600'
-                                            }`}
-                                          >
-                                            #{blockerNum} {isActiveBlocker ? 'Open' : 'Resolved'}
-                                          </span>
-                                        );
-                                      })}
-                                    </div>
+              if (filteredRows.length === 0) {
+                return (
+                  <div className="text-center py-12 text-zinc-600 font-mono text-xs">
+                    No issues found matching the active filter and search query.
+                  </div>
+                );
+              }
+
+              return (
+                <Table>
+                  <TableHeader className="bg-zinc-950/60 border-b border-zinc-900">
+                    <TableRow className="hover:bg-transparent border-zinc-900">
+                      <TableHead className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider pl-5 py-3">ID</TableHead>
+                      <TableHead className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider py-3">Type</TableHead>
+                      <TableHead className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider py-3">Title</TableHead>
+                      <TableHead className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider py-3">Status</TableHead>
+                      <TableHead className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider py-3">Connection / Branch</TableHead>
+                      <TableHead className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider pr-5 py-3 text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredRows.map((row) => {
+                      const isPrd = row.type === 'PRD';
+                      return (
+                        <TableRow 
+                          key={row.id}
+                          className="hover:bg-zinc-900/40 border-zinc-900/40 cursor-pointer transition-colors group"
+                          onClick={() => onIssueClick?.(row.id)}
+                        >
+                          <TableCell className="font-mono text-xs text-zinc-400 pl-5 py-3.5">
+                            #{row.id}
+                          </TableCell>
+                          <TableCell className="py-3.5">
+                            <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded font-sans uppercase tracking-wider ${
+                              isPrd 
+                                ? 'bg-zinc-800/60 text-zinc-400 border border-zinc-700/30' 
+                                : 'bg-teal-950/40 text-teal-400 border border-teal-900/30'
+                            }`}>
+                              {row.type}
+                            </span>
+                          </TableCell>
+                          <TableCell className="py-3.5 max-w-[320px]">
+                            <div className="flex flex-col gap-1">
+                              <span className={`text-xs font-semibold leading-tight transition-colors group-hover:text-teal-400 font-sans ${
+                                isPrd ? 'text-white font-bold' : 'text-zinc-300'
+                              }`}>
+                                {row.title}
+                              </span>
+                              
+                              {/* Dependencies inline for Implementation Issues */}
+                              {!isPrd && row.blockedBy && row.blockedBy.length > 0 && (
+                                <div className="flex flex-wrap items-center gap-1.5 mt-1 font-mono text-[9px]">
+                                  <span className="text-zinc-500 uppercase font-bold tracking-wider">Blocked By:</span>
+                                  <div className="flex flex-wrap gap-1">
+                                    {row.blockedBy.map((blockerNum: number) => {
+                                      const isActiveBlocker = row.activeBlockers?.includes(blockerNum);
+                                      return (
+                                        <span 
+                                          key={blockerNum} 
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            onIssueClick?.(blockerNum);
+                                          }}
+                                          className={`inline-flex items-center gap-1 px-1.5 py-0.2 rounded border text-[9px] font-bold ${
+                                            isActiveBlocker 
+                                              ? 'bg-orange-950/20 border-orange-900/40 text-orange-400 hover:text-orange-350 hover:bg-orange-950/40' 
+                                              : 'bg-zinc-950 border-zinc-900 text-zinc-650 hover:text-zinc-400 hover:bg-zinc-900'
+                                          }`}
+                                        >
+                                          #{blockerNum} {isActiveBlocker ? 'Open' : 'Resolved'}
+                                        </span>
+                                      );
+                                    })}
                                   </div>
-                                )}
-                              </div>
-
-                              <div className="shrink-0 flex items-start">
-                                {getStatusBadge(c.status)}
-                              </div>
+                                </div>
+                              )}
                             </div>
-                          ))
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
+                          </TableCell>
+                          <TableCell className="py-3.5">
+                            {getStatusBadge(row.status)}
+                          </TableCell>
+                          <TableCell className="py-3.5 max-w-[200px] truncate font-mono text-[10.5px]">
+                            {isPrd ? (
+                              <span className="text-zinc-600 italic">PRD Level</span>
+                            ) : row.branch ? (
+                              <div className="flex items-center gap-1.5 text-zinc-400">
+                                <GitBranch className="size-3 text-zinc-650 shrink-0" />
+                                <span className="truncate" title={row.branch}>{row.branch}</span>
+                              </div>
+                            ) : row.parentPrdNumber ? (
+                              <div 
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onIssueClick?.(row.parentPrdNumber);
+                                }}
+                                className="flex items-center gap-1 text-zinc-500 hover:text-teal-400 transition-colors"
+                              >
+                                <ChevronRight className="size-3 text-zinc-700 shrink-0" />
+                                <span>PRD #{row.parentPrdNumber}</span>
+                              </div>
+                            ) : (
+                              <span className="text-zinc-600">-</span>
+                            )}
+                          </TableCell>
+                          <TableCell className="pr-5 py-3.5 text-right">
+                            <Button 
+                              variant="outline" 
+                              size="xs" 
+                              className="h-7 text-[9.5px] uppercase font-bold tracking-wider px-2 font-sans hover:bg-zinc-900 border-zinc-900 hover:border-zinc-800"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onIssueClick?.(row.id);
+                              }}
+                            >
+                              Details
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              );
+            })()}
           </CardContent>
         </Card>
 
