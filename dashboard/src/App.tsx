@@ -37,7 +37,8 @@ import Header from '@/components/Header'
 import { useReposQuery } from '@/hooks/useReposQuery'
 import { useIssuesQuery } from '@/hooks/useIssuesQuery'
 import { useRunsQuery } from '@/hooks/useRunsQuery'
-import { useRunLogQuery } from '@/hooks/useRunLogQuery'
+import { useSSE } from '@/hooks/useSSE'
+import { useLogStream } from '@/hooks/useLogStream'
 
 interface ProcessGlobal {
   process?: {
@@ -158,7 +159,6 @@ export default function App() {
   const [selectedRepo, setSelectedRepo] = useState<string>('');
   const [selectedRunIssue, setSelectedRunIssue] = useState<number | null>(null);
   const [logsLimit, setLogsLimit] = useState<number>(100);
-  const [streaming, setStreaming] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [preparePrdState, setPreparePrdState] = useState<Record<number, PrdPreparationState>>({});
   const [claimIssueState, setClaimIssueState] = useState<Record<number, ImplementationClaimState>>({});
@@ -194,12 +194,18 @@ export default function App() {
 
   const issuesQuery = useIssuesQuery(effectiveSelectedRepo);
   const runsQuery = useRunsQuery(effectiveSelectedRepo);
-  const runLogQuery = useRunLogQuery(effectiveSelectedRepo, selectedRunIssue, logsLimit);
+  const latestSSEMessage = useSSE(effectiveSelectedRepo);
+  const logStream = useLogStream({
+    repo: effectiveSelectedRepo,
+    issueNumber: selectedRunIssue,
+    limit: logsLimit,
+    latestEvent: latestSSEMessage,
+  });
 
   // Derive data from queries
   const issues: Issue[] = issuesQuery.data || [];
   const runs: RunState[] = runsQuery.data || [];
-  const logTail = runLogQuery.data || null;
+  const logTail = logStream.logTail || null;
   const loading = reposQuery.isPending || Boolean(effectiveSelectedRepo && (issuesQuery.isPending || runsQuery.isPending));
   const queryError = reposQuery.error ?? issuesQuery.error ?? runsQuery.error;
   const connectionError = queryError ? `Data fetch failed: ${messageFromError(queryError)}` : error;
@@ -894,27 +900,6 @@ export default function App() {
                     <option value={100}>100 lines</option>
                     <option value={300}>300 lines</option>
                   </select>
-
-                  <span className="text-border">|</span>
-
-                  <button
-                    onClick={() => setStreaming(!streaming)}
-                    className={`dashboard-control flex items-center gap-1.5 rounded border px-1.5 py-0.5 text-[9px] font-semibold tracking-wider ${
-                      streaming
-                        ? 'border-emerald-600/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
-                        : 'text-muted-foreground'
-
-                    }`}
-                  >
-                    {streaming && (
-                      <span
-                        title="Streaming active"
-                        className="stream-indicator"
-                        aria-label="Streaming active"
-                      />
-                    )}
-                    {streaming ? 'STREAM ON' : 'STREAM OFF'}
-                  </button>
 
                   {logTail && (
                     <Button

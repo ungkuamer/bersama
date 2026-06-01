@@ -1816,7 +1816,7 @@ describe('Bersama Dashboard Frontend', () => {
     });
   });
 
-  it('shows a pulsing stream indicator when log polling is active and a run is selected', async () => {
+  it('does not render the removed STREAM ON/OFF controls when a run is selected', async () => {
     mockFetch.mockImplementation((url: string) => {
       if (url.endsWith('/api/repos')) {
         return Promise.resolve({ ok: true, json: () => Promise.resolve(mockRepos) });
@@ -1838,8 +1838,9 @@ describe('Bersama Dashboard Frontend', () => {
     fireEvent.click(await screen.findByRole('button', { name: /View Log/i }));
     await screen.findByText(/harness execution started/i);
 
-    // The stream indicator should be visible when polling is active
-    expect(screen.getByTitle(/Streaming active/i)).toBeInTheDocument();
+    expect(screen.queryByTitle(/Streaming active/i)).not.toBeInTheDocument();
+    expect(screen.queryByText('STREAM ON')).not.toBeInTheDocument();
+    expect(screen.queryByText('STREAM OFF')).not.toBeInTheDocument();
   });
 
   describe('Tab Switcher Layout & Navigation', () => {
