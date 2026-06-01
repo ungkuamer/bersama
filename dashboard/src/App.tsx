@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef, type ReactNode } from 'react'
 import { 
   Terminal, 
-  RefreshCw, 
   GitBranch, 
   AlertCircle, 
   CheckCircle2,
@@ -16,7 +15,6 @@ import {
   ChevronDown,
   ChevronRight,
   Play,
-  Pause,
   Server,
   GitMerge,
   ArrowDown,
@@ -33,6 +31,7 @@ import { ShimmerText } from '@/components/Shimmer'
 import DependencyPipeline from '@/components/DependencyPipeline'
 import SchedulingReadinessPanel from '@/components/SchedulingReadinessPanel'
 import Sidebar from '@/components/Sidebar'
+import Header from '@/components/Header'
 
 const isTestEnv = typeof (globalThis as any).process !== 'undefined' && (globalThis as any).process.env.NODE_ENV === 'test';
 const API_BASE = import.meta.env.DEV ? `http://${window.location.hostname}:8000` : '';
@@ -697,95 +696,21 @@ export default function App() {
 
       {/* Main Panel Content Area */}
       <div className="flex-1 flex flex-col min-h-screen min-w-0 overflow-y-auto bg-background">
-        {/* Top Banner Status Bar */}
-        <header className="dashboard-glass-panel border-b px-6 py-4 flex flex-col md:flex-row md:items-center md:justify-between gap-4 sticky top-0 z-50">
-          <div className="flex items-center gap-3">
-            {isCollapsed && (
-              <button 
-                onClick={() => setIsCollapsed(false)}
-                className="p-1 rounded bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-zinc-200 hover:border-zinc-700 transition mr-2 cursor-pointer"
-                title="Expand Sidebar"
-              >
-                <ChevronRight className="size-4" />
-              </button>
-            )}
-            <div>
-              <h1 className="text-xs font-bold text-zinc-400 tracking-widest uppercase flex items-center gap-2 select-none">
-                Workspace <span className="text-zinc-700">//</span> <span className="text-white">{activeTab === 'readiness' ? 'Pre-Flight Validation' : 'Operations Command'}</span>
-              </h1>
-              <p className="text-[10px] text-zinc-500 tracking-tight select-none">
-                {activeTab === 'readiness' ? 'Observed parameters & validation metrics' : 'Active agent runs & lifecycle mutations'}
-              </p>
-            </div>
-          </div>
-
-          {/* Global Statistics Panel */}
-          <div className="flex flex-wrap items-center gap-4 text-xs">
-            {/* Quick Metrics */}
-            <div className="dashboard-glass-surface flex items-center gap-3 border rounded px-3 py-1 text-[11px]">
-              <div className="flex items-center gap-1.5 border-r border-border pr-3">
-                <span className="size-1.5 rounded-full bg-amber-500 animate-pulse"></span>
-                <span className="text-zinc-400">ACTIVE RUNS:</span>
-                <span className="text-foreground font-bold">{getActiveRunsCount()}</span>
-              </div>
-              <div className="flex items-center gap-1.5 border-r border-border pr-3">
-                <span className="size-1.5 rounded-full bg-blue-500"></span>
-                <span className="text-zinc-400">READY ISSUES:</span>
-                <span className="text-foreground font-bold">{getReadyIssuesCount()}</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <span className="size-1.5 rounded-full bg-red-500"></span>
-                <span className="text-zinc-400">FAILED RUNS:</span>
-                <span className="text-foreground font-bold">{getFailedRunsCount()}</span>
-              </div>
-            </div>
-
-            {/* Refresh / Polling controls */}
-            <div className="dashboard-glass-surface flex items-center gap-2 border rounded px-2 py-1">
-              <button 
-                onClick={() => fetchData(true)} 
-                disabled={refreshing}
-                className="dashboard-focus rounded text-zinc-400 hover:text-white transition disabled:opacity-50"
-                title="Manual Sync"
-              >
-                <RefreshCw className={`size-3.5 ${refreshing ? 'animate-spin' : ''}`} />
-              </button>
-              <span className="text-[10px] text-zinc-600">|</span>
-              <button
-                onClick={() => setPollingActive(!pollingActive)}
-                className="dashboard-focus rounded flex items-center gap-1 hover:text-white transition"
-              >
-                {pollingActive ? (
-                  <>
-                    <Pause className="size-3 text-emerald-400" />
-                    <span className="text-[10px] text-zinc-400">AUTO SYNC ON</span>
-                  </>
-                ) : (
-                  <>
-                    <Play className="size-3 text-zinc-500" />
-                    <span className="text-[10px] text-zinc-500">AUTO SYNC OFF</span>
-                  </>
-                )}
-              </button>
-            </div>
-          </div>
-        </header>
-
-      {/* Connection Failure banner */}
-      {error && (
-        <div className="bg-red-950/50 border-b border-red-900 text-red-300 px-6 py-2.5 flex items-center gap-3 text-xs font-mono">
-          <AlertCircle className="size-4 shrink-0 text-red-400" />
-          <div className="grow">
-            <strong>SYSTEM FAULT:</strong> {error}
-          </div>
-          <button 
-            onClick={() => { fetchRepos(); if(selectedRepo) fetchData(true); }}
-            className="dashboard-focus px-2.5 py-1 bg-red-900/60 hover:bg-red-800 rounded border border-red-700 text-red-200 uppercase tracking-wider text-[10px]"
-          >
-            Retry Connection
-          </button>
-        </div>
-      )}
+        {/* Top Banner Status Bar & Connection Alerts */}
+        <Header 
+          isCollapsed={isCollapsed}
+          setIsCollapsed={setIsCollapsed}
+          activeTab={activeTab}
+          activeRunsCount={getActiveRunsCount()}
+          readyIssuesCount={getReadyIssuesCount()}
+          failedRunsCount={getFailedRunsCount()}
+          refreshing={refreshing}
+          pollingActive={pollingActive}
+          setPollingActive={setPollingActive}
+          fetchData={fetchData}
+          error={error}
+          onRetryConnection={() => { fetchRepos(); if(selectedRepo) fetchData(true); }}
+        />
 
       {/* Main Content Layout */}
       {activeTab === 'readiness' ? (
