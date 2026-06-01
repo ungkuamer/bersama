@@ -8,7 +8,14 @@ import {
 } from '@/components/ui/sheet'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { ShimmerCard } from '@/components/Shimmer'
+import { Skeleton } from '@/components/ui/skeleton'
+import { Separator } from '@/components/ui/separator'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableRow,
+} from '@/components/ui/table'
 import {
   Info,
   Play,
@@ -71,26 +78,47 @@ const TABS: { id: TabId; label: string; icon: React.ReactNode }[] = [
 ];
 
 function getStatusBadge(status?: string) {
-  const defaultClasses = "font-mono font-semibold uppercase tracking-wider text-[10px] px-2 py-0.5 rounded border";
-  switch (status) {
-    case 'closed':
-    case 'succeeded':
-      return <Badge className={`${defaultClasses} bg-emerald-950/40 text-emerald-400 border-emerald-800`}>SUCCEEDED</Badge>;
-    case 'running':
-      return <Badge className={`${defaultClasses} bg-amber-950/40 text-amber-400 border-amber-800`}>RUNNING</Badge>;
-    case 'failed':
-      return <Badge className={`${defaultClasses} bg-red-950/40 text-red-400 border-red-800`}>FAILED</Badge>;
-    case 'blocked':
-      return <Badge className={`${defaultClasses} bg-orange-950/40 text-orange-400 border-orange-800`}>BLOCKED</Badge>;
+  const baseClass = "inline-flex items-center gap-1 font-mono text-[9px] uppercase font-bold tracking-wider px-2 py-0.5 rounded border bg-neutral-100 text-neutral-800 dark:bg-neutral-800 dark:text-neutral-200 border-neutral-200 dark:border-neutral-700";
+  
+  let dotColor = "bg-neutral-400";
+  let isPulse = false;
+
+  const normalizedStatus = status?.toLowerCase() || 'unknown';
+
+  switch (normalizedStatus) {
     case 'ready':
-      return <Badge className={`${defaultClasses} bg-blue-950/40 text-blue-400 border-blue-800`}>READY</Badge>;
+      dotColor = "bg-blue-500";
+      break;
     case 'claimed':
-      return <Badge className={`${defaultClasses} bg-cyan-950/40 text-cyan-400 border-cyan-800`}>CLAIMED</Badge>;
+      dotColor = "bg-cyan-500";
+      break;
+    case 'running':
+      dotColor = "bg-amber-500 animate-pulse";
+      isPulse = true;
+      break;
+    case 'succeeded':
+    case 'closed':
+      dotColor = "bg-emerald-500";
+      break;
+    case 'failed':
+      dotColor = "bg-red-500";
+      break;
+    case 'blocked':
+      dotColor = "bg-orange-500";
+      break;
     case 'unready':
-      return <Badge className={`${defaultClasses} bg-zinc-900 text-zinc-400 border-zinc-700`}>UNREADY</Badge>;
+      dotColor = "bg-zinc-500";
+      break;
     default:
-      return <Badge className={`${defaultClasses} bg-zinc-900 text-zinc-400 border-zinc-700`}>{status || 'UNKNOWN'}</Badge>;
+      dotColor = "bg-zinc-400";
   }
+
+  return (
+    <Badge className={`${baseClass} ${isPulse ? 'animate-pulse' : ''}`} variant="outline">
+      <span className={`size-1.5 rounded-full ${dotColor}`} />
+      {normalizedStatus}
+    </Badge>
+  );
 }
 
 function formatDate(dateStr?: string | null) {
@@ -167,36 +195,36 @@ export default function SideDrawer({
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
-        className="dashboard-glass-panel w-full sm:max-w-lg border-l border-zinc-800 bg-black p-0 gap-0"
+        className="dashboard-glass-panel w-full sm:max-w-lg border-l border-border p-0 gap-0 flex flex-col h-full bg-background"
         showCloseButton={true}
       >
         {/* Drawer Header */}
-        <SheetHeader className="dashboard-glass-panel border-b border-zinc-800 px-5 py-4 shrink-0">
+        <SheetHeader className="border-b border-border px-5 py-4 shrink-0 bg-card">
           <div className="flex items-center gap-2">
-            <span className="font-mono text-xs font-extrabold text-zinc-400 bg-zinc-900 border border-zinc-800 px-1.5 py-0.5 rounded">
+            <span className="font-mono text-xs font-extrabold text-muted-foreground bg-muted border border-border px-1.5 py-0.5 rounded">
               {issue.kind === 'prd' ? 'PRD' : 'ISSUE'} #{issue.number}
             </span>
             {getStatusBadge(issue.status)}
           </div>
-          <SheetTitle className="text-sm font-bold text-white mt-1.5 tracking-tight">
+          <SheetTitle className="text-sm font-bold text-foreground mt-1.5 tracking-tight">
             {issue.title}
           </SheetTitle>
-          <SheetDescription className="text-[10px] text-zinc-500">
+          <SheetDescription className="text-[10px] text-muted-foreground">
             {issue.kind === 'prd' ? 'Product Requirements Document' : 'Implementation Issue'}
             {issue.parent_prd_number && ` · Parent PRD #${issue.parent_prd_number}`}
           </SheetDescription>
         </SheetHeader>
 
         {/* Tab Bar */}
-        <div className="flex border-b border-zinc-800 shrink-0">
+        <div className="flex border-b border-border shrink-0 bg-card">
           {visibleTabs.map((tab) => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
               className={`flex items-center gap-1.5 px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider transition-all duration-150 border-b-2 -mb-px ${
                 activeTab === tab.id
-                  ? 'border-teal-400 text-teal-400 bg-teal-950/20'
-                  : 'border-transparent text-zinc-500 hover:text-zinc-300 hover:border-zinc-700'
+                  ? 'border-primary border-teal-400 text-primary bg-primary/5'
+                  : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border'
               }`}
             >
               {tab.icon}
@@ -206,108 +234,123 @@ export default function SideDrawer({
         </div>
 
         {/* Tab Content */}
-        <div className="grow overflow-y-auto px-5 py-4">
+        <div className="grow overflow-y-auto px-5 py-4 flex flex-col gap-4">
           {/* ---- Overview Tab ---- */}
           {activeTab === 'overview' && (
-            <div className="space-y-4">
+            <div className="flex flex-col gap-4">
               <section>
-                <h4 className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 mb-2">Status &amp; Metadata</h4>
-                <div className="dashboard-glass-surface rounded border p-3 space-y-2 text-[10px]">
-                  <div className="flex justify-between">
-                    <span className="text-zinc-500">State:</span>
-                    <span className="text-zinc-300 capitalize">{issue.state}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-zinc-500">Kind:</span>
-                    <span className="text-zinc-300 capitalize">{issue.kind}</span>
-                  </div>
-                  {issue.labels.length > 0 && (
-                    <div className="flex justify-between">
-                      <span className="text-zinc-500">Labels:</span>
-                      <div className="flex flex-wrap gap-1 justify-end max-w-[240px]">
-                        {issue.labels.map((label) => (
-                          <span key={label} className="bg-zinc-900 border border-zinc-800 rounded px-1.5 py-0.5 text-[9px] text-zinc-400 font-mono">
-                            {label}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
+                <h4 className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-2">Status &amp; Metadata</h4>
+                <Table className="border rounded-md border-border">
+                  <TableBody>
+                    <TableRow className="border-b border-border hover:bg-transparent">
+                      <TableCell className="text-muted-foreground text-[10px] font-medium py-2">State</TableCell>
+                      <TableCell className="text-foreground text-[10px] capitalize text-right py-2">{issue.state}</TableCell>
+                    </TableRow>
+                    <TableRow className="border-b border-border hover:bg-transparent">
+                      <TableCell className="text-muted-foreground text-[10px] font-medium py-2">Kind</TableCell>
+                      <TableCell className="text-foreground text-[10px] capitalize text-right py-2">{issue.kind}</TableCell>
+                    </TableRow>
+                    {issue.labels.length > 0 && (
+                      <TableRow className="border-0 hover:bg-transparent">
+                        <TableCell className="text-muted-foreground text-[10px] font-medium py-2">Labels</TableCell>
+                        <TableCell className="text-foreground text-[10px] text-right py-2">
+                          <div className="flex flex-wrap gap-1 justify-end max-w-[240px]">
+                            {issue.labels.map((label) => (
+                              <Badge key={label} variant="outline" className="text-[9px] font-mono border-border bg-muted">
+                                {label}
+                              </Badge>
+                            ))}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
               </section>
+
+              <Separator className="bg-border" />
 
               {/* Blocking Dependencies */}
               {issue.blocked_by && issue.blocked_by.length > 0 && (
-                <section>
-                  <h4 className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 mb-2">Blocking Dependencies</h4>
-                  <div className="dashboard-glass-surface rounded border p-3">
+                <>
+                  <section>
+                    <h4 className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-2">Blocking Dependencies</h4>
                     <div className="flex flex-wrap items-center gap-2">
                       {issue.blocked_by.map((num) => {
                         const isOpen = issue.active_blockers?.includes(num) ?? false;
                         return (
-                          <span
+                          <Badge
                             key={num}
-                            aria-label={`${isOpen ? 'Open' : 'Resolved'} Blocking Dependency #${num}`}
-                            className={`inline-flex h-5 items-center gap-1 rounded-full border px-2 text-[9px] font-bold uppercase tracking-wider ${
+                            variant={isOpen ? "destructive" : "outline"}
+                            className={`text-[9px] font-bold uppercase tracking-wider h-5 flex items-center gap-1 rounded-full ${
                               isOpen
-                                ? 'border-orange-800 bg-orange-950/60 text-orange-300'
-                                : 'border-zinc-800 bg-[#050506] text-zinc-600'
+                                ? 'border-destructive/30 bg-destructive/10 text-destructive'
+                                : 'border-border bg-muted text-muted-foreground'
                             }`}
                           >
                             {isOpen ? <AlertCircle className="size-2.5" /> : <CheckCircle2 className="size-2.5" />}
                             <span>{isOpen ? 'Open' : 'Resolved'} #{num}</span>
-                          </span>
+                          </Badge>
                         );
                       })}
                     </div>
-                  </div>
-                </section>
+                  </section>
+                  <Separator className="bg-border" />
+                </>
               )}
 
               {/* Agent Run Info */}
               {issue.agent_run_id && (
-                <section>
-                  <h4 className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 mb-2">Agent Run</h4>
-                  <div className="dashboard-glass-surface rounded border p-3 space-y-2 text-[10px]">
-                    <div className="flex justify-between">
-                      <span className="text-zinc-500">Run ID:</span>
-                      <span className="text-zinc-300 font-mono">{issue.agent_run_id}</span>
-                    </div>
-                    {issue.claimed_at && (
-                      <div className="flex justify-between">
-                        <span className="text-zinc-500">Claimed:</span>
-                        <span className="text-zinc-300">{formatDate(issue.claimed_at)}</span>
-                      </div>
-                    )}
-                  </div>
-                </section>
+                <>
+                  <section>
+                    <h4 className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-2">Agent Run</h4>
+                    <Table className="border rounded-md border-border">
+                      <TableBody>
+                        <TableRow className="border-b border-border hover:bg-transparent">
+                          <TableCell className="text-muted-foreground text-[10px] font-medium py-2">Run ID</TableCell>
+                          <TableCell className="text-foreground text-[10px] font-mono text-right py-2">{issue.agent_run_id}</TableCell>
+                        </TableRow>
+                        {issue.claimed_at && (
+                          <TableRow className="border-0 hover:bg-transparent">
+                            <TableCell className="text-muted-foreground text-[10px] font-medium py-2">Claimed</TableCell>
+                            <TableCell className="text-foreground text-[10px] text-right py-2">{formatDate(issue.claimed_at)}</TableCell>
+                          </TableRow>
+                        )}
+                      </TableBody>
+                    </Table>
+                  </section>
+                  <Separator className="bg-border" />
+                </>
               )}
 
               {/* Failure Reason */}
               {issue.failure_reason && (
-                <section>
-                  <h4 className="text-[10px] font-bold uppercase tracking-wider text-red-400/70 mb-2">Failure Reason</h4>
-                  <div className="bg-red-950/20 border border-red-950 rounded p-3 text-[9.5px] text-red-400 font-mono whitespace-pre-wrap max-h-32 overflow-y-auto">
-                    {issue.failure_reason}
-                  </div>
-                </section>
+                <>
+                  <section>
+                    <h4 className="text-[10px] font-bold uppercase tracking-wider text-destructive mb-2">Failure Reason</h4>
+                    <div className="bg-destructive/10 border border-destructive/20 rounded p-3 text-[9.5px] text-destructive font-mono whitespace-pre-wrap max-h-32 overflow-y-auto">
+                      {issue.failure_reason}
+                    </div>
+                  </section>
+                  <Separator className="bg-border" />
+                </>
               )}
 
               {/* PRD-specific: Children overview */}
               {issue.kind === 'prd' && issue.children && issue.children.length > 0 && (
                 <section>
-                  <h4 className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 mb-2">Implementation Slices ({issue.children.length})</h4>
-                  <div className="space-y-1.5">
-                    {issue.children.map((c) => (
-                      <div key={c.number} className="dashboard-glass-surface rounded border p-2 flex items-center justify-between text-[10px]">
-                        <div className="flex items-center gap-2">
-                          <span className="font-mono text-zinc-400">#{c.number}</span>
-                          <span className="text-zinc-300 truncate max-w-[280px]">{c.title}</span>
-                        </div>
-                        {getStatusBadge(c.status)}
-                      </div>
-                    ))}
-                  </div>
+                  <h4 className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-2">Implementation Slices ({issue.children.length})</h4>
+                  <Table className="border rounded-md border-border">
+                    <TableBody>
+                      {issue.children.map((c, index, array) => (
+                        <TableRow key={c.number} className={`${index === array.length - 1 ? 'border-0' : 'border-b border-border'} hover:bg-transparent`}>
+                          <TableCell className="font-mono text-[10px] text-muted-foreground py-2">#{c.number}</TableCell>
+                          <TableCell className="text-[10px] text-foreground py-2 truncate max-w-[220px]">{c.title}</TableCell>
+                          <TableCell className="py-2 text-right">{getStatusBadge(c.status)}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
                 </section>
               )}
             </div>
@@ -316,7 +359,7 @@ export default function SideDrawer({
           {/* ---- Readiness Timeline Tab ---- */}
           {activeTab === 'timeline' && (
             <div className="space-y-6 py-2 px-1">
-              <div className="relative border-l border-zinc-800 ml-3.5 pl-6 space-y-6">
+              <div className="relative border-l border-border ml-3.5 pl-6 space-y-6">
                 {(() => {
                   const isClosed = issue.state === 'closed' || issue.status === 'closed';
 
@@ -462,22 +505,22 @@ export default function SideDrawer({
                     }
                   ];
                 })().map((step, idx) => {
-                  let dotBg = 'bg-zinc-900 border-zinc-700';
-                  let dotIcon = <span className="size-1.5 rounded-full bg-zinc-600" />;
-                  let titleColor = 'text-zinc-500';
+                  let dotBg = 'bg-muted border-border text-muted-foreground';
+                  let dotIcon = <span className="size-1.5 rounded-full bg-muted-foreground/60" />;
+                  let titleColor = 'text-muted-foreground';
 
                   if (step.status === 'completed') {
-                    dotBg = 'bg-emerald-950/80 border-emerald-500 text-emerald-400';
+                    dotBg = 'bg-emerald-100 dark:bg-emerald-950/80 border-emerald-500 text-emerald-600 dark:text-emerald-400';
                     dotIcon = <CheckCircle2 className="size-3.5" />;
-                    titleColor = 'text-zinc-200';
+                    titleColor = 'text-foreground font-semibold';
                   } else if (step.status === 'active') {
-                    dotBg = 'bg-teal-950/80 border-teal-500 text-teal-400 animate-pulse';
-                    dotIcon = <span className="size-2 rounded-full bg-teal-400 shadow-[0_0_8px_rgba(20,184,166,0.5)]" />;
-                    titleColor = 'text-white font-bold';
+                    dotBg = 'bg-primary/10 border-primary text-primary animate-pulse';
+                    dotIcon = <span className="size-2 rounded-full bg-primary animate-pulse" />;
+                    titleColor = 'text-foreground font-bold';
                   } else if (step.status === 'failed') {
-                    dotBg = 'bg-red-950/80 border-red-500 text-red-400';
+                    dotBg = 'bg-red-100 dark:bg-red-950/80 border-red-500 text-red-600 dark:text-red-400';
                     dotIcon = <AlertCircle className="size-3.5" />;
-                    titleColor = 'text-red-400';
+                    titleColor = 'text-destructive font-semibold';
                   }
 
                   return (
@@ -493,14 +536,14 @@ export default function SideDrawer({
                           {step.title}
                         </h4>
                         {step.timestamp && step.timestamp !== 'N/A' && (
-                          <span className="font-mono text-[9px] text-zinc-500 shrink-0">
+                          <span className="font-mono text-[9px] text-muted-foreground shrink-0">
                             {step.timestamp}
                           </span>
                         )}
                       </div>
 
                       {/* Description */}
-                      <p className="text-[10px] text-zinc-400 leading-relaxed mt-1 font-sans">
+                      <p className="text-[10px] text-muted-foreground leading-relaxed mt-1 font-sans">
                         {step.description}
                       </p>
                     </div>
@@ -512,120 +555,141 @@ export default function SideDrawer({
 
           {/* ---- Operations Tab ---- */}
           {activeTab === 'operations' && !readOnly && (
-            <div className="space-y-4">
+            <div className="flex flex-col gap-4">
               {/* Git Parameters & Remote Path */}
               <section>
-                <h4 className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 mb-2">Git Parameters</h4>
-                <div className="dashboard-glass-surface rounded border p-3 space-y-2 text-[10px]">
-                  {issue.prd_branch && (
-                    <div className="flex justify-between">
-                      <span className="text-zinc-500">PRD Branch:</span>
-                      <span className="text-zinc-300 font-mono break-all text-right ml-2">{issue.prd_branch}</span>
-                    </div>
-                  )}
-                  {issue.implementation_branch && (
-                    <div className="flex justify-between">
-                      <span className="text-zinc-500">Impl Branch:</span>
-                      <span className="text-zinc-300 font-mono break-all text-right ml-2">{issue.implementation_branch}</span>
-                    </div>
-                  )}
-                  {!issue.prd_branch && !issue.implementation_branch && (
-                    <p className="text-zinc-600 italic text-[10px]">No branch information available.</p>
-                  )}
-                </div>
+                <h4 className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-2">Git Parameters</h4>
+                <Table className="border rounded-md border-border">
+                  <TableBody>
+                    {issue.prd_branch && (
+                      <TableRow className={`${issue.implementation_branch ? "border-b border-border" : "border-0"} hover:bg-transparent`}>
+                        <TableCell className="text-muted-foreground text-[10px] font-medium py-2">PRD Branch</TableCell>
+                        <TableCell className="text-foreground text-[10px] font-mono break-all text-right py-2">{issue.prd_branch}</TableCell>
+                      </TableRow>
+                    )}
+                    {issue.implementation_branch && (
+                      <TableRow className="border-0 hover:bg-transparent">
+                        <TableCell className="text-muted-foreground text-[10px] font-medium py-2">Impl Branch</TableCell>
+                        <TableCell className="text-foreground text-[10px] font-mono break-all text-right py-2">{issue.implementation_branch}</TableCell>
+                      </TableRow>
+                    )}
+                    {!issue.prd_branch && !issue.implementation_branch && (
+                      <TableRow className="border-0 hover:bg-transparent">
+                        <TableCell colSpan={2} className="text-muted-foreground italic text-[10px] text-center py-2">No branch information available.</TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
               </section>
+
+              <Separator className="bg-border" />
 
               {/* Remote / Origin summary */}
               <section>
-                <h4 className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 mb-2">Remote Path</h4>
-                <div className="dashboard-glass-surface rounded border p-3 text-[10px]">
-                  <p className="text-zinc-500 font-mono break-all">
-                    {issue.prd_branch
-                      ? `origin/${issue.prd_branch}`
-                      : 'No remote path resolved'}
-                  </p>
-                </div>
+                <h4 className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-2">Remote Path</h4>
+                <Table className="border rounded-md border-border">
+                  <TableBody>
+                    <TableRow className="border-0 hover:bg-transparent">
+                      <TableCell className="text-muted-foreground text-[10px] font-medium py-2">Remote Origin</TableCell>
+                      <TableCell className="text-foreground text-[10px] font-mono break-all text-right py-2">
+                        {issue.prd_branch ? `origin/${issue.prd_branch}` : 'No remote path resolved'}
+                      </TableCell>
+                    </TableRow>
+                  </TableBody>
+                </Table>
               </section>
+
+              <Separator className="bg-border" />
 
               {/* Run Metrics */}
               {isImplementation && (issue.status === 'running' || issue.status === 'succeeded' || issue.status === 'failed') ? (
-                <section className="space-y-4">
-                  <div>
-                    <h4 className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 mb-2">Run Metrics</h4>
-                    <div className="dashboard-glass-surface rounded border p-3 space-y-2 text-[10px]">
-                      <div className="flex justify-between">
-                        <span className="text-zinc-500">Status:</span>
-                        <span className="text-zinc-300">{issue.status}</span>
-                      </div>
-                      {issue.started_at && (
-                        <div className="flex justify-between">
-                          <span className="text-zinc-500">Started:</span>
-                          <span className="text-zinc-300 font-mono">{formatDate(issue.started_at)}</span>
-                        </div>
-                      )}
-                      {issue.finished_at && (
-                        <div className="flex justify-between">
-                          <span className="text-zinc-500">Finished:</span>
-                          <span className="text-zinc-300 font-mono">{formatDate(issue.finished_at)}</span>
-                        </div>
-                      )}
-                      {formatElapsed(issue.started_at, issue.finished_at) && (
-                        <div className="flex justify-between">
-                          <span className="text-zinc-500">Elapsed:</span>
-                          <span className="text-amber-400 font-mono">{formatElapsed(issue.started_at, issue.finished_at)}</span>
-                        </div>
-                      )}
+                <>
+                  <section className="space-y-4">
+                    <div>
+                      <h4 className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-2">Run Metrics</h4>
+                      <Table className="border rounded-md border-border">
+                        <TableBody>
+                          <TableRow className="border-b border-border hover:bg-transparent">
+                            <TableCell className="text-muted-foreground text-[10px] font-medium py-2">Status</TableCell>
+                            <TableCell className="text-foreground text-[10px] text-right py-2 capitalize">{issue.status}</TableCell>
+                          </TableRow>
+                          {issue.started_at && (
+                            <TableRow className={`${issue.finished_at ? "border-b border-border" : "border-0"} hover:bg-transparent`}>
+                              <TableCell className="text-muted-foreground text-[10px] font-medium py-2">Started</TableCell>
+                              <TableCell className="text-foreground text-[10px] font-mono text-right py-2">{formatDate(issue.started_at)}</TableCell>
+                            </TableRow>
+                          )}
+                          {issue.finished_at && (
+                            <TableRow className={`${formatElapsed(issue.started_at, issue.finished_at) ? "border-b border-border" : "border-0"} hover:bg-transparent`}>
+                              <TableCell className="text-muted-foreground text-[10px] font-medium py-2">Finished</TableCell>
+                              <TableCell className="text-foreground text-[10px] font-mono text-right py-2">{formatDate(issue.finished_at)}</TableCell>
+                            </TableRow>
+                          )}
+                          {formatElapsed(issue.started_at, issue.finished_at) && (
+                            <TableRow className="border-0 hover:bg-transparent">
+                              <TableCell className="text-muted-foreground text-[10px] font-medium py-2">Elapsed</TableCell>
+                              <TableCell className="text-amber-500 text-[10px] font-mono text-right py-2">{formatElapsed(issue.started_at, issue.finished_at)}</TableCell>
+                            </TableRow>
+                          )}
+                        </TableBody>
+                      </Table>
                     </div>
-                  </div>
 
-                  {/* Logs Quick View */}
-                  <div>
-                    <h4 className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 mb-2">Agent Logs</h4>
-                    <div className="dashboard-glass-surface rounded border p-3">
+                    {/* Logs Quick View */}
+                    <div>
+                      <h4 className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-2">Agent Logs</h4>
                       <Button
                         type="button"
                         size="xs"
                         variant="outline"
                         onClick={() => onViewLog?.(issue.number)}
-                        className={`dashboard-control text-[9px] uppercase tracking-wider ${
-                          isSelectedLog ? 'text-emerald-400' : 'text-zinc-300'
+                        className={`text-[9px] uppercase tracking-wider w-full ${
+                          isSelectedLog ? 'text-emerald-500 border-emerald-500' : 'text-foreground border-border'
                         }`}
                       >
-                        <Eye className="size-3" />
+                        <Eye className="size-3" data-icon="inline-start" />
                         {isSelectedLog ? 'Log Selected' : 'View Terminal Log'}
                       </Button>
                     </div>
-                  </div>
-                </section>
+                  </section>
+                  <Separator className="bg-border" />
+                </>
               ) : isImplementation && issue.status === 'running' ? (
-                <section>
-                  <h4 className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 mb-2">Run Metrics</h4>
-                  <ShimmerCard />
-                </section>
+                <>
+                  <section>
+                    <h4 className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-2">Run Metrics</h4>
+                    <div className="flex flex-col gap-2 p-3 border border-border rounded-md animate-shimmer animate-pulse">
+                      <Skeleton className="h-3 w-1/3" />
+                      <Skeleton className="h-3 w-full" />
+                      <Skeleton className="h-3 w-5/6" />
+                    </div>
+                  </section>
+                  <Separator className="bg-border" />
+                </>
               ) : null}
 
               {/* Action Controls */}
               {isImplementation && (
                 <section>
-                  <h4 className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 mb-2">Action Controls</h4>
+                  <h4 className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-2">Action Controls</h4>
                   <div className="space-y-2">
                     {/* Claim */}
                     {canClaimIssue && (
-                      <div className="dashboard-glass-surface rounded border p-3">
+                      <div className="p-3 border border-border rounded-md">
                         {!claimFormOpen ? (
                           <Button
                             type="button"
                             size="xs"
                             variant="outline"
                             onClick={() => setClaimFormOpen(true)}
-                            className="dashboard-control text-[9px] uppercase tracking-wider text-zinc-200 w-full"
+                            className="text-[9px] uppercase tracking-wider w-full border-border"
                           >
-                            <Hand className="size-3" />
+                            <Hand className="size-3" data-icon="inline-start" />
                             Claim #{issue.number}
                           </Button>
                         ) : (
                           <form onSubmit={handleClaimSubmit} className="space-y-2" aria-label={`Claim Implementation Issue #${issue.number}`}>
-                            <label className="text-[9px] text-zinc-500 font-bold uppercase tracking-wider block">
+                            <label className="text-[9px] text-muted-foreground font-bold uppercase tracking-wider block">
                               Agent Run ID
                             </label>
                             <div className="flex gap-2">
@@ -633,7 +697,7 @@ export default function SideDrawer({
                                 value={claimAgentRunId || ''}
                                 disabled={isClaiming}
                                 onChange={(e) => onClaimAgentRunIdChange?.(e.target.value)}
-                                className="dashboard-control min-w-0 w-full rounded px-2 py-1 text-[10px] text-zinc-200 focus:outline-none font-mono"
+                                className="flex h-8 w-full rounded-md border border-input bg-transparent px-3 py-1 text-xs shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 font-mono"
                                 placeholder={`run-${issue.number}-...`}
                               />
                               <Button
@@ -641,9 +705,9 @@ export default function SideDrawer({
                                 size="xs"
                                 variant="outline"
                                 disabled={isClaiming}
-                                className="dashboard-control text-[9px] uppercase tracking-wider text-zinc-200 shrink-0"
+                                className="text-[9px] uppercase tracking-wider shrink-0 border-border"
                               >
-                                <Send className={`size-3 ${isClaiming ? 'animate-pulse' : ''}`} />
+                                <Send className={`size-3 ${isClaiming ? 'animate-pulse' : ''}`} data-icon="inline-start" />
                                 {isClaiming ? 'Claiming' : 'Submit'}
                               </Button>
                             </div>
@@ -652,8 +716,8 @@ export default function SideDrawer({
                         {claimState && claimState.status !== 'loading' && (
                           <div className={`mt-2 rounded border px-2 py-1 text-[9px] font-mono ${
                             claimState.status === 'succeeded'
-                              ? 'bg-emerald-950/20 border-emerald-950/60 text-emerald-300'
-                              : 'bg-red-950/25 border-red-950/70 text-red-300'
+                              ? 'bg-emerald-100 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-950/60 text-emerald-800 dark:text-emerald-300'
+                              : 'bg-red-100 dark:bg-red-950/25 border-red-200 dark:border-red-950/70 text-red-800 dark:text-red-300'
                           }`}>
                             {claimState.message}
                           </div>
@@ -663,24 +727,24 @@ export default function SideDrawer({
 
                     {/* Start */}
                     {canStartIssue && (
-                      <div className="dashboard-glass-surface rounded border p-3">
+                      <div className="p-3 border border-border rounded-md">
                         <Button
                           type="button"
                           size="xs"
                           variant="outline"
                           onClick={() => onStart?.(issue.number)}
                           disabled={isStarting}
-                          className="dashboard-control text-[9px] uppercase tracking-wider text-zinc-200 w-full"
+                          className="text-[9px] uppercase tracking-wider w-full border-border"
                           aria-label={isStarting ? `Starting Agent Run for Implementation Issue #${issue.number}` : `Start Agent Run for Implementation Issue #${issue.number}`}
                         >
-                          <Play className={`size-3 ${isStarting ? 'animate-pulse' : ''}`} />
+                          <Play className={`size-3 ${isStarting ? 'animate-pulse' : ''}`} data-icon="inline-start" />
                           {isStarting ? 'Starting' : 'Start'} Agent Run
                         </Button>
                         {startState && startState.status !== 'loading' && (
                           <div className={`mt-2 rounded border px-2 py-1 text-[9px] font-mono ${
                             startState.status === 'succeeded'
-                              ? 'bg-emerald-950/20 border-emerald-950/60 text-emerald-300'
-                              : 'bg-red-950/25 border-red-950/70 text-red-300'
+                              ? 'bg-emerald-100 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-950/60 text-emerald-800 dark:text-emerald-300'
+                              : 'bg-red-100 dark:bg-red-950/25 border-red-200 dark:border-red-950/70 text-red-800 dark:text-red-300'
                           }`}>
                             {startState.message}
                           </div>
@@ -690,23 +754,23 @@ export default function SideDrawer({
 
                     {/* Integrate */}
                     {canIntegrateIssue && (
-                      <div className="dashboard-glass-surface rounded border p-3">
+                      <div className="p-3 border border-border rounded-md">
                         <Button
                           type="button"
                           size="xs"
                           variant="outline"
                           onClick={() => onIntegrate?.(issue.number)}
                           disabled={isIntegrating}
-                          className="dashboard-control text-[9px] uppercase tracking-wider text-zinc-200 w-full"
+                          className="text-[9px] uppercase tracking-wider w-full border-border"
                         >
-                          <GitMerge className={`size-3 ${isIntegrating ? 'animate-pulse' : ''}`} />
+                          <GitMerge className={`size-3 ${isIntegrating ? 'animate-pulse' : ''}`} data-icon="inline-start" />
                           {isIntegrating ? 'Integrating' : 'Integrate'} #{issue.number}
                         </Button>
                         {integrateState && integrateState.status !== 'loading' && (
                           <div className={`mt-2 rounded border px-2 py-1 text-[9px] font-mono ${
                             integrateState.status === 'succeeded'
-                              ? 'bg-emerald-950/20 border-emerald-950/60 text-emerald-300'
-                              : 'bg-red-950/25 border-red-950/70 text-red-300'
+                              ? 'bg-emerald-100 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-950/60 text-emerald-800 dark:text-emerald-300'
+                              : 'bg-red-100 dark:bg-red-950/25 border-red-200 dark:border-red-950/70 text-red-800 dark:text-red-300'
                           }`}>
                             {integrateState.message}
                           </div>
@@ -716,7 +780,7 @@ export default function SideDrawer({
 
                     {/* No actions available message */}
                     {!canClaimIssue && !canStartIssue && !canIntegrateIssue && (
-                      <p className="text-[10px] text-zinc-600 italic text-center py-3">
+                      <p className="text-[10px] text-muted-foreground italic text-center py-3">
                         {issue.status === 'running'
                           ? 'Agent run is active. Monitor in Operations tab.'
                           : issue.status === 'failed'

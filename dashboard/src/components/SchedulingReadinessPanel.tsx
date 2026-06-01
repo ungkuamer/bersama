@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ShimmerCard } from '@/components/Shimmer';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -71,14 +71,34 @@ export default function SchedulingReadinessPanel({ repoName, apiBase, onIssueCli
 
   if (loading) {
     return (
-      <div className="grow p-6 grid grid-cols-1 lg:grid-cols-3 gap-6 overflow-hidden animate-pulse">
-        <div className="lg:col-span-1 space-y-6">
-          <ShimmerCard />
-          <ShimmerCard />
+      <div className="grow p-6 grid grid-cols-1 lg:grid-cols-3 gap-6 overflow-hidden">
+        <div className="lg:col-span-1 flex flex-col gap-6">
+          <div className="flex flex-col gap-3 p-5 border border-border rounded-xl">
+            <Skeleton className="h-4 w-1/3" />
+            <Skeleton className="h-3 w-full" />
+            <Skeleton className="h-3 w-5/6" />
+            <Skeleton className="h-3 w-2/3" />
+          </div>
+          <div className="flex flex-col gap-3 p-5 border border-border rounded-xl">
+            <Skeleton className="h-4 w-1/3" />
+            <Skeleton className="h-3 w-full" />
+            <Skeleton className="h-3 w-5/6" />
+            <Skeleton className="h-3 w-2/3" />
+          </div>
         </div>
-        <div className="lg:col-span-2 space-y-6">
-          <ShimmerCard />
-          <ShimmerCard />
+        <div className="lg:col-span-2 flex flex-col gap-6">
+          <div className="flex flex-col gap-3 p-5 border border-border rounded-xl">
+            <Skeleton className="h-4 w-1/3" />
+            <Skeleton className="h-3 w-full" />
+            <Skeleton className="h-3 w-5/6" />
+            <Skeleton className="h-3 w-2/3" />
+          </div>
+          <div className="flex flex-col gap-3 p-5 border border-border rounded-xl">
+            <Skeleton className="h-4 w-1/3" />
+            <Skeleton className="h-3 w-full" />
+            <Skeleton className="h-3 w-5/6" />
+            <Skeleton className="h-3 w-2/3" />
+          </div>
         </div>
       </div>
     );

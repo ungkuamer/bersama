@@ -28,7 +28,7 @@ import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Button } from '@/components/ui/button'
 import SideDrawer from '@/components/SideDrawer'
-import { ShimmerText } from '@/components/Shimmer'
+import { Skeleton } from '@/components/ui/skeleton'
 import DependencyPipeline, { type PipelineNode } from '@/components/DependencyPipeline'
 import SchedulingReadinessPanel from '@/components/SchedulingReadinessPanel'
 import Sidebar from '@/components/Sidebar'
@@ -858,7 +858,12 @@ export default function App() {
           />
         ) : (
           <div className="grow p-6 flex items-center justify-center">
-            <ShimmerText lines={4} className="w-full max-w-md" />
+            <div className="flex flex-col gap-2 w-full max-w-md">
+              <Skeleton className="h-4 w-full animate-shimmer" />
+              <Skeleton className="h-4 w-5/6 animate-shimmer" />
+              <Skeleton className="h-4 w-4/5 animate-shimmer" />
+              <Skeleton className="h-4 w-2/3 animate-shimmer" />
+            </div>
           </div>
         )
       ) : (
@@ -884,7 +889,11 @@ export default function App() {
             <CardContent className="p-0 grow overflow-hidden">
               {loading ? (
                 <div className="h-full flex items-center justify-center p-6">
-                  <ShimmerText lines={3} className="w-full max-w-[200px]" />
+                  <div className="flex flex-col gap-2 w-full max-w-[200px]">
+                    <Skeleton className="h-3 w-full animate-shimmer" />
+                    <Skeleton className="h-3 w-5/6 animate-shimmer" />
+                    <Skeleton className="h-3 w-2/3 animate-shimmer" />
+                  </div>
                 </div>
               ) : runs.length === 0 ? (
                 <div className="h-full flex flex-col items-center justify-center p-8 text-center">
@@ -1059,7 +1068,10 @@ export default function App() {
                 </div>
               ) : !logTail ? (
                 <div className="grow flex items-center justify-center p-6">
-                  <ShimmerText lines={2} className="w-full max-w-[180px]" />
+                  <div className="flex flex-col gap-2 w-full max-w-[180px]">
+                    <Skeleton className="h-3 w-full animate-shimmer" />
+                    <Skeleton className="h-3 w-3/4 animate-shimmer" />
+                  </div>
                 </div>
               ) : (
                 <div className="grow flex flex-col overflow-hidden text-[10px]">
@@ -1080,7 +1092,7 @@ export default function App() {
                       {logTail.content ? (
                         logTail.content.split('\n').map((line, idx) => (
                           <div key={idx} className="table-row">
-                            <span className="table-cell text-zinc-700 select-none pr-3 text-right w-8">{idx + 1}</span>
+                            <span className="table-cell text-muted-foreground/30 select-none pr-3 text-right w-8 font-mono">{idx + 1}</span>
                             <span className="table-cell text-[#f4f4f5]">{highlightMatches(line, logSearchQuery)}</span>
                           </div>
                         ))
@@ -1155,7 +1167,7 @@ export default function App() {
             <CardContent className="px-6 py-4 flex flex-col justify-center min-h-[110px]">
               {loading ? (
                 <div className="h-[80px] flex items-center justify-center">
-                  <ShimmerText lines={1} className="w-full max-w-[200px]" />
+                  <Skeleton className="h-3 w-full max-w-[200px] animate-shimmer" />
                 </div>
               ) : topologyNodes.length === 0 ? (
                 <div className="h-[80px] flex flex-col items-center justify-center text-center font-mono">
@@ -1215,7 +1227,12 @@ export default function App() {
             <CardContent className="p-0 grow overflow-hidden">
               {loading ? (
                 <div className="h-full flex items-center justify-center p-8">
-                  <ShimmerText lines={4} className="w-full max-w-[220px]" />
+                  <div className="flex flex-col gap-2 w-full max-w-[220px]">
+                    <Skeleton className="h-3 w-full animate-shimmer" />
+                    <Skeleton className="h-3 w-5/6 animate-shimmer" />
+                    <Skeleton className="h-3 w-4/5 animate-shimmer" />
+                    <Skeleton className="h-3 w-2/3 animate-shimmer" />
+                  </div>
                 </div>
               ) : filteredPrds.length === 0 ? (
                 <div className="h-full flex flex-col items-center justify-center p-12 text-center">
