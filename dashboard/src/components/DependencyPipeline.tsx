@@ -71,17 +71,17 @@ function topologicalSort(nodes: PipelineNode[]): PipelineNode[] {
 const statusColor = (status?: string): { fill: string; stroke: string; text: string; animate?: boolean } => {
   switch (status) {
     case 'succeeded':
-      return { fill: 'rgba(16, 185, 129, 0.15)', stroke: 'rgba(16, 185, 129, 0.5)', text: '#34d399' };
+      return { fill: 'var(--pipeline-succeeded-fill)', stroke: 'var(--pipeline-succeeded-stroke)', text: 'var(--pipeline-succeeded-text)' };
     case 'running':
-      return { fill: 'rgba(245, 158, 11, 0.15)', stroke: 'rgba(245, 158, 11, 0.7)', text: '#fbbf24', animate: true };
+      return { fill: 'var(--pipeline-running-fill)', stroke: 'var(--pipeline-running-stroke)', text: 'var(--pipeline-running-text)', animate: true };
     case 'blocked':
-      return { fill: 'rgba(249, 115, 22, 0.15)', stroke: 'rgba(249, 115, 22, 0.5)', text: '#fb923c' };
+      return { fill: 'var(--pipeline-blocked-fill)', stroke: 'var(--pipeline-blocked-stroke)', text: 'var(--pipeline-blocked-text)' };
     case 'ready':
-      return { fill: 'rgba(59, 130, 246, 0.15)', stroke: 'rgba(59, 130, 246, 0.5)', text: '#60a5fa' };
+      return { fill: 'var(--pipeline-ready-fill)', stroke: 'var(--pipeline-ready-stroke)', text: 'var(--pipeline-ready-text)' };
     case 'claimed':
-      return { fill: 'rgba(6, 182, 212, 0.15)', stroke: 'rgba(6, 182, 212, 0.5)', text: '#22d3ee' };
+      return { fill: 'var(--pipeline-claimed-fill)', stroke: 'var(--pipeline-claimed-stroke)', text: 'var(--pipeline-claimed-text)' };
     default:
-      return { fill: 'rgba(113, 113, 122, 0.1)', stroke: 'rgba(113, 113, 122, 0.3)', text: '#a1a1aa' };
+      return { fill: 'var(--pipeline-default-fill)', stroke: 'var(--pipeline-default-stroke)', text: 'var(--pipeline-default-text)' };
   }
 };
 
@@ -125,14 +125,14 @@ export default function DependencyPipeline({ children }: DependencyPipelineProps
                     y1={y + NODE_HEIGHT / 2}
                     x2={x + NODE_WIDTH + ARROW_GAP + 4}
                     y2={y + NODE_HEIGHT / 2}
-                    stroke="rgba(113, 113, 122, 0.4)"
+                    stroke="var(--pipeline-connector)"
                     strokeWidth={1.5}
                     strokeDasharray={color.animate ? '4 2' : undefined}
                   />
                   {/* Arrowhead */}
                   <polygon
                     points={`${x + NODE_WIDTH + ARROW_GAP + 8},${y + NODE_HEIGHT / 2} ${x + NODE_WIDTH + ARROW_GAP},${y + NODE_HEIGHT / 2 - 4} ${x + NODE_WIDTH + ARROW_GAP},${y + NODE_HEIGHT / 2 + 4}`}
-                    fill="rgba(113, 113, 122, 0.5)"
+                    fill="var(--pipeline-arrow)"
                   />
                 </g>
               )}

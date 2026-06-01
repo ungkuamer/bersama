@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, type ReactNode } from 'react'
+import { useState, useEffect, useRef, useMemo, type ReactNode } from 'react'
 import { 
   Terminal, 
   GitBranch, 
@@ -29,7 +29,7 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { Button } from '@/components/ui/button'
 import SideDrawer from '@/components/SideDrawer'
 import { ShimmerText } from '@/components/Shimmer'
-import DependencyPipeline from '@/components/DependencyPipeline'
+import DependencyPipeline, { type PipelineNode } from '@/components/DependencyPipeline'
 import SchedulingReadinessPanel from '@/components/SchedulingReadinessPanel'
 import Sidebar from '@/components/Sidebar'
 import Header from '@/components/Header'
@@ -172,6 +172,7 @@ export default function App() {
   // UI States
   const [expandedPrds, setExpandedPrds] = useState<Record<number, boolean>>({});
   const [filterStatus, setFilterStatus] = useState<string>('all');
+  const [selectedPrdScope, setSelectedPrdScope] = useState<number | 'all'>('all');
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [drawerIssue, setDrawerIssue] = useState<Issue | null>(null);
   const [drawerOpen, setDrawerOpen] = useState<boolean>(false);
@@ -251,6 +252,7 @@ export default function App() {
   // Handle selected repository changes
   useEffect(() => {
     if (selectedRepo) {
+      setSelectedPrdScope('all');
       fetchData(true);
     }
   }, [selectedRepo]);
@@ -666,6 +668,32 @@ export default function App() {
 
   // Filter issues based on UI controls
   const prdIssues = issues.filter(i => i.kind === 'prd');
+  const topologyNodes = useMemo(() => {
+    const nodes: PipelineNode[] = [];
+    if (selectedPrdScope === 'all') {
+      prdIssues.forEach(prd => {
+        if (prd.children) {
+          nodes.push(...prd.children.map(c => ({
+            number: c.number,
+            status: c.status,
+            blocked_by: c.blocked_by,
+            active_blockers: c.active_blockers
+          })));
+        }
+      });
+    } else {
+      const prd = prdIssues.find(i => i.number === selectedPrdScope);
+      if (prd && prd.children) {
+        nodes.push(...prd.children.map(c => ({
+          number: c.number,
+          status: c.status,
+          blocked_by: c.blocked_by,
+          active_blockers: c.active_blockers
+        })));
+      }
+    }
+    return nodes;
+  }, [selectedPrdScope, prdIssues]);
   const filteredPrds = prdIssues.filter(prd => {
     const matchesSearch = prd.title.toLowerCase().includes(searchTerm.toLowerCase()) || 
                           prd.number.toString().includes(searchTerm);
@@ -1084,6 +1112,62 @@ export default function App() {
 
         {/* RIGHT COLUMN: PRDS & CHILD IMPLEMENTATION ISSUES */}
         <section className="xl:col-span-2 flex flex-col gap-6 h-full overflow-hidden">
+          {/* Central Topology Card: System Dependency Topology */}
+          <Card className="dashboard-glass-panel border border-zinc-800 bg-[#0d0d0f]/85 flex flex-col shadow-[0_4px_20px_rgba(0,0,0,0.4)] overflow-hidden shrink-0">
+            <CardHeader className="py-4 border-b border-zinc-800 px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 select-none">
+              <div>
+                <CardTitle className="text-xs tracking-wider font-bold uppercase text-white flex items-center gap-2">
+                  <GitMerge className="size-3.5 text-emerald-400 rotate-90" />
+                  System Dependency Topology
+                </CardTitle>
+                <CardDescription className="text-[10px] text-zinc-500">
+                  Interactive sorted execution dependency pipeline map
+                </CardDescription>
+              </div>
+
+              {/* PRD Scope Filters (matching time filters in design.png) */}
+              <div className="flex flex-wrap items-center gap-1.5 bg-black/40 p-1 rounded-lg border border-zinc-800/80">
+                <button
+                  onClick={() => setSelectedPrdScope('all')}
+                  className={`px-3 py-1 rounded-md text-[10px] font-mono font-bold tracking-wider transition-all uppercase cursor-pointer ${
+                    selectedPrdScope === 'all'
+                      ? 'bg-zinc-800 text-white shadow-sm border border-zinc-700'
+                      : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/40 border border-transparent'
+                  }`}
+                >
+                  All
+                </button>
+                {prdIssues.map(prd => (
+                  <button
+                    key={prd.number}
+                    onClick={() => setSelectedPrdScope(prd.number)}
+                    className={`px-3 py-1 rounded-md text-[10px] font-mono font-bold tracking-wider transition-all uppercase cursor-pointer ${
+                      selectedPrdScope === prd.number
+                        ? 'bg-zinc-800 text-white shadow-sm border border-zinc-700'
+                        : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/40 border border-transparent'
+                    }`}
+                  >
+                    PRD #{prd.number}
+                  </button>
+                ))}
+              </div>
+            </CardHeader>
+            <CardContent className="px-6 py-4 flex flex-col justify-center min-h-[110px]">
+              {loading ? (
+                <div className="h-[80px] flex items-center justify-center">
+                  <ShimmerText lines={1} className="w-full max-w-[200px]" />
+                </div>
+              ) : topologyNodes.length === 0 ? (
+                <div className="h-[80px] flex flex-col items-center justify-center text-center font-mono">
+                  <GitMerge className="size-6 text-zinc-800 mb-1" />
+                  <p className="text-[10px] text-zinc-500">No active dependency nodes observed in this scope</p>
+                </div>
+              ) : (
+                <DependencyPipeline children={topologyNodes} />
+              )}
+            </CardContent>
+          </Card>
+
           <Card className="dashboard-glass-panel flex flex-col grow h-full overflow-hidden">
             {/* Header Controls for filtering */}
             <CardHeader className="py-4 border-b border-zinc-800 px-6 flex flex-col md:flex-row md:items-center justify-between gap-4">

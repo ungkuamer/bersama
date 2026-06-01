@@ -11,13 +11,13 @@ const collectNodeLabels = (): string[] => {
 };
 
 const colorMap: Record<string, string> = {
-  succeeded: '#34d399',
-  running: '#fbbf24',
-  blocked: '#fb923c',
-  ready: '#60a5fa',
-  claimed: '#22d3ee',
-  unready: '#a1a1aa',
-  failed: '#a1a1aa',
+  succeeded: 'var(--pipeline-succeeded-text)',
+  running: 'var(--pipeline-running-text)',
+  blocked: 'var(--pipeline-blocked-text)',
+  ready: 'var(--pipeline-ready-text)',
+  claimed: 'var(--pipeline-claimed-text)',
+  unready: 'var(--pipeline-default-text)',
+  failed: 'var(--pipeline-default-text)',
 };
 
 describe('DependencyPipeline', () => {

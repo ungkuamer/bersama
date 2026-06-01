@@ -98,6 +98,34 @@
     --sidebar-accent-foreground: oklch(0.205 0 0);
     --sidebar-border: oklch(0.922 0 0);
     --sidebar-ring: oklch(0.708 0 0);
+
+    /* Light Mode Pipeline Colors (Desaturated, clear, highly readable on light backgrounds) */
+    --pipeline-succeeded-fill: rgba(16, 185, 129, 0.08);
+    --pipeline-succeeded-stroke: rgba(16, 185, 129, 0.35);
+    --pipeline-succeeded-text: rgb(4, 120, 87);
+
+    --pipeline-running-fill: rgba(245, 158, 11, 0.08);
+    --pipeline-running-stroke: rgba(245, 158, 11, 0.55);
+    --pipeline-running-text: rgb(180, 83, 9);
+
+    --pipeline-blocked-fill: rgba(249, 115, 22, 0.08);
+    --pipeline-blocked-stroke: rgba(249, 115, 22, 0.35);
+    --pipeline-blocked-text: rgb(194, 65, 12);
+
+    --pipeline-ready-fill: rgba(59, 130, 246, 0.08);
+    --pipeline-ready-stroke: rgba(59, 130, 246, 0.35);
+    --pipeline-ready-text: rgb(29, 78, 216);
+
+    --pipeline-claimed-fill: rgba(6, 182, 212, 0.08);
+    --pipeline-claimed-stroke: rgba(6, 182, 212, 0.35);
+    --pipeline-claimed-text: rgb(14, 116, 144);
+
+    --pipeline-default-fill: rgba(113, 113, 122, 0.05);
+    --pipeline-default-stroke: rgba(113, 113, 122, 0.25);
+    --pipeline-default-text: rgb(113, 113, 122);
+
+    --pipeline-connector: rgba(113, 113, 122, 0.25);
+    --pipeline-arrow: rgba(113, 113, 122, 0.35);
 }
 
 .dark {
@@ -132,6 +160,34 @@
     --sidebar-accent-foreground: oklch(0.985 0 0);
     --sidebar-border: oklch(1 0 0 / 10%);
     --sidebar-ring: oklch(0.556 0 0);
+
+    /* Dark Mode Pipeline Colors (Vibrant, high-contrast on dark backgrounds) */
+    --pipeline-succeeded-fill: rgba(16, 185, 129, 0.15);
+    --pipeline-succeeded-stroke: rgba(16, 185, 129, 0.5);
+    --pipeline-succeeded-text: #34d399;
+
+    --pipeline-running-fill: rgba(245, 158, 11, 0.15);
+    --pipeline-running-stroke: rgba(245, 158, 11, 0.7);
+    --pipeline-running-text: #fbbf24;
+
+    --pipeline-blocked-fill: rgba(249, 115, 22, 0.15);
+    --pipeline-blocked-stroke: rgba(249, 115, 22, 0.5);
+    --pipeline-blocked-text: #fb923c;
+
+    --pipeline-ready-fill: rgba(59, 130, 246, 0.15);
+    --pipeline-ready-stroke: rgba(59, 130, 246, 0.5);
+    --pipeline-ready-text: #60a5fa;
+
+    --pipeline-claimed-fill: rgba(6, 182, 212, 0.15);
+    --pipeline-claimed-stroke: rgba(6, 182, 212, 0.5);
+    --pipeline-claimed-text: #22d3ee;
+
+    --pipeline-default-fill: rgba(113, 113, 122, 0.1);
+    --pipeline-default-stroke: rgba(113, 113, 122, 0.3);
+    --pipeline-default-text: #a1a1aa;
+
+    --pipeline-connector: rgba(113, 113, 122, 0.4);
+    --pipeline-arrow: rgba(113, 113, 122, 0.5);
 }
 
 @layer base {

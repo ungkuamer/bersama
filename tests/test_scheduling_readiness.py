@@ -246,6 +246,15 @@ def test_provider_reports_missing_harness_command_using_path_resolution_only(tmp
 def test_provider_builds_prd_grouped_implementation_issue_state_capacity_and_warnings(
     tmp_path: Path,
 ) -> None:
+    from datetime import datetime, timezone, timedelta
+    now_z = datetime.now(timezone.utc)
+    recent_z = (now_z - timedelta(minutes=30)).isoformat().replace("+00:00", "Z")
+    stale_z = (now_z - timedelta(hours=3)).isoformat().replace("+00:00", "Z")
+
+    # Issue 14 specific dates to verify timeline values without being stale
+    run_started_z = (now_z - timedelta(minutes=60)).isoformat().replace("+00:00", "Z")
+    claimed_at_z = (now_z - timedelta(minutes=55)).isoformat().replace("+00:00", "Z")
+
     repo_path = tmp_path / "repo"
     repo_path.mkdir()
     (repo_path / ".git").mkdir()
@@ -259,7 +268,7 @@ def test_provider_builds_prd_grouped_implementation_issue_state_capacity_and_war
         json.dumps(
             {
                 "status": "running",
-                "started_at": "2026-05-31T18:00:00Z",
+                "started_at": run_started_z,
             }
         ),
         encoding="utf-8",
@@ -271,8 +280,8 @@ def test_provider_builds_prd_grouped_implementation_issue_state_capacity_and_war
         json.dumps(
             {
                 "status": "failed",
-                "started_at": "2026-05-31T17:30:00Z",
-                "finished_at": "2026-05-31T17:40:00Z",
+                "started_at": stale_z,
+                "finished_at": recent_z,
                 "failure_reason": "Tests failed",
             }
         ),
@@ -351,7 +360,7 @@ def test_provider_builds_prd_grouped_implementation_issue_state_capacity_and_war
                             "## Blocked By\nNone\n\n"
                             "## Orchestration\n"
                             "- Agent Run: run-14\n"
-                            "- Claimed At: 2026-05-31T18:05:00Z\n"
+                            f"- Claimed At: {claimed_at_z}\n"
                             "- Claim Status: active\n"
                             "- Implementation Branch: impl/10/14-running\n"
                         ),
@@ -368,7 +377,7 @@ def test_provider_builds_prd_grouped_implementation_issue_state_capacity_and_war
                             "## Blocked By\nNone\n\n"
                             "## Orchestration\n"
                             "- Agent Run: run-15\n"
-                            "- Claimed At: 2026-05-31T19:50:00Z\n"
+                            f"- Claimed At: {recent_z}\n"
                             "- Claim Status: active\n"
                             "- Implementation Branch: impl/10/15-failed\n"
                         ),
@@ -385,7 +394,7 @@ def test_provider_builds_prd_grouped_implementation_issue_state_capacity_and_war
                             "## Blocked By\nNone\n\n"
                             "## Orchestration\n"
                             "- Agent Run: run-16\n"
-                            "- Claimed At: 2026-05-31T12:00:00Z\n"
+                            f"- Claimed At: {stale_z}\n"
                             "- Claim Status: active\n"
                             "- Implementation Branch: impl/10/16-stale\n"
                         ),
@@ -460,21 +469,21 @@ def test_provider_builds_prd_grouped_implementation_issue_state_capacity_and_war
                 "key": "claim_setup",
                 "label": "Claim Setup",
                 "status": "completed",
-                "observed_at": "2026-05-31T18:05:00Z",
+                "observed_at": claimed_at_z,
                 "detail": "Observed implementation branch metadata.",
             },
             {
                 "key": "active_claim",
                 "label": "Active Claim",
                 "status": "completed",
-                "observed_at": "2026-05-31T18:05:00Z",
+                "observed_at": claimed_at_z,
                 "detail": "Observed active claim metadata.",
             },
             {
                 "key": "agent_run",
                 "label": "Agent Run",
                 "status": "active",
-                "observed_at": "2026-05-31T18:00:00Z",
+                "observed_at": run_started_z,
                 "detail": "Observed Agent Run state from normalized backend fields.",
             },
             {
@@ -495,13 +504,13 @@ def test_provider_builds_prd_grouped_implementation_issue_state_capacity_and_war
         "run": {
             "status": "running",
             "agent_run_id": "run-14",
-            "started_at": "2026-05-31T18:00:00Z",
+            "started_at": run_started_z,
             "finished_at": None,
             "failure_reason": None,
         },
         "claim": {
             "status": "active",
-            "claimed_at": "2026-05-31T18:05:00Z",
+            "claimed_at": claimed_at_z,
             "implementation_branch": "impl/10/14-running",
         },
         "integration": {
