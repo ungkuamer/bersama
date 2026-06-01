@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { renderHook, waitFor } from '@testing-library/react'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { act, renderHook, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { useRunsQuery } from './useRunsQuery'
 import type { ReactNode } from 'react'
@@ -33,6 +33,11 @@ const createWrapper = () => {
 describe('useRunsQuery', () => {
   beforeEach(() => {
     vi.resetAllMocks()
+    vi.useRealTimers()
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
   })
 
   it('does not fetch when no repo is selected', () => {
@@ -60,5 +65,29 @@ describe('useRunsQuery', () => {
     expect(mockFetch).toHaveBeenCalledWith(
       expect.stringContaining('/api/runs?repo=demo')
     )
+  })
+
+  it('refetches every 5 seconds only when fallback polling is enabled', async () => {
+    vi.useFakeTimers()
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve(mockRuns),
+    })
+
+    const { unmount } = renderHook(() => useRunsQuery('demo', true), {
+      wrapper: createWrapper(),
+    })
+
+    await act(async () => {
+      await Promise.resolve()
+    })
+    expect(mockFetch).toHaveBeenCalledTimes(1)
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5_000)
+    })
+
+    expect(mockFetch).toHaveBeenCalledTimes(2)
+    unmount()
   })
 })

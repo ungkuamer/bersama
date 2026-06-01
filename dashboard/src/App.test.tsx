@@ -4,6 +4,14 @@ import '@testing-library/jest-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import App from './App'
 
+const { mockFetchEventSource } = vi.hoisted(() => ({
+  mockFetchEventSource: vi.fn(),
+}))
+
+vi.mock('@microsoft/fetch-event-source', () => ({
+  fetchEventSource: mockFetchEventSource,
+}))
+
 // Mock global fetch
 const mockFetch = vi.fn();
 globalThis.fetch = mockFetch as unknown as typeof fetch;
@@ -434,6 +442,10 @@ const setLogScrollMetrics = (
 describe('Bersama Dashboard Frontend', () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    mockFetchEventSource.mockImplementation(async (_input: string, init?: { onopen?: () => void }) => {
+      init?.onopen?.();
+      return new Promise(() => undefined);
+    });
     
     // Default mock setup for fetches
     mockFetch.mockImplementation((url: string) => {
@@ -480,6 +492,25 @@ describe('Bersama Dashboard Frontend', () => {
 
     // Check statistics numbers
     expect(screen.getByText(/Active Runs/i)).toBeInTheDocument();
+  });
+
+  it('shows live SSE status in the dashboard footer when the stream is connected', async () => {
+    renderWithProviders(<App />);
+
+    expect(await screen.findByLabelText('SSE Live')).toBeInTheDocument();
+    expect(screen.getByText('Live')).toBeInTheDocument();
+  });
+
+  it('shows disconnected SSE status in the dashboard footer when the stream drops', async () => {
+    mockFetchEventSource.mockImplementationOnce(async (_input: string, init?: { onopen?: () => void }) => {
+      init?.onopen?.();
+      throw new Error('stream dropped');
+    });
+
+    renderWithProviders(<App />);
+
+    expect(await screen.findByLabelText('SSE Disconnected')).toBeInTheDocument();
+    expect(screen.getByText('Disconnected')).toBeInTheDocument();
   });
 
   it('displays PRDs and implementation issues correctly', async () => {

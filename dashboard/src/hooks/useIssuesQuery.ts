@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 
 const API_BASE = import.meta.env.DEV ? `http://${window.location.hostname}:8000` : ''
 
-export function useIssuesQuery(repo: string) {
+export function useIssuesQuery(repo: string, enablePollingFallback = false) {
   return useQuery({
     queryKey: ['issues', repo],
     queryFn: async () => {
@@ -11,5 +11,7 @@ export function useIssuesQuery(repo: string) {
       return res.json()
     },
     enabled: !!repo,
+    refetchInterval: enablePollingFallback ? 5_000 : false,
+    refetchIntervalInBackground: enablePollingFallback,
   })
 }

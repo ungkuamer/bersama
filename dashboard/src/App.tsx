@@ -153,6 +153,18 @@ const buildAgentRunId = (issueNumber: number): string => {
   return `run-${issueNumber}-${Date.now().toString(16)}`;
 }
 
+function SSEStatus({ isConnected }: { isConnected: boolean }) {
+  return (
+    <div className="flex items-center gap-2" aria-label={`SSE ${isConnected ? 'Live' : 'Disconnected'}`}>
+      <span
+        className={`size-1.5 rounded-full ${isConnected ? 'animate-pulse bg-emerald-500' : 'bg-red-500'}`}
+        aria-hidden="true"
+      />
+      <span>{isConnected ? 'Live' : 'Disconnected'}</span>
+    </div>
+  );
+}
+
 export default function App() {
   const queryClient = useQueryClient();
 
@@ -192,14 +204,15 @@ export default function App() {
   const repos: Repo[] = reposQuery.data || [];
   const effectiveSelectedRepo = selectedRepo || (repos.length > 0 ? repos[0].name : '');
 
-  const issuesQuery = useIssuesQuery(effectiveSelectedRepo);
-  const runsQuery = useRunsQuery(effectiveSelectedRepo);
-  const latestSSEMessage = useSSE(effectiveSelectedRepo);
+  const sseState = useSSE(effectiveSelectedRepo);
+  const issuesQuery = useIssuesQuery(effectiveSelectedRepo, sseState.isPollingFallback);
+  const runsQuery = useRunsQuery(effectiveSelectedRepo, sseState.isPollingFallback);
   const logStream = useLogStream({
     repo: effectiveSelectedRepo,
     issueNumber: selectedRunIssue,
     limit: logsLimit,
-    latestEvent: latestSSEMessage,
+    latestEvent: sseState.latestMessage,
+    enablePollingFallback: sseState.isPollingFallback,
   });
 
   // Derive data from queries
@@ -1450,10 +1463,7 @@ export default function App() {
 
       {/* Footer Info Box */}
       <footer className="mt-auto flex shrink-0 items-center justify-between border-t px-6 py-3 text-[10px] text-muted-foreground">
-        <div className="flex items-center gap-2">
-          <span className="size-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-          <span>Engine Connected</span>
-        </div>
+        <SSEStatus isConnected={sseState.isConnected} />
         <div>
           <span>Antigravity Orchestration Scaffold v1.0.0</span>
         </div>

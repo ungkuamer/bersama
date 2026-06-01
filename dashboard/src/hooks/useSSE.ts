@@ -9,43 +9,145 @@ export interface SSEMessage {
   data: Record<string, unknown>
 }
 
+export interface SSEState {
+  latestMessage: SSEMessage | null
+  isConnected: boolean
+  isPollingFallback: boolean
+}
+
+const BACKOFF_DELAYS_MS = [1_000, 2_000, 4_000, 8_000]
+const MAX_BACKOFF_DELAY_MS = 30_000
+const FALLBACK_TIMEOUT_MS = 10_000
+const INITIAL_SSE_STATE: SSEState = {
+  latestMessage: null,
+  isConnected: false,
+  isPollingFallback: false,
+}
+
 export function useSSE(repo: string) {
   const queryClient = useQueryClient()
-  const [latestMessage, setLatestMessage] = useState<SSEMessage | null>(null)
+  const [state, setState] = useState<SSEState>(INITIAL_SSE_STATE)
 
   useEffect(() => {
     if (!repo) {
-      setLatestMessage(null)
       return
     }
 
-    const controller = new AbortController()
+    let isDisposed = false
+    let retryAttempt = 0
+    let reconnectTimer: ReturnType<typeof setTimeout> | undefined
+    let fallbackTimer: ReturnType<typeof setTimeout> | undefined
+    let hasEverConnected = false
+    let hasMessageForCurrentAttempt = false
+    let controller: AbortController | undefined
 
-    void fetchEventSource(`${API_BASE}/api/events?repo=${encodeURIComponent(repo)}`, {
-      signal: controller.signal,
-      async onmessage(message) {
-        const parsedData = JSON.parse(message.data) as Record<string, unknown>
-        setLatestMessage({ event: message.event, data: parsedData })
+    const clearFallbackTimer = () => {
+      if (fallbackTimer) {
+        clearTimeout(fallbackTimer)
+        fallbackTimer = undefined
+      }
+    }
 
-        if (message.event === 'issues_updated') {
-          await queryClient.invalidateQueries({ queryKey: ['issues', repo] })
-        }
+    const startFallbackTimer = () => {
+      clearFallbackTimer()
+      hasMessageForCurrentAttempt = false
+      fallbackTimer = setTimeout(() => {
+        if (isDisposed || hasMessageForCurrentAttempt) return
+        setState(prev => ({
+          ...prev,
+          isConnected: false,
+          isPollingFallback: true,
+        }))
+      }, FALLBACK_TIMEOUT_MS)
+    }
 
-        if (message.event === 'runs_updated') {
-          await Promise.all([
-            queryClient.invalidateQueries({ queryKey: ['runs', repo] }),
-            queryClient.invalidateQueries({ queryKey: ['issues', repo] }),
-          ])
-        }
-      },
-    }).catch(() => {
-      // Library default reconnection behavior is sufficient here.
-    })
+    const invalidateAllRepoData = async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['issues', repo] }),
+        queryClient.invalidateQueries({ queryKey: ['runs', repo] }),
+      ])
+    }
+
+    const reconnectDelay = () => {
+      if (retryAttempt < BACKOFF_DELAYS_MS.length) {
+        return BACKOFF_DELAYS_MS[retryAttempt]
+      }
+      return MAX_BACKOFF_DELAY_MS
+    }
+
+    const scheduleReconnect = () => {
+      if (isDisposed) return
+      const delay = reconnectDelay()
+      retryAttempt += 1
+      reconnectTimer = setTimeout(() => {
+        void connect()
+      }, delay)
+    }
+
+    const connect = async () => {
+      controller = new AbortController()
+      startFallbackTimer()
+
+      try {
+        await fetchEventSource(`${API_BASE}/api/events?repo=${encodeURIComponent(repo)}`, {
+          signal: controller.signal,
+          onopen: async () => {
+            if (isDisposed) return
+            setState(prev => ({
+              ...prev,
+              isConnected: true,
+              isPollingFallback: false,
+            }))
+            if (hasEverConnected) {
+              await invalidateAllRepoData()
+            }
+            hasEverConnected = true
+          },
+          async onmessage(message) {
+            const parsedData = JSON.parse(message.data) as Record<string, unknown>
+            hasMessageForCurrentAttempt = true
+            clearFallbackTimer()
+            retryAttempt = 0
+            setState({
+              latestMessage: { event: message.event, data: parsedData },
+              isConnected: true,
+              isPollingFallback: false,
+            })
+
+            if (message.event === 'issues_updated') {
+              await queryClient.invalidateQueries({ queryKey: ['issues', repo] })
+            }
+
+            if (message.event === 'runs_updated') {
+              await invalidateAllRepoData()
+            }
+          },
+          onerror(error) {
+            throw error
+          },
+        })
+      } catch {
+        if (isDisposed || controller.signal.aborted) return
+        clearFallbackTimer()
+        setState(prev => ({
+          ...prev,
+          isConnected: false,
+        }))
+        scheduleReconnect()
+      }
+    }
+
+    void connect()
 
     return () => {
-      controller.abort()
+      isDisposed = true
+      if (reconnectTimer) {
+        clearTimeout(reconnectTimer)
+      }
+      clearFallbackTimer()
+      controller?.abort()
     }
   }, [queryClient, repo])
 
-  return latestMessage
+  return repo ? state : INITIAL_SSE_STATE
 }

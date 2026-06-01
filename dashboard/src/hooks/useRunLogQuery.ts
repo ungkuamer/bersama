@@ -9,7 +9,7 @@ export interface LogTail {
   content: string
 }
 
-export function useRunLogQuery(repo: string, issueNumber: number | null, limit: number) {
+export function useRunLogQuery(repo: string, issueNumber: number | null, limit: number, enablePollingFallback = false) {
   return useQuery<LogTail>({
     queryKey: ['runLog', repo, issueNumber, limit],
     queryFn: async () => {
@@ -29,5 +29,7 @@ export function useRunLogQuery(repo: string, issueNumber: number | null, limit: 
     },
     enabled: !!repo && issueNumber !== null,
     placeholderData: keepPreviousData,
+    refetchInterval: enablePollingFallback ? 2_000 : false,
+    refetchIntervalInBackground: enablePollingFallback,
   })
 }

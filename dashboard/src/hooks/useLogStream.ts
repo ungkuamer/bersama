@@ -7,6 +7,7 @@ interface UseLogStreamOptions {
   issueNumber: number | null
   limit: number
   latestEvent: SSEMessage | null
+  enablePollingFallback?: boolean
 }
 
 const trimLines = (content: string, limit: number): string => {
@@ -15,8 +16,8 @@ const trimLines = (content: string, limit: number): string => {
   return lines.slice(-limit).join('\n')
 }
 
-export function useLogStream({ repo, issueNumber, limit, latestEvent }: UseLogStreamOptions) {
-  const runLogQuery = useRunLogQuery(repo, issueNumber, limit)
+export function useLogStream({ repo, issueNumber, limit, latestEvent, enablePollingFallback = false }: UseLogStreamOptions) {
+  const runLogQuery = useRunLogQuery(repo, issueNumber, limit, enablePollingFallback)
   const [appendedLines, setAppendedLines] = useState<string[]>([])
   const previousIssueRef = useRef<number | null>(null)
 
@@ -48,10 +49,16 @@ export function useLogStream({ repo, issueNumber, limit, latestEvent }: UseLogSt
 
     if (nextLines.length === 0) return
 
-    setAppendedLines(prev => {
-      const combined = [...prev, ...nextLines]
-      return combined.slice(-limit)
-    })
+    const updateHandle = setTimeout(() => {
+      setAppendedLines(prev => {
+        const combined = [...prev, ...nextLines]
+        return combined.slice(-limit)
+      })
+    }, 0)
+
+    return () => {
+      clearTimeout(updateHandle)
+    }
   }, [issueNumber, latestEvent, limit])
 
   const logTail = useMemo<LogTail | null>(() => {

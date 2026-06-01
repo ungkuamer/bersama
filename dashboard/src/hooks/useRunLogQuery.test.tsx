@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { renderHook, waitFor } from '@testing-library/react'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { act, renderHook, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { useRunLogQuery } from './useRunLogQuery'
 import type { ReactNode } from 'react'
@@ -30,6 +30,11 @@ const createWrapper = () => {
 describe('useRunLogQuery', () => {
   beforeEach(() => {
     vi.resetAllMocks()
+    vi.useRealTimers()
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
   })
 
   it('does not fetch when issueNumber is null', () => {
@@ -77,5 +82,29 @@ describe('useRunLogQuery', () => {
       lines_returned: 0,
       content: 'Log file not found yet. The agent run might be starting up...'
     })
+  })
+
+  it('refetches every 2 seconds only when fallback polling is enabled', async () => {
+    vi.useFakeTimers()
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve(mockLogTail),
+    })
+
+    const { unmount } = renderHook(() => useRunLogQuery('demo', 8, 100, true), {
+      wrapper: createWrapper(),
+    })
+
+    await act(async () => {
+      await Promise.resolve()
+    })
+    expect(mockFetch).toHaveBeenCalledTimes(1)
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2_000)
+    })
+
+    expect(mockFetch).toHaveBeenCalledTimes(2)
+    unmount()
   })
 })
