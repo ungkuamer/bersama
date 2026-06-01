@@ -1,11 +1,32 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react'
 import '@testing-library/jest-dom'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import App from './App'
 
 // Mock global fetch
 const mockFetch = vi.fn();
 globalThis.fetch = mockFetch as unknown as typeof fetch;
+
+const createTestQueryClient = () => {
+  return new QueryClient({
+    defaultOptions: {
+      queries: {
+        retry: false,
+        gcTime: 0,
+      },
+    },
+  })
+}
+
+const renderWithProviders = (ui: React.ReactElement) => {
+  const queryClient = createTestQueryClient()
+  return render(
+    <QueryClientProvider client={queryClient}>
+      {ui}
+    </QueryClientProvider>
+  )
+}
 
 const mockRepos = [
   {
@@ -445,7 +466,7 @@ describe('Bersama Dashboard Frontend', () => {
   });
 
   it('renders dashboard with primary branding and structure', async () => {
-    render(<App />);
+    renderWithProviders(<App />);
     
     // Check loading indicator or titles
     expect(screen.getByText(/Bersama/i)).toBeInTheDocument();
@@ -462,7 +483,7 @@ describe('Bersama Dashboard Frontend', () => {
   });
 
   it('displays PRDs and implementation issues correctly', async () => {
-    render(<App />);
+    renderWithProviders(<App />);
     
     // Wait for data load
     await waitFor(() => {
@@ -478,7 +499,7 @@ describe('Bersama Dashboard Frontend', () => {
   });
 
   it('shows open and resolved Blocking Dependencies in a compact dependency rail', async () => {
-    render(<App />);
+    renderWithProviders(<App />);
 
     await screen.findByText(/Child implementation issue/i);
 
@@ -492,7 +513,7 @@ describe('Bersama Dashboard Frontend', () => {
   });
 
   it('displays recent agent runs and handles log loading', async () => {
-    render(<App />);
+    renderWithProviders(<App />);
     
     // Wait for runs to render
     await waitFor(() => {
@@ -546,7 +567,7 @@ describe('Bersama Dashboard Frontend', () => {
       return Promise.reject(new Error(`Unhandled mock fetch for ${url}`));
     });
 
-    render(<App />);
+    renderWithProviders(<App />);
 
     fireEvent.click(await screen.findByRole('button', { name: /View Log/i }));
 
@@ -592,7 +613,7 @@ describe('Bersama Dashboard Frontend', () => {
       return Promise.reject(new Error(`Unhandled mock fetch for ${url}`));
     });
 
-    render(<App />);
+    renderWithProviders(<App />);
 
     fireEvent.click(await screen.findByRole('button', { name: /View Log/i }));
 
@@ -644,7 +665,7 @@ describe('Bersama Dashboard Frontend', () => {
       return Promise.reject(new Error(`Unhandled mock fetch for ${url}`));
     });
 
-    render(<App />);
+    renderWithProviders(<App />);
 
     fireEvent.click(await screen.findByRole('button', { name: /View Log/i }));
 
@@ -691,7 +712,7 @@ describe('Bersama Dashboard Frontend', () => {
       return element;
     });
 
-    render(<App />);
+    renderWithProviders(<App />);
 
     fireEvent.click(await screen.findByRole('button', { name: /View Log/i }));
     await screen.findByText(/building assets/i);
@@ -730,7 +751,7 @@ describe('Bersama Dashboard Frontend', () => {
       return Promise.reject(new Error(`Unhandled mock fetch for ${url}`));
     });
 
-    render(<App />);
+    renderWithProviders(<App />);
 
     await waitFor(() => {
       expect(screen.getByText('Unprepared PRD Title')).toBeInTheDocument();
@@ -785,7 +806,7 @@ describe('Bersama Dashboard Frontend', () => {
       return Promise.reject(new Error(`Unhandled mock fetch for ${url}`));
     });
 
-    render(<App />);
+    renderWithProviders(<App />);
 
     const prepareButton = await screen.findByRole('button', { name: /Prepare PRD #2/i });
     fireEvent.click(prepareButton);
@@ -834,7 +855,7 @@ describe('Bersama Dashboard Frontend', () => {
       return Promise.reject(new Error(`Unhandled mock fetch for ${url}`));
     });
 
-    render(<App />);
+    renderWithProviders(<App />);
 
     fireEvent.click(await screen.findByRole('button', { name: /Prepare PRD #2/i }));
 
@@ -868,7 +889,7 @@ describe('Bersama Dashboard Frontend', () => {
       return Promise.reject(new Error(`Unhandled mock fetch for ${url}`));
     });
 
-    render(<App />);
+    renderWithProviders(<App />);
 
     fireEvent.click(await screen.findByRole('button', { name: /Prepare PRD #2/i }));
 
@@ -902,7 +923,7 @@ describe('Bersama Dashboard Frontend', () => {
       return Promise.reject(new Error(`Unhandled mock fetch for ${url}`));
     });
 
-    render(<App />);
+    renderWithProviders(<App />);
 
     await screen.findByText('Succeeded implementation issue');
     expect(screen.getByRole('button', { name: /Integrate #11/i })).toBeInTheDocument();
@@ -932,7 +953,7 @@ describe('Bersama Dashboard Frontend', () => {
       return Promise.reject(new Error(`Unhandled mock fetch for ${url}`));
     });
 
-    render(<App />);
+    renderWithProviders(<App />);
 
     await screen.findByText('Succeeded implementation issue');
     expect(screen.queryByRole('button', { name: /Integrate #11/i })).not.toBeInTheDocument();
@@ -983,7 +1004,7 @@ describe('Bersama Dashboard Frontend', () => {
       return Promise.reject(new Error(`Unhandled mock fetch for ${url}`));
     });
 
-    render(<App />);
+    renderWithProviders(<App />);
 
     const integrateButton = await screen.findByRole('button', { name: /Integrate #11/i });
     fireEvent.click(integrateButton);
@@ -1030,7 +1051,7 @@ describe('Bersama Dashboard Frontend', () => {
       return Promise.reject(new Error(`Unhandled mock fetch for ${url}`));
     });
 
-    render(<App />);
+    renderWithProviders(<App />);
 
     fireEvent.click(await screen.findByRole('button', { name: /Integrate #11/i }));
 
@@ -1064,7 +1085,7 @@ describe('Bersama Dashboard Frontend', () => {
       return Promise.reject(new Error(`Unhandled mock fetch for ${url}`));
     });
 
-    render(<App />);
+    renderWithProviders(<App />);
 
     fireEvent.click(await screen.findByRole('button', { name: /Integrate #11/i }));
 
@@ -1098,7 +1119,7 @@ describe('Bersama Dashboard Frontend', () => {
       return Promise.reject(new Error(`Unhandled mock fetch for ${url}`));
     });
 
-    render(<App />);
+    renderWithProviders(<App />);
 
     await screen.findByText('Ready claim candidate');
 
@@ -1130,7 +1151,7 @@ describe('Bersama Dashboard Frontend', () => {
       return Promise.reject(new Error(`Unhandled mock fetch for ${url}`));
     });
 
-    render(<App />);
+    renderWithProviders(<App />);
 
     fireEvent.click(await screen.findByRole('button', { name: /Claim #21/i }));
 
@@ -1189,7 +1210,7 @@ describe('Bersama Dashboard Frontend', () => {
       return Promise.reject(new Error(`Unhandled mock fetch for ${url}`));
     });
 
-    render(<App />);
+    renderWithProviders(<App />);
 
     fireEvent.click(await screen.findByRole('button', { name: /Claim #21/i }));
     fireEvent.change(screen.getByLabelText(/Agent Run identifier for Implementation Issue #21/i), {
@@ -1237,7 +1258,7 @@ describe('Bersama Dashboard Frontend', () => {
       return Promise.reject(new Error(`Unhandled mock fetch for ${url}`));
     });
 
-    render(<App />);
+    renderWithProviders(<App />);
 
     fireEvent.click(await screen.findByRole('button', { name: /Claim #21/i }));
     fireEvent.click(screen.getByRole('button', { name: /Submit claim for Implementation Issue #21/i }));
@@ -1269,7 +1290,7 @@ describe('Bersama Dashboard Frontend', () => {
       return Promise.reject(new Error(`Unhandled mock fetch for ${url}`));
     });
 
-    render(<App />);
+    renderWithProviders(<App />);
 
     await screen.findByText('Claimed start candidate');
 
@@ -1338,7 +1359,7 @@ describe('Bersama Dashboard Frontend', () => {
       return Promise.reject(new Error(`Unhandled mock fetch for ${url}`));
     });
 
-    render(<App />);
+    renderWithProviders(<App />);
 
     const startButton = await screen.findByRole('button', {
       name: /Start Agent Run for Implementation Issue #31/i
@@ -1390,7 +1411,7 @@ describe('Bersama Dashboard Frontend', () => {
       return Promise.reject(new Error(`Unhandled mock fetch for ${url}`));
     });
 
-    render(<App />);
+    renderWithProviders(<App />);
 
     fireEvent.click(await screen.findByRole('button', {
       name: /Start Agent Run for Implementation Issue #31/i
@@ -1417,7 +1438,7 @@ describe('Bersama Dashboard Frontend', () => {
       return Promise.reject(new Error(`Unhandled mock fetch for ${url}`));
     });
 
-    render(<App />);
+    renderWithProviders(<App />);
 
     fireEvent.click(await screen.findByRole('button', { name: /View Log/i }));
     await screen.findByText(/harness execution started/i);
@@ -1442,7 +1463,7 @@ describe('Bersama Dashboard Frontend', () => {
       return Promise.reject(new Error(`Unhandled mock fetch for ${url}`));
     });
 
-    render(<App />);
+    renderWithProviders(<App />);
 
     fireEvent.click(await screen.findByRole('button', { name: /View Log/i }));
     await screen.findByText(/harness execution started/i);
@@ -1479,7 +1500,7 @@ describe('Bersama Dashboard Frontend', () => {
       return Promise.reject(new Error(`Unhandled mock fetch for ${url}`));
     });
 
-    render(<App />);
+    renderWithProviders(<App />);
 
     fireEvent.click(await screen.findByRole('button', { name: /View Log/i }));
     await screen.findByText(/error error error/);
@@ -1509,7 +1530,7 @@ describe('Bersama Dashboard Frontend', () => {
         return Promise.reject(new Error(`Unhandled mock fetch for ${url}`));
       });
 
-      render(<App />);
+      renderWithProviders(<App />);
 
       // Find and click the implementation issue in the list (not in drawer)
       const issueLinks = await screen.findAllByText(/Child implementation issue/i);
@@ -1537,7 +1558,7 @@ describe('Bersama Dashboard Frontend', () => {
         return Promise.reject(new Error(`Unhandled mock fetch for ${url}`));
       });
 
-      render(<App />);
+      renderWithProviders(<App />);
 
       // Open drawer
       const issueLinks = await screen.findAllByText(/Child implementation issue/i);
@@ -1573,7 +1594,7 @@ describe('Bersama Dashboard Frontend', () => {
         return Promise.reject(new Error(`Unhandled mock fetch for ${url}`));
       });
 
-      render(<App />);
+      renderWithProviders(<App />);
 
       // Find and click the PRD title (the h3 element, not the drawer title)
       const prdTitles = await screen.findAllByText(/Parent PRD Title/i);
@@ -1601,7 +1622,7 @@ describe('Bersama Dashboard Frontend', () => {
         return Promise.reject(new Error(`Unhandled mock fetch for ${url}`));
       });
 
-      render(<App />);
+      renderWithProviders(<App />);
 
       // Open drawer
       const issueLinks = await screen.findAllByText(/Child implementation issue/i);
@@ -1638,7 +1659,7 @@ describe('Bersama Dashboard Frontend', () => {
         return Promise.reject(new Error(`Unhandled mock fetch for ${url}`));
       });
 
-      render(<App />);
+      renderWithProviders(<App />);
 
       // Open drawer
       const issueLinks = await screen.findAllByText(/Child implementation issue/i);
@@ -1672,7 +1693,7 @@ describe('Bersama Dashboard Frontend', () => {
         return Promise.reject(new Error(`Unhandled mock fetch for ${url}`));
       });
 
-      render(<App />);
+      renderWithProviders(<App />);
 
       const issueLinks = await screen.findAllByText(/Child implementation issue/i);
       const issueLink = issueLinks.find(el => el.tagName === 'SPAN')!;
@@ -1704,7 +1725,7 @@ describe('Bersama Dashboard Frontend', () => {
         return Promise.reject(new Error(`Unhandled mock fetch for ${url}`));
       });
 
-      render(<App />);
+      renderWithProviders(<App />);
 
       const issueLinks = await screen.findAllByText(/Child implementation issue/i);
       const issueLink = issueLinks.find(el => el.tagName === 'SPAN')!;
@@ -1740,7 +1761,7 @@ describe('Bersama Dashboard Frontend', () => {
         return Promise.reject(new Error(`Unhandled mock fetch for ${url}`));
       });
 
-      render(<App />);
+      renderWithProviders(<App />);
 
       // Click ready claim candidate in the list
       const issueLinks = await screen.findAllByText(/Ready claim candidate/i);
@@ -1785,7 +1806,7 @@ describe('Bersama Dashboard Frontend', () => {
         return Promise.reject(new Error(`Unhandled mock fetch for ${url}`));
       });
 
-      render(<App />);
+      renderWithProviders(<App />);
 
       // Should show shimmer skeletons while data is loading
       await waitFor(() => {
@@ -1812,7 +1833,7 @@ describe('Bersama Dashboard Frontend', () => {
       return Promise.reject(new Error(`Unhandled mock fetch for ${url}`));
     });
 
-    render(<App />);
+    renderWithProviders(<App />);
 
     fireEvent.click(await screen.findByRole('button', { name: /View Log/i }));
     await screen.findByText(/harness execution started/i);
@@ -1928,7 +1949,7 @@ describe('Bersama Dashboard Frontend', () => {
         return Promise.reject(new Error(`Unhandled mock fetch for ${url}`));
       });
 
-      render(<App />);
+      renderWithProviders(<App />);
 
       // Wait for app load
       await waitFor(() => {
@@ -2010,7 +2031,7 @@ describe('Bersama Dashboard Frontend', () => {
         return Promise.reject(new Error(`Unhandled mock fetch for ${url}`));
       });
 
-      render(<App />);
+      renderWithProviders(<App />);
 
       // Go to Scheduling Readiness
       const readinessTab = screen.getByText(/Dashboard/i);
@@ -2050,7 +2071,7 @@ describe('Bersama Dashboard Frontend', () => {
         return Promise.reject(new Error(`Unhandled mock fetch for ${url}`));
       });
 
-      render(<App />);
+      renderWithProviders(<App />);
 
       // Operator Console is active initially
       expect(await screen.findByText(/Product Roadmap & Implementation Lifecycle/i)).toBeInTheDocument();
@@ -2109,7 +2130,7 @@ describe('Bersama Dashboard Frontend', () => {
 
       localStorage.clear();
 
-      render(<App />);
+      renderWithProviders(<App />);
 
       expect(document.documentElement.classList.contains('dark')).toBe(false);
 

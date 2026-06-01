@@ -30,8 +30,79 @@ export interface SchedulingReadinessPanelProps {
   onIssueClick?: (issueNumber: number) => void;
 }
 
+type ReadinessCheck = {
+  message: string;
+  remediation?: string;
+  details?: {
+    code?: string;
+    error?: string;
+    path?: string;
+    missing_labels?: string[];
+    issue_number?: number;
+  };
+}
+
+type ReadinessGroupItem = {
+  issue_number: number;
+  title: string;
+  status: string;
+  implementation_branch?: string;
+  blocked_by?: number[];
+  active_blockers?: number[];
+}
+
+type ReadinessGroup = {
+  parent_prd: {
+    issue_number: number;
+    title: string;
+    prepared?: boolean;
+  };
+  items?: ReadinessGroupItem[];
+}
+
+type ReadinessRow = {
+  id: number;
+  title: string;
+  type: 'PRD' | 'Implementation';
+  status: string;
+  branch?: string;
+  parentPrdNumber?: number;
+  parentPrdTitle?: string;
+  blockedBy?: number[];
+  activeBlockers?: number[];
+  rawData: ReadinessGroup['parent_prd'] | ReadinessGroupItem;
+}
+
+type SchedulingReadinessData = {
+  repo?: {
+    path?: string;
+    main_branch?: string;
+  };
+  snapshot?: {
+    observed_at?: string;
+    config_provenance?: {
+      source?: string;
+      default_harness?: {
+        name?: string;
+        timeout_seconds?: number;
+      };
+    };
+    readiness_checks?: {
+      critical_failures?: ReadinessCheck[];
+      warnings?: ReadinessCheck[];
+    };
+    implementation_issue_state?: {
+      agent_run_capacity?: {
+        used: number;
+        total: number;
+      };
+      groups?: ReadinessGroup[];
+    };
+  };
+}
+
 export default function SchedulingReadinessPanel({ repoName, apiBase, onIssueClick }: SchedulingReadinessPanelProps) {
-  const [data, setData] = useState<any>(null);
+  const [data, setData] = useState<SchedulingReadinessData | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState<string>('');
@@ -45,14 +116,14 @@ export default function SchedulingReadinessPanel({ repoName, apiBase, onIssueCli
       try {
         const res = await fetch(`${apiBase}/api/scheduling-readiness/${encodeURIComponent(repoName)}`);
         if (!res.ok) throw new Error(`HTTP error ${res.status}`);
-        const result = await res.json();
+        const result = await res.json() as SchedulingReadinessData;
         if (active) {
           setData(result);
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error("Error loading readiness snapshot:", err);
         if (active) {
-          setError(err.message || 'Failed to fetch scheduling readiness data');
+          setError(err instanceof Error ? err.message : 'Failed to fetch scheduling readiness data');
         }
       } finally {
         if (active) {
@@ -296,7 +367,7 @@ export default function SchedulingReadinessPanel({ repoName, apiBase, onIssueCli
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {criticalFailures.map((check: any, idx: number) => (
+                  {criticalFailures.map((check: ReadinessCheck, idx: number) => (
                     <div key={idx} className="space-y-2 rounded border border-red-200 bg-red-50 p-4 font-mono text-xs dark:border-red-500/35 dark:bg-red-500/10">
                       <div className="flex items-start gap-2.5">
                         <AlertCircle className="mt-0.5 size-4 shrink-0 text-red-700 dark:text-red-300" />
@@ -348,7 +419,7 @@ export default function SchedulingReadinessPanel({ repoName, apiBase, onIssueCli
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {warnings.map((check: any, idx: number) => (
+                  {warnings.map((check: ReadinessCheck, idx: number) => (
                     <div key={idx} className="space-y-2 rounded border border-amber-200 bg-amber-50 p-4 font-mono text-xs dark:border-amber-500/35 dark:bg-amber-500/10">
                       <div className="flex items-start gap-2.5">
                         <AlertTriangle className="mt-0.5 size-4 shrink-0 text-amber-700 dark:text-amber-300" />
@@ -434,8 +505,8 @@ export default function SchedulingReadinessPanel({ repoName, apiBase, onIssueCli
 
           <CardContent className="p-0">
             {(() => {
-              const allRows: any[] = [];
-              groups.forEach((group: any) => {
+              const allRows: ReadinessRow[] = [];
+              groups.forEach((group: ReadinessGroup) => {
                 const prd = group.parent_prd;
                 allRows.push({
                   id: prd.issue_number,
@@ -446,7 +517,7 @@ export default function SchedulingReadinessPanel({ repoName, apiBase, onIssueCli
                 });
                 
                 const items = group.items || [];
-                items.forEach((item: any) => {
+                items.forEach((item: ReadinessGroupItem) => {
                   allRows.push({
                     id: item.issue_number,
                     title: item.title,
@@ -572,7 +643,9 @@ export default function SchedulingReadinessPanel({ repoName, apiBase, onIssueCli
                               <div 
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  onIssueClick?.(row.parentPrdNumber);
+                                  if (row.parentPrdNumber !== undefined) {
+                                    onIssueClick?.(row.parentPrdNumber);
+                                  }
                                 }}
                                 className="flex items-center gap-1 text-muted-foreground hover:text-primary transition-colors"
                               >

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import {
   Sheet,
   SheetContent,
@@ -174,20 +174,8 @@ export default function SideDrawer({
   onClaimAgentRunIdChange,
   selectedRunIssue,
 }: SideDrawerProps) {
-  const [activeTab, setActiveTab] = useState<TabId>('overview');
+  const [selectedTab, setSelectedTab] = useState<TabId>(() => readOnly ? 'overview' : 'operations');
   const [claimFormOpen, setClaimFormOpen] = useState(false);
-
-  useEffect(() => {
-    if (open) {
-      setActiveTab(readOnly ? 'overview' : 'operations');
-    }
-  }, [open, readOnly]);
-
-  useEffect(() => {
-    if (readOnly && activeTab === 'operations') {
-      setActiveTab('overview');
-    }
-  }, [readOnly, activeTab]);
 
   if (!issue) return null;
 
@@ -206,6 +194,8 @@ export default function SideDrawer({
   };
 
   const visibleTabs = TABS.filter(tab => !(tab.id === 'operations' && readOnly));
+  const activeTab = readOnly && selectedTab === 'operations' ? 'overview' : selectedTab;
+  const setActiveTab = (tab: TabId) => setSelectedTab(tab);
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>

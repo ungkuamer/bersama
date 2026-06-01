@@ -1,14 +1,15 @@
 import { useState, useEffect, useRef, type ReactNode } from 'react'
-import { 
-  Terminal, 
-  GitBranch, 
-  AlertCircle, 
+import { useQueryClient } from '@tanstack/react-query'
+import {
+  Terminal,
+  GitBranch,
+  AlertCircle,
   CheckCircle2,
-  Clock, 
-  Database, 
-  Layers, 
-  FileText, 
-  CornerDownRight, 
+  Clock,
+  Database,
+  Layers,
+  FileText,
+  CornerDownRight,
   ListFilter,
   Eye,
   EyeOff,
@@ -33,8 +34,21 @@ import DependencyPipeline from '@/components/DependencyPipeline'
 import SchedulingReadinessPanel from '@/components/SchedulingReadinessPanel'
 import Sidebar from '@/components/Sidebar'
 import Header from '@/components/Header'
+import { useReposQuery } from '@/hooks/useReposQuery'
+import { useIssuesQuery } from '@/hooks/useIssuesQuery'
+import { useRunsQuery } from '@/hooks/useRunsQuery'
+import { useRunLogQuery } from '@/hooks/useRunLogQuery'
 
-const isTestEnv = typeof (globalThis as any).process !== 'undefined' && (globalThis as any).process.env.NODE_ENV === 'test';
+interface ProcessGlobal {
+  process?: {
+    env: {
+      NODE_ENV?: string;
+    };
+  };
+}
+
+const isTestEnv = typeof (globalThis as ProcessGlobal).process !== 'undefined' &&
+                  (globalThis as ProcessGlobal).process?.env.NODE_ENV === 'test';
 const API_BASE = import.meta.env.DEV ? `http://${window.location.hostname}:8000` : '';
 
 interface Repo {
@@ -77,13 +91,6 @@ interface RunState {
   failure_reason?: string;
   exit_code?: number;
   harness_name?: string;
-}
-
-interface LogTail {
-  issue_number: number;
-  log_path: string;
-  lines_returned: number;
-  content: string;
 }
 
 type PrdPreparationState = {
@@ -146,18 +153,12 @@ const buildAgentRunId = (issueNumber: number): string => {
 }
 
 export default function App() {
-  const [repos, setRepos] = useState<Repo[]>([]);
+  const queryClient = useQueryClient();
+
   const [selectedRepo, setSelectedRepo] = useState<string>('');
-  const [issues, setIssues] = useState<Issue[]>([]);
-  const [runs, setRuns] = useState<RunState[]>([]);
   const [selectedRunIssue, setSelectedRunIssue] = useState<number | null>(null);
-  const [logTail, setLogTail] = useState<LogTail | null>(null);
   const [logsLimit, setLogsLimit] = useState<number>(100);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [, setRefreshing] = useState<boolean>(false);
-  const [pollingInterval] = useState<number>(5000); // 5s
-  const [pollingActive] = useState<boolean>(true);
-  const [pollLogsActive, setPollLogsActive] = useState<boolean>(true);
+  const [streaming, setStreaming] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [preparePrdState, setPreparePrdState] = useState<Record<number, PrdPreparationState>>({});
   const [claimIssueState, setClaimIssueState] = useState<Record<number, ImplementationClaimState>>({});
@@ -168,7 +169,7 @@ export default function App() {
   const [hasNewPausedLogOutput, setHasNewPausedLogOutput] = useState<boolean>(false);
   const [logSearchQuery, setLogSearchQuery] = useState<string>('');
   const logAutoScrollActiveRef = useRef<boolean>(true);
-  
+
   // UI States
   const [expandedPrds, setExpandedPrds] = useState<Record<number, boolean>>({});
   const [filterStatus, setFilterStatus] = useState<string>('all');
@@ -186,6 +187,23 @@ export default function App() {
     return 'light';
   });
 
+  // TanStack Query hooks
+  const reposQuery = useReposQuery();
+  const repos: Repo[] = reposQuery.data || [];
+  const effectiveSelectedRepo = selectedRepo || (repos.length > 0 ? repos[0].name : '');
+
+  const issuesQuery = useIssuesQuery(effectiveSelectedRepo);
+  const runsQuery = useRunsQuery(effectiveSelectedRepo);
+  const runLogQuery = useRunLogQuery(effectiveSelectedRepo, selectedRunIssue, logsLimit);
+
+  // Derive data from queries
+  const issues: Issue[] = issuesQuery.data || [];
+  const runs: RunState[] = runsQuery.data || [];
+  const logTail = runLogQuery.data || null;
+  const loading = reposQuery.isPending || Boolean(effectiveSelectedRepo && (issuesQuery.isPending || runsQuery.isPending));
+  const queryError = reposQuery.error ?? issuesQuery.error ?? runsQuery.error;
+  const connectionError = queryError ? `Data fetch failed: ${messageFromError(queryError)}` : error;
+
   useEffect(() => {
     if (theme === 'dark') {
       document.documentElement.classList.add('dark');
@@ -198,7 +216,7 @@ export default function App() {
   const toggleTheme = () => {
     setTheme(prev => prev === 'dark' ? 'light' : 'dark');
   };
-  
+
   const terminalViewportRef = useRef<HTMLDivElement>(null);
   const previousLogContentRef = useRef<string | null>(null);
   const previousSelectedRunIssueRef = useRef<number | null>(null);
@@ -207,114 +225,7 @@ export default function App() {
     logAutoScrollActiveRef.current = isActive;
   };
 
-  // Fetch initial repositories list
-  useEffect(() => {
-    fetchRepos();
-  }, []);
-
-  const fetchRepos = async () => {
-    try {
-      const res = await fetch(`${API_BASE}/api/repos`);
-      if (!res.ok) throw new Error(`HTTP error ${res.status}`);
-      const data = await res.json() as Repo[];
-      setRepos(data);
-      if (data.length > 0 && !selectedRepo) {
-        setSelectedRepo(data[0].name);
-      }
-    } catch (err: unknown) {
-      console.error("Error fetching repos:", err);
-      setError(`Failed to connect to backend: ${messageFromError(err)}`);
-    }
-  };
-
-  // Fetch core data (issues & runs)
-  const fetchData = async (showRefreshIndicator = false) => {
-    if (showRefreshIndicator) setRefreshing(true);
-    try {
-      const repoParam = selectedRepo ? `?repo=${encodeURIComponent(selectedRepo)}` : '';
-      
-      const [issuesRes, runsRes] = await Promise.all([
-        fetch(`${API_BASE}/api/issues${repoParam}`),
-        fetch(`${API_BASE}/api/runs${repoParam}`)
-      ]);
-
-      if (!issuesRes.ok) throw new Error(`Issues HTTP error ${issuesRes.status}`);
-      if (!runsRes.ok) throw new Error(`Runs HTTP error ${runsRes.status}`);
-
-      const issuesData = await issuesRes.json() as Issue[];
-      const runsData = await runsRes.json() as RunState[];
-
-      setIssues(issuesData);
-      setRuns(runsData);
-      
-      // Auto expand PRDs on first load
-      if (loading) {
-        const initialExpanded: Record<number, boolean> = {};
-        issuesData.forEach((issue: Issue) => {
-          if (issue.kind === 'prd') {
-            initialExpanded[issue.number] = true;
-          }
-        });
-        setExpandedPrds(initialExpanded);
-      }
-      
-      setError(null);
-    } catch (err: unknown) {
-      console.error("Error fetching data:", err);
-      setError(`Data fetch failed: ${messageFromError(err)}`);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  };
-
-  // Handle selected repository changes
-  useEffect(() => {
-    if (selectedRepo) {
-      fetchData(true);
-    }
-  }, [selectedRepo]);
-
-  // Polling core data
-  useEffect(() => {
-    if (!pollingActive || !selectedRepo) return;
-    const interval = setInterval(() => {
-      fetchData(false);
-    }, pollingInterval);
-    return () => clearInterval(interval);
-  }, [pollingActive, selectedRepo, pollingInterval]);
-
-  // Fetch selected run logs
-  const fetchLogs = async (issueNumber: number) => {
-    try {
-      const repoParam = selectedRepo ? `&repo=${encodeURIComponent(selectedRepo)}` : '';
-      const res = await fetch(`${API_BASE}/api/runs/${issueNumber}/log?limit=${logsLimit}${repoParam}`);
-      if (!res.ok) {
-        if (res.status === 404) {
-          setLogTail({
-            issue_number: issueNumber,
-            log_path: 'System Path',
-            lines_returned: 0,
-            content: 'Log file not found yet. The agent run might be starting up...'
-          });
-          return;
-        }
-        throw new Error(`HTTP error ${res.status}`);
-      }
-      const data = await res.json() as LogTail;
-      setLogTail(data);
-    } catch (err: unknown) {
-      console.error("Error fetching logs:", err);
-      setLogTail({
-        issue_number: issueNumber,
-        log_path: 'Error',
-        lines_returned: 0,
-        content: `Error loading log: ${messageFromError(err)}`
-      });
-    }
-  };
-
-  // Fetch logs whenever selected run or limit changes
+  // Handle selected run issue changes
   useEffect(() => {
     if (previousSelectedRunIssueRef.current !== selectedRunIssue) {
       previousLogContentRef.current = null;
@@ -322,30 +233,7 @@ export default function App() {
       setHasNewPausedLogOutput(false);
       previousSelectedRunIssueRef.current = selectedRunIssue;
     }
-
-    if (selectedRunIssue !== null) {
-      fetchLogs(selectedRunIssue);
-    } else {
-      setLogTail(null);
-    }
-  }, [selectedRunIssue, logsLimit]);
-
-  // Polling logs for running states
-  useEffect(() => {
-    if (selectedRunIssue === null || !pollLogsActive) return;
-    
-    // Check if the current selected run is actively running
-    const activeRun = runs.find(r => r.issue_number === selectedRunIssue);
-    const isRunning = activeRun ? activeRun.status === 'running' : false;
-    
-    if (!isRunning && !pollLogsActive) return;
-
-    const interval = setInterval(() => {
-      fetchLogs(selectedRunIssue);
-    }, 2000); // Poll logs faster
-
-    return () => clearInterval(interval);
-  }, [selectedRunIssue, pollLogsActive, runs]);
+  }, [selectedRunIssue]);
 
   const scrollLogToBottom = () => {
     const viewport = terminalViewportRef.current;
@@ -426,7 +314,7 @@ export default function App() {
   };
 
   const preparePrdIssue = async (issueNumber: number) => {
-    if (!selectedRepo) return;
+    if (!effectiveSelectedRepo) return;
 
     setPreparePrdState(prev => ({
       ...prev,
@@ -438,7 +326,7 @@ export default function App() {
 
     try {
       const res = await fetch(
-        `${API_BASE}/dashboard/repos/${encodeURIComponent(selectedRepo)}/prd-issues/${issueNumber}/prepare`,
+        `${API_BASE}/dashboard/repos/${encodeURIComponent(effectiveSelectedRepo)}/prd-issues/${issueNumber}/prepare`,
         { method: 'POST' }
       );
       if (!res.ok) {
@@ -452,7 +340,8 @@ export default function App() {
           message: `Prepared PRD #${issueNumber}${data.prd_branch ? ` on ${data.prd_branch}` : ''}.`
         }
       }));
-      await fetchData(false);
+      queryClient.invalidateQueries({ queryKey: ['issues', effectiveSelectedRepo] });
+      queryClient.invalidateQueries({ queryKey: ['runs', effectiveSelectedRepo] });
     } catch (err: unknown) {
       if (err instanceof TypeError) {
         setPreparePrdState(prev => {
@@ -475,7 +364,7 @@ export default function App() {
   };
 
   const integrateImplementationIssue = async (issueNumber: number) => {
-    if (!selectedRepo) return;
+    if (!effectiveSelectedRepo) return;
 
     setIntegrateIssueState(prev => ({
       ...prev,
@@ -487,7 +376,7 @@ export default function App() {
 
     try {
       const res = await fetch(
-        `${API_BASE}/dashboard/repos/${encodeURIComponent(selectedRepo)}/implementation-issues/${issueNumber}/integrate`,
+        `${API_BASE}/dashboard/repos/${encodeURIComponent(effectiveSelectedRepo)}/implementation-issues/${issueNumber}/integrate`,
         { method: 'POST' }
       );
       if (!res.ok) {
@@ -501,7 +390,8 @@ export default function App() {
           message: `Integrated Implementation Issue #${issueNumber}${data.prd_branch ? ` into ${data.prd_branch}` : ''}.`
         }
       }));
-      await fetchData(false);
+      queryClient.invalidateQueries({ queryKey: ['issues', effectiveSelectedRepo] });
+      queryClient.invalidateQueries({ queryKey: ['runs', effectiveSelectedRepo] });
     } catch (err: unknown) {
       if (err instanceof TypeError) {
         setIntegrateIssueState(prev => {
@@ -524,7 +414,7 @@ export default function App() {
   };
 
   const claimImplementationIssue = async (issueNumber: number) => {
-    if (!selectedRepo) return;
+    if (!effectiveSelectedRepo) return;
 
     const agentRunId = (claimAgentRunIds[issueNumber] || '').trim();
     if (!agentRunId) {
@@ -548,7 +438,7 @@ export default function App() {
 
     try {
       const res = await fetch(
-        `${API_BASE}/dashboard/repos/${encodeURIComponent(selectedRepo)}/implementation-issues/${issueNumber}/claim`,
+        `${API_BASE}/dashboard/repos/${encodeURIComponent(effectiveSelectedRepo)}/implementation-issues/${issueNumber}/claim`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -568,7 +458,8 @@ export default function App() {
         }
       }));
       setClaimFormIssue(null);
-      await fetchData(false);
+      queryClient.invalidateQueries({ queryKey: ['issues', effectiveSelectedRepo] });
+      queryClient.invalidateQueries({ queryKey: ['runs', effectiveSelectedRepo] });
     } catch (err: unknown) {
       if (err instanceof TypeError) {
         setClaimIssueState(prev => {
@@ -599,7 +490,7 @@ export default function App() {
   };
 
   const startImplementationIssue = async (issueNumber: number) => {
-    if (!selectedRepo) return;
+    if (!effectiveSelectedRepo) return;
 
     setStartIssueState(prev => ({
       ...prev,
@@ -611,7 +502,7 @@ export default function App() {
 
     try {
       const res = await fetch(
-        `${API_BASE}/dashboard/repos/${encodeURIComponent(selectedRepo)}/implementation-issues/${issueNumber}/start`,
+        `${API_BASE}/dashboard/repos/${encodeURIComponent(effectiveSelectedRepo)}/implementation-issues/${issueNumber}/start`,
         { method: 'POST' }
       );
       if (!res.ok) {
@@ -628,7 +519,8 @@ export default function App() {
             : `Started Agent Run for Implementation Issue #${issueNumber}.`
         }
       }));
-      await fetchData(false);
+      queryClient.invalidateQueries({ queryKey: ['issues', effectiveSelectedRepo] });
+      queryClient.invalidateQueries({ queryKey: ['runs', effectiveSelectedRepo] });
       setSelectedRunIssue(issueNumber);
     } catch (err: unknown) {
       if (err instanceof TypeError) {
@@ -686,13 +578,19 @@ export default function App() {
 
   // Filter issues based on UI controls
   const prdIssues = issues.filter(i => i.kind === 'prd');
+  const defaultExpandedPrds = prdIssues.reduce<Record<number, boolean>>((acc, prd) => {
+    acc[prd.number] = true;
+    return acc;
+  }, {});
+  const visibleExpandedPrds = { ...defaultExpandedPrds, ...expandedPrds };
+
   const filteredPrds = prdIssues.filter(prd => {
-    const matchesSearch = prd.title.toLowerCase().includes(searchTerm.toLowerCase()) || 
+    const matchesSearch = prd.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
                           prd.number.toString().includes(searchTerm);
     if (!matchesSearch) return false;
 
     if (filterStatus === 'all') return true;
-    
+
     // Check if any child matches the filter status
     const children = prd.children || [];
     return children.some(c => c.status === filterStatus);
@@ -702,7 +600,7 @@ export default function App() {
   const getFailedRunsCount = () => runs.filter(r => r.status === 'failed').length;
   const getReadyIssuesCount = () => issues.filter(i => i.kind === 'implementation' && i.status === 'ready').length;
 
-  const currentRepo = repos.find(r => r.name === selectedRepo);
+  const currentRepo = repos.find(r => r.name === effectiveSelectedRepo);
   const capacity = currentRepo?.global_concurrency || 0;
   const activeRunsCount = getActiveRunsCount();
   const capacityUtilization = capacity > 0 ? Math.round((activeRunsCount / capacity) * 100) : 0;
@@ -710,9 +608,9 @@ export default function App() {
   return (
     <div className="dashboard-shell relative min-h-screen text-foreground flex antialiased">
       {/* Premium Collapsible Left Sidebar */}
-      <Sidebar 
+      <Sidebar
         repos={repos}
-        selectedRepo={selectedRepo}
+        selectedRepo={effectiveSelectedRepo}
         setSelectedRepo={setSelectedRepo}
         activeTab={activeTab}
         setActiveTab={setActiveTab}
@@ -723,12 +621,18 @@ export default function App() {
       {/* Main Panel Content Area */}
       <div className="flex-1 flex flex-col min-h-screen min-w-0 overflow-y-auto bg-background">
         {/* Top Banner Status Bar & Connection Alerts */}
-        <Header 
+        <Header
           isCollapsed={isCollapsed}
           setIsCollapsed={setIsCollapsed}
           activeTab={activeTab}
-          error={error}
-          onRetryConnection={() => { fetchRepos(); if(selectedRepo) fetchData(true); }}
+          error={connectionError}
+          onRetryConnection={() => {
+            queryClient.invalidateQueries({ queryKey: ['repos'] });
+            if (effectiveSelectedRepo) {
+              queryClient.invalidateQueries({ queryKey: ['issues', effectiveSelectedRepo] });
+              queryClient.invalidateQueries({ queryKey: ['runs', effectiveSelectedRepo] });
+            }
+          }}
           theme={theme}
           toggleTheme={toggleTheme}
         />
@@ -798,6 +702,7 @@ export default function App() {
               <CardAction>
                 <Badge variant="outline" className="gap-1 text-xs">
                   <span className="size-1.5 rounded-full bg-emerald-500" />
+
                   Active
                 </Badge>
               </CardAction>
@@ -814,10 +719,10 @@ export default function App() {
 
       {/* Main Content Layout */}
       {activeTab === 'readiness' ? (
-        selectedRepo ? (
-          <SchedulingReadinessPanel 
-            repoName={selectedRepo} 
-            apiBase={API_BASE} 
+        effectiveSelectedRepo ? (
+          <SchedulingReadinessPanel
+            repoName={effectiveSelectedRepo}
+            apiBase={API_BASE}
             onIssueClick={(issueNumber) => {
               let found = issues.find(i => i.number === issueNumber);
               if (!found) {
@@ -850,10 +755,10 @@ export default function App() {
         )
       ) : (
         <main className="grid min-h-0 grow grid-cols-1 gap-6 overflow-hidden p-6 xl:grid-cols-3">
-        
+
         {/* LEFT COLUMN: RUNS & LOCAL LOGS */}
         <section className="xl:col-span-1 flex flex-col gap-6 h-full min-h-[500px]">
-          
+
           {/* Agent Runs List Panel */}
           <Card className="dashboard-glass-panel border border-border bg-card text-card-foreground flex flex-col grow shrink overflow-hidden max-h-[380px]">
             <CardHeader className="py-3.5 border-b border-border px-4 flex flex-row items-center justify-between">
@@ -889,7 +794,7 @@ export default function App() {
                     {[...runs].reverse().map((run) => {
                       const isSelected = selectedRunIssue === run.issue_number;
                       return (
-                        <div 
+                        <div
                           key={run.issue_number}
                           onClick={() => setSelectedRunIssue(isSelected ? null : run.issue_number)}
                           role="button"
@@ -903,7 +808,7 @@ export default function App() {
                             }
                           }}
                           className={`dashboard-row p-3 font-mono cursor-pointer flex flex-col gap-2 transition hover:bg-muted/30 ${
-                            isSelected 
+                            isSelected
                               ? 'bg-muted border-l-2 border-primary'
                               : 'bg-transparent border-l-2 border-transparent'
                           }`}
@@ -914,7 +819,7 @@ export default function App() {
                             </span>
                             {getStatusBadge(run.status)}
                           </div>
-                          
+
                           <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
                             <GitBranch className="size-3 shrink-0" />
                             <span className="truncate max-w-[240px]" title={run.implementation_branch}>
@@ -978,9 +883,9 @@ export default function App() {
 
                   <span className="text-border">|</span>
 
-                  <select 
+                  <select
                     aria-label="Log tail limit"
-                    value={logsLimit} 
+                    value={logsLimit}
                     onChange={(e) => setLogsLimit(Number(e.target.value))}
                     className="dashboard-control rounded px-1.5 py-0.5 focus:outline-none"
                   >
@@ -993,21 +898,22 @@ export default function App() {
                   <span className="text-border">|</span>
 
                   <button
-                    onClick={() => setPollLogsActive(!pollLogsActive)}
+                    onClick={() => setStreaming(!streaming)}
                     className={`dashboard-control flex items-center gap-1.5 rounded border px-1.5 py-0.5 text-[9px] font-semibold tracking-wider ${
-                      pollLogsActive 
-                        ? 'border-emerald-600/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' 
+                      streaming
+                        ? 'border-emerald-600/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
                         : 'text-muted-foreground'
+
                     }`}
                   >
-                    {pollLogsActive && (
+                    {streaming && (
                       <span
                         title="Streaming active"
                         className="stream-indicator"
                         aria-label="Streaming active"
                       />
                     )}
-                    {pollLogsActive ? 'STREAM ON' : 'STREAM OFF'}
+                    {streaming ? 'STREAM ON' : 'STREAM OFF'}
                   </button>
 
                   {logTail && (
@@ -1046,7 +952,7 @@ export default function App() {
                     <span className="truncate pr-4">PATH: {logTail.log_path}</span>
                     <span className="shrink-0">{logTail.lines_returned} lines</span>
                   </div>
-                  
+
                   <div
                     ref={terminalViewportRef}
                     role="log"
@@ -1107,8 +1013,8 @@ export default function App() {
               {/* Filtering / Search Controls */}
               <div className="flex items-center gap-2 text-xs">
                 {/* Search */}
-                <input 
-                  type="text" 
+                <input
+                  type="text"
                   placeholder="SEARCH ISSUE..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
@@ -1157,19 +1063,19 @@ export default function App() {
                 <ScrollArea className="h-full px-6 py-4">
                   <div className="space-y-6">
                     {filteredPrds.map((prd) => {
-                      const isExpanded = expandedPrds[prd.number];
+                      const isExpanded = visibleExpandedPrds[prd.number];
                       const children = prd.children || [];
                       const canPreparePrd = prd.state === 'open' && !prd.prd_branch;
                       const prepareState = preparePrdState[prd.number];
                       const isPreparingPrd = prepareState?.status === 'loading';
-                      
+
                       return (
-                        <div 
+                        <div
                           key={prd.number}
                           className="dashboard-glass-surface border border-border rounded overflow-hidden transition-all duration-200 hover:border-border"
                         >
                           {/* PRD Main Bar */}
-                          <div 
+                          <div
                             onClick={() => togglePrdExpand(prd.number)}
                             className="dashboard-row bg-card hover:bg-muted/40 px-4 py-3.5 cursor-pointer flex items-center justify-between border-b border-border transition"
                           >
@@ -1197,7 +1103,7 @@ export default function App() {
                                 )}
                               </div>
                             </div>
-                            
+
                             <div className="flex items-center gap-4">
                               {canPreparePrd && (
                                 <Button
@@ -1267,7 +1173,7 @@ export default function App() {
                                   const isStartingIssue = startState?.status === 'loading';
 
                                   return (
-                                    <div 
+                                    <div
                                       key={c.number}
                                       className={`dashboard-row py-3.5 flex flex-col md:flex-row md:items-start justify-between gap-4 font-mono ${
                                         isSelectedLog ? 'bg-muted/60 px-2 -mx-2 rounded border border-border' : ''
@@ -1292,7 +1198,7 @@ export default function App() {
                                               {c.title}
                                             </span>
                                           </div>
-                                          
+
                                           {/* Branch & Dates */}
                                           <div className="flex flex-col gap-1 text-[9.5px] text-muted-foreground">
                                             {c.implementation_branch && (
@@ -1303,7 +1209,7 @@ export default function App() {
                                                 </span>
                                               </span>
                                             )}
-                                            
+
                                             {c.started_at && (
                                               <span className="flex items-center gap-1.5">
                                                 <Clock className="size-3 text-muted-foreground shrink-0" />
