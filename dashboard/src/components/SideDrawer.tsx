@@ -78,44 +78,59 @@ const TABS: { id: TabId; label: string; icon: React.ReactNode }[] = [
 ];
 
 function getStatusBadge(status?: string) {
-  const baseClass = "inline-flex items-center gap-1 font-mono text-[9px] uppercase font-bold tracking-wider px-2 py-0.5 rounded border bg-neutral-100 text-neutral-800 dark:bg-neutral-800 dark:text-neutral-200 border-neutral-200 dark:border-neutral-700";
-  
-  let dotColor = "bg-neutral-400";
-  let isPulse = false;
-
+  const baseClass = "inline-flex items-center gap-1 font-mono text-[9px] uppercase font-bold tracking-wider px-2 py-0.5 rounded border";
   const normalizedStatus = status?.toLowerCase() || 'unknown';
-
-  switch (normalizedStatus) {
-    case 'ready':
-      dotColor = "bg-blue-500";
-      break;
-    case 'claimed':
-      dotColor = "bg-cyan-500";
-      break;
-    case 'running':
-      dotColor = "bg-amber-500 animate-pulse";
-      isPulse = true;
-      break;
-    case 'succeeded':
-    case 'closed':
-      dotColor = "bg-emerald-500";
-      break;
-    case 'failed':
-      dotColor = "bg-red-500";
-      break;
-    case 'blocked':
-      dotColor = "bg-orange-500";
-      break;
-    case 'unready':
-      dotColor = "bg-zinc-500";
-      break;
-    default:
-      dotColor = "bg-zinc-400";
-  }
+  const statusStyle = (() => {
+    switch (normalizedStatus) {
+      case 'ready':
+        return {
+          toneClass: "border-blue-200 bg-blue-50 text-blue-900 dark:border-blue-500/35 dark:bg-blue-500/15 dark:text-blue-300",
+          dotColor: "bg-blue-600 dark:bg-blue-400",
+          isPulse: false,
+        };
+      case 'claimed':
+        return {
+          toneClass: "border-cyan-200 bg-cyan-50 text-cyan-900 dark:border-cyan-500/35 dark:bg-cyan-500/15 dark:text-cyan-300",
+          dotColor: "bg-cyan-700 dark:bg-cyan-300",
+          isPulse: false,
+        };
+      case 'running':
+        return {
+          toneClass: "border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-500/35 dark:bg-amber-500/15 dark:text-amber-300",
+          dotColor: "bg-amber-600 animate-pulse dark:bg-amber-400",
+          isPulse: true,
+        };
+      case 'succeeded':
+      case 'closed':
+        return {
+          toneClass: "border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-500/35 dark:bg-emerald-500/15 dark:text-emerald-300",
+          dotColor: "bg-emerald-600 dark:bg-emerald-400",
+          isPulse: false,
+        };
+      case 'failed':
+        return {
+          toneClass: "border-red-200 bg-red-50 text-red-900 dark:border-red-500/35 dark:bg-red-500/15 dark:text-red-300",
+          dotColor: "bg-red-600 dark:bg-red-400",
+          isPulse: false,
+        };
+      case 'blocked':
+        return {
+          toneClass: "border-orange-200 bg-orange-50 text-orange-900 dark:border-orange-500/35 dark:bg-orange-500/15 dark:text-orange-300",
+          dotColor: "bg-orange-600 dark:bg-orange-400",
+          isPulse: false,
+        };
+      default:
+        return {
+          toneClass: "border-border bg-muted text-foreground",
+          dotColor: "bg-muted-foreground",
+          isPulse: false,
+        };
+    }
+  })();
 
   return (
-    <Badge className={`${baseClass} ${isPulse ? 'animate-pulse' : ''}`} variant="outline">
-      <span className={`size-1.5 rounded-full ${dotColor}`} />
+    <Badge className={`${baseClass} ${statusStyle.toneClass} ${statusStyle.isPulse ? 'animate-pulse' : ''}`} variant="outline">
+      <span className={`size-1.5 rounded-full ${statusStyle.dotColor}`} />
       {normalizedStatus}
     </Badge>
   );
@@ -223,7 +238,7 @@ export default function SideDrawer({
               onClick={() => setActiveTab(tab.id)}
               className={`flex items-center gap-1.5 px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider transition-all duration-150 border-b-2 -mb-px ${
                 activeTab === tab.id
-                  ? 'border-primary border-teal-400 text-primary bg-primary/5'
+                  ? 'border-primary text-primary bg-primary/5'
                   : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border'
               }`}
             >
@@ -510,7 +525,7 @@ export default function SideDrawer({
                   let titleColor = 'text-muted-foreground';
 
                   if (step.status === 'completed') {
-                    dotBg = 'bg-emerald-100 dark:bg-emerald-950/80 border-emerald-500 text-emerald-600 dark:text-emerald-400';
+                    dotBg = 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-500/35 dark:bg-emerald-500/15 dark:text-emerald-300';
                     dotIcon = <CheckCircle2 className="size-3.5" />;
                     titleColor = 'text-foreground font-semibold';
                   } else if (step.status === 'active') {
@@ -518,7 +533,7 @@ export default function SideDrawer({
                     dotIcon = <span className="size-2 rounded-full bg-primary animate-pulse" />;
                     titleColor = 'text-foreground font-bold';
                   } else if (step.status === 'failed') {
-                    dotBg = 'bg-red-100 dark:bg-red-950/80 border-red-500 text-red-600 dark:text-red-400';
+                    dotBg = 'border-red-200 bg-red-50 text-red-800 dark:border-red-500/35 dark:bg-red-500/15 dark:text-red-300';
                     dotIcon = <AlertCircle className="size-3.5" />;
                     titleColor = 'text-destructive font-semibold';
                   }
@@ -716,8 +731,8 @@ export default function SideDrawer({
                         {claimState && claimState.status !== 'loading' && (
                           <div className={`mt-2 rounded border px-2 py-1 text-[9px] font-mono ${
                             claimState.status === 'succeeded'
-                              ? 'bg-emerald-100 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-950/60 text-emerald-800 dark:text-emerald-300'
-                              : 'bg-red-100 dark:bg-red-950/25 border-red-200 dark:border-red-950/70 text-red-800 dark:text-red-300'
+                              ? 'border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-500/35 dark:bg-emerald-500/10 dark:text-emerald-300'
+                              : 'border-red-200 bg-red-50 text-red-900 dark:border-red-500/35 dark:bg-red-500/10 dark:text-red-300'
                           }`}>
                             {claimState.message}
                           </div>
@@ -743,8 +758,8 @@ export default function SideDrawer({
                         {startState && startState.status !== 'loading' && (
                           <div className={`mt-2 rounded border px-2 py-1 text-[9px] font-mono ${
                             startState.status === 'succeeded'
-                              ? 'bg-emerald-100 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-950/60 text-emerald-800 dark:text-emerald-300'
-                              : 'bg-red-100 dark:bg-red-950/25 border-red-200 dark:border-red-950/70 text-red-800 dark:text-red-300'
+                              ? 'border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-500/35 dark:bg-emerald-500/10 dark:text-emerald-300'
+                              : 'border-red-200 bg-red-50 text-red-900 dark:border-red-500/35 dark:bg-red-500/10 dark:text-red-300'
                           }`}>
                             {startState.message}
                           </div>
@@ -769,8 +784,8 @@ export default function SideDrawer({
                         {integrateState && integrateState.status !== 'loading' && (
                           <div className={`mt-2 rounded border px-2 py-1 text-[9px] font-mono ${
                             integrateState.status === 'succeeded'
-                              ? 'bg-emerald-100 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-950/60 text-emerald-800 dark:text-emerald-300'
-                              : 'bg-red-100 dark:bg-red-950/25 border-red-200 dark:border-red-950/70 text-red-800 dark:text-red-300'
+                              ? 'border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-500/35 dark:bg-emerald-500/10 dark:text-emerald-300'
+                              : 'border-red-200 bg-red-50 text-red-900 dark:border-red-500/35 dark:bg-red-500/10 dark:text-red-300'
                           }`}>
                             {integrateState.message}
                           </div>

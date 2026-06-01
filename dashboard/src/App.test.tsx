@@ -449,11 +449,11 @@ describe('Bersama Dashboard Frontend', () => {
     
     // Check loading indicator or titles
     expect(screen.getByText(/Bersama/i)).toBeInTheDocument();
-    expect(screen.getByText(/Agent Orchestration/i)).toBeInTheDocument();
+    expect(screen.getByText(/Bersama OS/i)).toBeInTheDocument();
     
     // Wait for repos and data to load
     await waitFor(() => {
-      expect(screen.getByText(/REPO:/i)).toBeInTheDocument();
+      expect(screen.getAllByRole('combobox').length).toBeGreaterThan(0);
       expect(screen.getByText(/demo/i)).toBeInTheDocument();
     });
 
@@ -839,7 +839,7 @@ describe('Bersama Dashboard Frontend', () => {
     fireEvent.click(await screen.findByRole('button', { name: /Prepare PRD #2/i }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent("Issue is not a PRD Issue.");
-    expect(screen.queryByText(/SYSTEM FAULT/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Connection issue/i)).not.toBeInTheDocument();
   });
 
   it('keeps backend connectivity failures in the global system fault banner', async () => {
@@ -873,7 +873,7 @@ describe('Bersama Dashboard Frontend', () => {
     fireEvent.click(await screen.findByRole('button', { name: /Prepare PRD #2/i }));
 
     await waitFor(() => {
-      expect(screen.getByText(/SYSTEM FAULT:/i)).toBeInTheDocument();
+      expect(screen.getByText(/Connection issue/i)).toBeInTheDocument();
       expect(screen.getByText(/Failed to connect to backend: Failed to fetch/i)).toBeInTheDocument();
     });
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
@@ -1035,7 +1035,7 @@ describe('Bersama Dashboard Frontend', () => {
     fireEvent.click(await screen.findByRole('button', { name: /Integrate #11/i }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent("Merge conflict while updating implementation branch against PRD branch.");
-    expect(screen.queryByText(/SYSTEM FAULT/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Connection issue/i)).not.toBeInTheDocument();
   });
 
   it('keeps integration connectivity failures in the global system fault banner', async () => {
@@ -1069,7 +1069,7 @@ describe('Bersama Dashboard Frontend', () => {
     fireEvent.click(await screen.findByRole('button', { name: /Integrate #11/i }));
 
     await waitFor(() => {
-      expect(screen.getByText(/SYSTEM FAULT:/i)).toBeInTheDocument();
+      expect(screen.getByText(/Connection issue/i)).toBeInTheDocument();
       expect(screen.getByText(/Failed to connect to backend: Failed to fetch/i)).toBeInTheDocument();
     });
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
@@ -1243,7 +1243,7 @@ describe('Bersama Dashboard Frontend', () => {
     fireEvent.click(screen.getByRole('button', { name: /Submit claim for Implementation Issue #21/i }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent("Implementation Issue is already claimed.");
-    expect(screen.queryByText(/SYSTEM FAULT/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Connection issue/i)).not.toBeInTheDocument();
   });
 
   it('shows Start Agent Run only for Claimed Implementation Issues', async () => {
@@ -1397,7 +1397,7 @@ describe('Bersama Dashboard Frontend', () => {
     }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent("Implementation Issue worktree does not exist: /worktrees/demo/issue-31");
-    expect(screen.queryByText(/SYSTEM FAULT/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Connection issue/i)).not.toBeInTheDocument();
   });
 
   it('renders log search input in terminal console header when a run is selected', async () => {
@@ -1932,34 +1932,33 @@ describe('Bersama Dashboard Frontend', () => {
 
       // Wait for app load
       await waitFor(() => {
-        expect(screen.getByText(/Scheduling Readiness/i)).toBeInTheDocument();
-        expect(screen.getByText(/Operator Console/i)).toBeInTheDocument();
+        expect(screen.getByText(/Dashboard/i)).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /Lifecycle/i })).toBeInTheDocument();
       });
 
       // Under test environment, Operator Console is active initially to keep existing tests intact
       expect(screen.getByText(/Product Roadmap & Implementation Lifecycle/i)).toBeInTheDocument();
-      expect(screen.queryByText(/Config Provenance/i)).not.toBeInTheDocument();
+      expect(screen.queryByText(/Repository Summary/i)).not.toBeInTheDocument();
 
-      // Click on Scheduling Readiness tab
-      const readinessTab = screen.getByText(/Scheduling Readiness/i);
+      // Click on Dashboard tab
+      const readinessTab = screen.getByText(/Dashboard/i);
       fireEvent.click(readinessTab);
 
       // Verify Scheduling Readiness panel elements are loaded
       await waitFor(() => {
-        expect(screen.getByText(/Config Provenance/i)).toBeInTheDocument();
+        expect(screen.getByText(/Repository Summary/i)).toBeInTheDocument();
       });
 
       // 1. Observed Timestamps & Unmasked configuration provenance paths
       expect(screen.getByText(/\/repos\/demo/i)).toBeInTheDocument();
-      expect(screen.getByText(/\/worktrees\/demo/i)).toBeInTheDocument();
       expect(screen.getByText(/^main$/)).toBeInTheDocument();
 
       // 2. Default harness variables unmasked
-      expect(screen.getByText(/Name: local/i)).toBeInTheDocument();
-      expect(screen.getByText(/Timeout: 3600s/i)).toBeInTheDocument();
+      expect(screen.getByText(/^local$/i)).toBeInTheDocument();
+      expect(screen.getByText(/3600s/i)).toBeInTheDocument();
 
       // 3. Active capacity usage limits (used / total)
-      expect(screen.getByText((_, node) => node?.textContent === '2 / 4 runs')).toBeInTheDocument();
+      expect(screen.getByText((_, node) => node?.textContent === '2/4')).toBeInTheDocument();
 
       // 4. Critical Readiness Failures & Warnings with diagnostics + remediation
       expect(screen.getByText(/Required repository labels are missing./i)).toBeInTheDocument();
@@ -1983,15 +1982,15 @@ describe('Bersama Dashboard Frontend', () => {
       expect(textMatches('Start')).toHaveLength(0);
       expect(textMatches('Integrate')).toHaveLength(0);
 
-      // Switch back to Operator Console
-      const operatorTab = screen.getByText(/Operator Console/i);
+      // Switch back to Lifecycle
+      const operatorTab = screen.getByRole('button', { name: /Lifecycle/i });
       fireEvent.click(operatorTab);
 
       // Product Roadmap is visible again, and Scheduling Readiness panel is unmounted
       await waitFor(() => {
         expect(screen.getByText(/Product Roadmap & Implementation Lifecycle/i)).toBeInTheDocument();
       });
-      expect(screen.queryByText(/Config Provenance/i)).not.toBeInTheDocument();
+      expect(screen.queryByText(/Repository Summary/i)).not.toBeInTheDocument();
     });
 
     it('opens side drawer in readOnly mode when clicking an issue in Scheduling Readiness view', async () => {
@@ -2014,11 +2013,11 @@ describe('Bersama Dashboard Frontend', () => {
       render(<App />);
 
       // Go to Scheduling Readiness
-      const readinessTab = screen.getByText(/Scheduling Readiness/i);
+      const readinessTab = screen.getByText(/Dashboard/i);
       fireEvent.click(readinessTab);
 
       // Verify page is rendered
-      expect(await screen.findByText(/Config Provenance/i)).toBeInTheDocument();
+      expect(await screen.findByText(/Repository Summary/i)).toBeInTheDocument();
 
       // Click on "Implement feature A" issue
       const issueLink = screen.getByText(/Implement feature A/i);
@@ -2073,11 +2072,11 @@ describe('Bersama Dashboard Frontend', () => {
       expect(operationsButton).toBeInTheDocument();
 
       // Since we expect it to be active by default, it should have the active tab styling class
-      expect(operationsButton).toHaveClass('border-teal-400');
+      expect(operationsButton).toHaveClass('border-primary');
 
       // Overview button should not be active
       const overviewButton = within(dialog).getByRole('button', { name: /Overview/i });
-      expect(overviewButton).not.toHaveClass('border-teal-400');
+      expect(overviewButton).not.toHaveClass('border-primary');
 
       // Operations tab content (Git Parameters) should be rendered
       expect(within(dialog).getByText('Git Parameters')).toBeInTheDocument();
@@ -2112,19 +2111,19 @@ describe('Bersama Dashboard Frontend', () => {
 
       render(<App />);
 
-      expect(document.documentElement.classList.contains('dark')).toBe(true);
+      expect(document.documentElement.classList.contains('dark')).toBe(false);
 
-      const themeBtn = await screen.findByTitle('Switch to Light Mode');
+      const themeBtn = await screen.findByTitle('Switch to dark mode');
       expect(themeBtn).toBeInTheDocument();
 
       fireEvent.click(themeBtn);
 
-      expect(document.documentElement.classList.contains('dark')).toBe(false);
-      expect(localStorage.getItem('theme')).toBe('light');
-
-      fireEvent.click(themeBtn);
       expect(document.documentElement.classList.contains('dark')).toBe(true);
       expect(localStorage.getItem('theme')).toBe('dark');
+
+      fireEvent.click(themeBtn);
+      expect(document.documentElement.classList.contains('dark')).toBe(false);
+      expect(localStorage.getItem('theme')).toBe('light');
     });
   });
 });

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo, type ReactNode } from 'react'
+import { useState, useEffect, useRef, type ReactNode } from 'react'
 import { 
   Terminal, 
   GitBranch, 
@@ -29,7 +29,7 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { Button } from '@/components/ui/button'
 import SideDrawer from '@/components/SideDrawer'
 import { Skeleton } from '@/components/ui/skeleton'
-import DependencyPipeline, { type PipelineNode } from '@/components/DependencyPipeline'
+import DependencyPipeline from '@/components/DependencyPipeline'
 import SchedulingReadinessPanel from '@/components/SchedulingReadinessPanel'
 import Sidebar from '@/components/Sidebar'
 import Header from '@/components/Header'
@@ -154,9 +154,9 @@ export default function App() {
   const [logTail, setLogTail] = useState<LogTail | null>(null);
   const [logsLimit, setLogsLimit] = useState<number>(100);
   const [loading, setLoading] = useState<boolean>(true);
-  const [refreshing, setRefreshing] = useState<boolean>(false);
+  const [, setRefreshing] = useState<boolean>(false);
   const [pollingInterval] = useState<number>(5000); // 5s
-  const [pollingActive, setPollingActive] = useState<boolean>(true);
+  const [pollingActive] = useState<boolean>(true);
   const [pollLogsActive, setPollLogsActive] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [preparePrdState, setPreparePrdState] = useState<Record<number, PrdPreparationState>>({});
@@ -172,7 +172,6 @@ export default function App() {
   // UI States
   const [expandedPrds, setExpandedPrds] = useState<Record<number, boolean>>({});
   const [filterStatus, setFilterStatus] = useState<string>('all');
-  const [selectedPrdScope, setSelectedPrdScope] = useState<number | 'all'>('all');
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [drawerIssue, setDrawerIssue] = useState<Issue | null>(null);
   const [drawerOpen, setDrawerOpen] = useState<boolean>(false);
@@ -184,7 +183,7 @@ export default function App() {
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
     const saved = localStorage.getItem('theme');
     if (saved === 'light' || saved === 'dark') return saved;
-    return 'dark';
+    return 'light';
   });
 
   useEffect(() => {
@@ -272,7 +271,6 @@ export default function App() {
   // Handle selected repository changes
   useEffect(() => {
     if (selectedRepo) {
-      setSelectedPrdScope('all');
       fetchData(true);
     }
   }, [selectedRepo]);
@@ -654,25 +652,25 @@ export default function App() {
   };
 
   const getStatusBadge = (status?: string) => {
-    const defaultClasses = "font-mono font-semibold uppercase tracking-wider text-[10px] px-2 py-0.5 rounded border";
+    const defaultClasses = "font-medium capitalize text-xs border";
     switch (status) {
       case 'closed':
       case 'succeeded':
-        return <Badge className={`${defaultClasses} bg-emerald-950/40 text-emerald-400 border-emerald-800`}>SUCCEEDED</Badge>;
+        return <Badge variant="outline" className={`${defaultClasses} border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-500/30 dark:bg-emerald-500/15 dark:text-emerald-300`}><span className="size-1.5 rounded-full bg-emerald-600 dark:bg-emerald-400" />Succeeded</Badge>;
       case 'running':
-        return <Badge className={`${defaultClasses} bg-amber-950/40 text-amber-400 border-amber-800 animate-pulse`}>RUNNING</Badge>;
+        return <Badge variant="outline" className={`${defaultClasses} animate-pulse border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-500/35 dark:bg-amber-500/15 dark:text-amber-300`}><span className="size-1.5 rounded-full bg-amber-600 dark:bg-amber-400" />Running</Badge>;
       case 'failed':
-        return <Badge className={`${defaultClasses} bg-red-950/40 text-red-400 border-red-800`}>FAILED</Badge>;
+        return <Badge variant="outline" className={`${defaultClasses} border-red-200 bg-red-50 text-red-900 dark:border-red-500/35 dark:bg-red-500/15 dark:text-red-300`}><span className="size-1.5 rounded-full bg-red-600 dark:bg-red-400" />Failed</Badge>;
       case 'blocked':
-        return <Badge className={`${defaultClasses} bg-orange-950/40 text-orange-400 border-orange-800`}>BLOCKED</Badge>;
+        return <Badge variant="outline" className={`${defaultClasses} border-orange-200 bg-orange-50 text-orange-900 dark:border-orange-500/35 dark:bg-orange-500/15 dark:text-orange-300`}><span className="size-1.5 rounded-full bg-orange-600 dark:bg-orange-400" />Blocked</Badge>;
       case 'ready':
-        return <Badge className={`${defaultClasses} bg-blue-950/40 text-blue-400 border-blue-800`}>READY</Badge>;
+        return <Badge variant="outline" className={`${defaultClasses} border-blue-200 bg-blue-50 text-blue-900 dark:border-blue-500/35 dark:bg-blue-500/15 dark:text-blue-300`}><span className="size-1.5 rounded-full bg-blue-600 dark:bg-blue-400" />Ready</Badge>;
       case 'claimed':
-        return <Badge className={`${defaultClasses} bg-cyan-950/40 text-cyan-400 border-cyan-800`}>CLAIMED</Badge>;
+        return <Badge variant="outline" className={`${defaultClasses} border-cyan-200 bg-cyan-50 text-cyan-900 dark:border-cyan-500/35 dark:bg-cyan-500/15 dark:text-cyan-300`}><span className="size-1.5 rounded-full bg-cyan-700 dark:bg-cyan-300" />Claimed</Badge>;
       case 'unready':
-        return <Badge className={`${defaultClasses} bg-zinc-900 text-zinc-400 border-zinc-700`}>UNREADY</Badge>;
+        return <Badge variant="outline" className={`${defaultClasses} border-border bg-muted text-foreground`}>Unready</Badge>;
       default:
-        return <Badge className={`${defaultClasses} bg-zinc-900 text-zinc-400 border-zinc-700`}>{status || 'UNKNOWN'}</Badge>;
+        return <Badge variant="outline" className={`${defaultClasses} border-border bg-muted text-foreground`}>{status || 'Unknown'}</Badge>;
     }
   };
 
@@ -688,32 +686,6 @@ export default function App() {
 
   // Filter issues based on UI controls
   const prdIssues = issues.filter(i => i.kind === 'prd');
-  const topologyNodes = useMemo(() => {
-    const nodes: PipelineNode[] = [];
-    if (selectedPrdScope === 'all') {
-      prdIssues.forEach(prd => {
-        if (prd.children) {
-          nodes.push(...prd.children.map(c => ({
-            number: c.number,
-            status: c.status,
-            blocked_by: c.blocked_by,
-            active_blockers: c.active_blockers
-          })));
-        }
-      });
-    } else {
-      const prd = prdIssues.find(i => i.number === selectedPrdScope);
-      if (prd && prd.children) {
-        nodes.push(...prd.children.map(c => ({
-          number: c.number,
-          status: c.status,
-          blocked_by: c.blocked_by,
-          active_blockers: c.active_blockers
-        })));
-      }
-    }
-    return nodes;
-  }, [selectedPrdScope, prdIssues]);
   const filteredPrds = prdIssues.filter(prd => {
     const matchesSearch = prd.title.toLowerCase().includes(searchTerm.toLowerCase()) || 
                           prd.number.toString().includes(searchTerm);
@@ -755,99 +727,87 @@ export default function App() {
           isCollapsed={isCollapsed}
           setIsCollapsed={setIsCollapsed}
           activeTab={activeTab}
-          refreshing={refreshing}
-          pollingActive={pollingActive}
-          setPollingActive={setPollingActive}
-          fetchData={fetchData}
           error={error}
           onRetryConnection={() => { fetchRepos(); if(selectedRepo) fetchData(true); }}
           theme={theme}
           toggleTheme={toggleTheme}
         />
 
-        {/* Premium Grid of Stat Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 px-6 pt-6 select-none animate-fade-in shrink-0">
-          {/* Card 1: Active Runs */}
-          <Card className="dashboard-glass-panel border border-zinc-200 dark:border-zinc-800 bg-white/85 dark:bg-[#0d0d0f]/85 flex flex-col justify-between shadow-[0_4px_20px_rgba(0,0,0,0.05)] dark:shadow-[0_4px_20px_rgba(0,0,0,0.4)]">
-            <CardHeader className="py-3 px-4 flex flex-row items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Activity className="size-4 text-amber-500 shrink-0" />
-                <CardTitle className="text-xs font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-200">Active Runs</CardTitle>
+        <div className="grid shrink-0 grid-cols-1 gap-4 px-6 pt-6 sm:grid-cols-2 xl:grid-cols-4">
+          <Card className="min-h-40 justify-between border bg-card shadow-sm">
+            <CardHeader className="grid-cols-[1fr_auto] px-6">
+              <div className="flex flex-col gap-1">
+                <CardDescription>Total Active Runs</CardDescription>
+                <CardTitle className="font-mono text-3xl font-semibold tracking-tight">{activeRunsCount}</CardTitle>
               </div>
               <CardAction>
-                <Badge variant="outline" className="font-mono text-[9px] text-zinc-500 dark:text-zinc-400 bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 px-1.5 py-0">
+                <Badge variant="outline" className="font-mono text-xs">
                   {capacityUtilization}% util
                 </Badge>
               </CardAction>
             </CardHeader>
-            <CardContent className="px-4 pb-4.5 pt-1">
-              <div className="flex items-baseline gap-1.5">
-                <span className="text-3xl font-bold font-mono tracking-tight text-zinc-900 dark:text-white">{activeRunsCount}</span>
-                <span className="text-xs font-mono text-zinc-555 dark:text-zinc-500">/ {capacity} capacity</span>
+            <CardContent className="px-6">
+              <div className="flex items-center gap-2 text-sm font-medium">
+                <Activity className="size-4" />
+                {activeRunsCount} of {capacity} execution slots occupied
               </div>
-              <CardDescription className="text-[10px] text-zinc-500 mt-2 font-sans">
-                Active runner execution slots currently occupied
-              </CardDescription>
+              <p className="mt-2 text-sm text-muted-foreground">Live runner capacity across this repository.</p>
             </CardContent>
           </Card>
 
-          {/* Card 2: Ready Issues */}
-          <Card className="dashboard-glass-panel border border-zinc-200 dark:border-zinc-800 bg-white/85 dark:bg-[#0d0d0f]/85 flex flex-col justify-between shadow-[0_4px_20px_rgba(0,0,0,0.05)] dark:shadow-[0_4px_20px_rgba(0,0,0,0.4)]">
-            <CardHeader className="py-3 px-4 flex flex-row items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Layers className="size-4 text-blue-500 shrink-0" />
-                <CardTitle className="text-xs font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-200">Ready Issues</CardTitle>
+          <Card className="min-h-40 justify-between border bg-card shadow-sm">
+            <CardHeader className="px-6">
+              <div className="flex flex-col gap-1">
+                <CardDescription>Ready Issues</CardDescription>
+                <CardTitle className="font-mono text-3xl font-semibold tracking-tight">{getReadyIssuesCount()}</CardTitle>
               </div>
             </CardHeader>
-            <CardContent className="px-4 pb-4.5 pt-1">
-              <div className="text-3xl font-bold font-mono tracking-tight text-zinc-900 dark:text-white">
-                {getReadyIssuesCount()}
+            <CardContent className="px-6">
+              <div className="flex items-center gap-2 text-sm font-medium">
+                <Layers className="size-4" />
+                Waiting for claim
               </div>
-              <CardDescription className="text-[10px] text-zinc-500 mt-2 font-sans">
-                Eligible ready implementation issues awaiting claims
-              </CardDescription>
+              <p className="mt-2 text-sm text-muted-foreground">Eligible implementation work that can be scheduled.</p>
             </CardContent>
           </Card>
 
-          {/* Card 3: Failed Runs */}
-          <Card className="dashboard-glass-panel border border-red-200 dark:border-[#ff0000]/15 bg-white/85 dark:bg-[#0d0d0f]/85 flex flex-col justify-between shadow-[0_4px_20px_rgba(0,0,0,0.05)] dark:shadow-[0_4px_20px_rgba(0,0,0,0.4)]">
-            <CardHeader className="py-3 px-4 flex flex-row items-center justify-between">
-              <div className="flex items-center gap-2">
-                <AlertCircle className="size-4 text-red-500 shrink-0" />
-                <CardTitle className="text-xs font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-200">Failed Runs</CardTitle>
+          <Card className="min-h-40 justify-between border bg-card shadow-sm">
+            <CardHeader className="px-6">
+              <div className="flex flex-col gap-1">
+                <CardDescription>Failed Runs</CardDescription>
+                <CardTitle className={`font-mono text-3xl font-semibold tracking-tight ${getFailedRunsCount() > 0 ? 'text-destructive' : ''}`}>
+                  {getFailedRunsCount()}
+                </CardTitle>
               </div>
             </CardHeader>
-            <CardContent className="px-4 pb-4.5 pt-1">
-              <div className={`text-3xl font-bold font-mono tracking-tight ${getFailedRunsCount() > 0 ? 'text-red-500 dark:text-red-400 animate-pulse' : 'text-zinc-900 dark:text-white'}`}>
-                {getFailedRunsCount()}
+            <CardContent className="px-6">
+              <div className="flex items-center gap-2 text-sm font-medium">
+                <AlertCircle className="size-4" />
+                Requires review
               </div>
-              <CardDescription className="text-[10px] text-zinc-500 mt-2 font-sans">
-                Failed agent runs requiring manual intervention
-              </CardDescription>
+              <p className="mt-2 text-sm text-muted-foreground">Runs that need manual intervention or retry.</p>
             </CardContent>
           </Card>
 
-          {/* Card 4: Registered Repos */}
-          <Card className="dashboard-glass-panel border border-zinc-200 dark:border-zinc-800 bg-white/85 dark:bg-[#0d0d0f]/85 flex flex-col justify-between shadow-[0_4px_20px_rgba(0,0,0,0.05)] dark:shadow-[0_4px_20px_rgba(0,0,0,0.4)]">
-            <CardHeader className="py-3 px-4 flex flex-row items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Database className="size-4 text-emerald-500 shrink-0" />
-                <CardTitle className="text-xs font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-200">Registered Repos</CardTitle>
+          <Card className="min-h-40 justify-between border bg-card shadow-sm">
+            <CardHeader className="grid-cols-[1fr_auto] px-6">
+              <div className="flex flex-col gap-1">
+                <CardDescription>Registered Repos</CardDescription>
+                <CardTitle className="font-mono text-3xl font-semibold tracking-tight">{repos.length}</CardTitle>
               </div>
               <CardAction>
-                <div className="flex items-center gap-1.5">
-                  <span className="size-1.5 rounded-full bg-emerald-500 animate-pulse shrink-0"></span>
-                  <span className="text-[9px] font-mono text-emerald-600 dark:text-emerald-450 uppercase tracking-wider font-semibold">Active</span>
-                </div>
+                <Badge variant="outline" className="gap-1 text-xs">
+                  <span className="size-1.5 rounded-full bg-emerald-500" />
+                  Active
+                </Badge>
               </CardAction>
             </CardHeader>
-            <CardContent className="px-4 pb-4.5 pt-1">
-              <div className="text-3xl font-bold font-mono tracking-tight text-zinc-900 dark:text-white">
-                {repos.length}
+            <CardContent className="px-6">
+              <div className="flex items-center gap-2 text-sm font-medium">
+                <Database className="size-4" />
+                Connected workspaces
               </div>
-              <CardDescription className="text-[10px] text-zinc-500 mt-2 font-sans">
-                Total connected codebases and workspaces
-              </CardDescription>
+              <p className="mt-2 text-sm text-muted-foreground">Codebases available for orchestration.</p>
             </CardContent>
           </Card>
         </div>
@@ -889,22 +849,22 @@ export default function App() {
           </div>
         )
       ) : (
-        <main className="grow p-6 grid grid-cols-1 xl:grid-cols-3 gap-6 overflow-hidden">
+        <main className="grid min-h-0 grow grid-cols-1 gap-6 overflow-hidden p-6 xl:grid-cols-3">
         
         {/* LEFT COLUMN: RUNS & LOCAL LOGS */}
         <section className="xl:col-span-1 flex flex-col gap-6 h-full min-h-[500px]">
           
           {/* Agent Runs List Panel */}
-          <Card className="dashboard-glass-panel flex flex-col grow shrink overflow-hidden max-h-[380px]">
-            <CardHeader className="py-3.5 border-b border-zinc-800 px-4 flex flex-row items-center justify-between">
+          <Card className="dashboard-glass-panel border border-border bg-card text-card-foreground flex flex-col grow shrink overflow-hidden max-h-[380px]">
+            <CardHeader className="py-3.5 border-b border-border px-4 flex flex-row items-center justify-between">
               <div>
-                <CardTitle className="text-xs tracking-wider font-bold uppercase text-white flex items-center gap-2">
-                  <Layers className="size-3.5 text-zinc-500" />
+                <CardTitle className="text-xs tracking-wider font-bold uppercase text-foreground flex items-center gap-2">
+                  <Layers className="size-3.5 text-muted-foreground" />
                   Recent Agent Runs
                 </CardTitle>
-                <CardDescription className="text-[10px] text-zinc-500">Agent execution history</CardDescription>
+                <CardDescription className="text-[10px] text-muted-foreground">Agent execution history</CardDescription>
               </div>
-              <Badge variant="outline" className="font-mono text-[9px] border-zinc-800 text-zinc-400">
+              <Badge variant="outline" className="font-mono text-[9px] border-border text-muted-foreground bg-muted">
                 {runs.length} Runs
               </Badge>
             </CardHeader>
@@ -919,13 +879,13 @@ export default function App() {
                 </div>
               ) : runs.length === 0 ? (
                 <div className="h-full flex flex-col items-center justify-center p-8 text-center">
-                  <Server className="size-6 text-zinc-700 mb-2" />
-                  <p className="text-xs text-zinc-500">No active worktrees or runs registered</p>
-                  <p className="text-[9px] text-zinc-600 mt-1 max-w-[200px]">Runs are initialized when implementation issues are claimed.</p>
+                  <Server className="mb-2 size-6 text-muted-foreground" />
+                  <p className="text-xs text-muted-foreground">No active worktrees or runs registered</p>
+                  <p className="mt-1 max-w-[200px] text-[9px] text-muted-foreground">Runs are initialized when implementation issues are claimed.</p>
                 </div>
               ) : (
                 <ScrollArea className="h-[280px]">
-                  <div className="divide-y divide-zinc-900">
+                  <div className="divide-y divide-border">
                     {[...runs].reverse().map((run) => {
                       const isSelected = selectedRunIssue === run.issue_number;
                       return (
@@ -942,40 +902,40 @@ export default function App() {
                               setSelectedRunIssue(isSelected ? null : run.issue_number);
                             }
                           }}
-                          className={`dashboard-row p-3 font-mono cursor-pointer flex flex-col gap-2 ${
+                          className={`dashboard-row p-3 font-mono cursor-pointer flex flex-col gap-2 transition hover:bg-muted/30 ${
                             isSelected 
-                              ? 'bg-zinc-900/80 border-l-2 border-teal-300'
+                              ? 'bg-muted border-l-2 border-primary'
                               : 'bg-transparent border-l-2 border-transparent'
                           }`}
                         >
                           <div className="flex items-start justify-between">
-                            <span className="text-xs font-bold text-white">
+                            <span className="text-xs font-bold text-foreground">
                               ISSUE #{run.issue_number}
                             </span>
                             {getStatusBadge(run.status)}
                           </div>
                           
-                          <div className="flex items-center gap-1.5 text-[10px] text-zinc-500">
-                            <GitBranch className="size-3 shrink-0 text-zinc-600" />
+                          <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+                            <GitBranch className="size-3 shrink-0" />
                             <span className="truncate max-w-[240px]" title={run.implementation_branch}>
                               {run.implementation_branch}
                             </span>
                           </div>
 
-                          <div className="flex items-center justify-between text-[9px] text-zinc-500">
+                          <div className="flex items-center justify-between text-[9px] text-muted-foreground">
                             <div className="flex items-center gap-1">
-                              <Clock className="size-2.5 text-zinc-600" />
+                              <Clock className="size-2.5" />
                               <span>{formatDate(run.started_at)}</span>
                             </div>
                             {run.finished_at && (
-                              <span className="text-zinc-600">
+                              <span>
                                 elapsed: {Math.round((new Date(run.finished_at).getTime() - new Date(run.started_at).getTime()) / 1000)}s
                               </span>
                             )}
                           </div>
 
                           {run.failure_reason && (
-                            <div className="bg-red-950/20 border border-red-950 rounded p-1.5 text-[9.5px] text-red-400 font-mono mt-1 whitespace-pre-wrap max-h-16 overflow-y-auto">
+                            <div className="mt-1 max-h-16 overflow-y-auto rounded border border-red-200 bg-red-50 p-1.5 font-mono text-[9.5px] text-red-900 whitespace-pre-wrap dark:border-red-500/35 dark:bg-red-500/10 dark:text-red-300">
                               <strong>Fail Reason:</strong> {run.failure_reason}
                             </div>
                           )}
@@ -990,53 +950,39 @@ export default function App() {
 
           {/* Local Log Tails Console */}
           <Card className="dashboard-glass-panel flex flex-col grow shrink overflow-hidden min-h-[220px]">
-            <CardHeader className="py-2.5 border-b border-zinc-800/80 px-4 flex flex-row items-center justify-between bg-black select-none gap-4">
-              <div className="flex items-center gap-3">
-                {/* macOS Window Controls */}
-                <div className="flex items-center gap-1.5 mr-1">
-                  <span className="size-2.5 rounded-full bg-[#ef4444]/90 hover:bg-[#ef4444] transition-colors cursor-pointer" title="Close" />
-                  <span className="size-2.5 rounded-full bg-[#f59e0b]/90 hover:bg-[#f59e0b] transition-colors cursor-pointer" title="Minimize" />
-                  <span className="size-2.5 rounded-full bg-[#10b981]/90 hover:bg-[#10b981] transition-colors cursor-pointer" title="Maximize" />
-                </div>
-                
-                <span className="text-zinc-850 font-mono text-sm">/</span>
-
-                {/* Tab Container */}
-                <div className="flex items-center gap-2 bg-black border border-zinc-900 px-3 py-1 rounded text-[11px] font-mono text-zinc-300 shadow-inner">
-                  <Terminal className="size-3.5 text-emerald-400" />
-                  <span className="font-semibold tracking-tight">harness.log</span>
+            <CardHeader className="flex flex-col gap-3 border-b border-border px-4 py-3.5 select-none sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <CardTitle className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-foreground">
+                  <Terminal className="size-3.5 text-muted-foreground" />
+                  Harness Log
                   {selectedRunIssue && (
-                    <span className="text-[9px] bg-emerald-950/60 border border-emerald-900/60 text-emerald-400 px-1 rounded-sm uppercase font-bold">
+                    <Badge variant="outline" className="ml-1 h-5 rounded border-border bg-muted px-1.5 font-mono text-[9px] text-muted-foreground">
                       #{selectedRunIssue}
-                    </span>
+                    </Badge>
                   )}
-                </div>
-
-                {/* Status / Description */}
-                <span className="hidden md:inline text-[10px] text-zinc-500 font-mono font-medium tracking-tight">
-                  {selectedRunIssue ? `Tailing active runner for Issue #${selectedRunIssue}` : 'Idle — No active run selected'}
-                </span>
+                </CardTitle>
+                <CardDescription className="text-[10px] text-muted-foreground">
+                  {selectedRunIssue ? `Tailing active runner for Issue #${selectedRunIssue}` : 'Idle - no active run selected'}
+                </CardDescription>
               </div>
               {selectedRunIssue !== null && (
                 <div className="flex items-center gap-2 text-[10px] font-mono">
-                  {/* Log search */}
                   <input
                     type="text"
-                    placeholder="Search log…"
+                    placeholder="Search log..."
                     aria-label="Search log content"
                     value={logSearchQuery}
                     onChange={(e) => setLogSearchQuery(e.target.value)}
-                    className="dashboard-control w-[120px] text-zinc-300 rounded px-1.5 py-0.5 focus:outline-none placeholder-zinc-700 text-[10px]"
+                    className="dashboard-control w-[120px] rounded px-1.5 py-0.5 text-[10px] focus:outline-none placeholder:text-muted-foreground"
                   />
 
-                  <span className="text-zinc-800">|</span>
+                  <span className="text-border">|</span>
 
-                  {/* Lines Limit */}
                   <select 
                     aria-label="Log tail limit"
                     value={logsLimit} 
                     onChange={(e) => setLogsLimit(Number(e.target.value))}
-                    className="dashboard-control text-zinc-400 rounded px-1.5 py-0.5 focus:outline-none"
+                    className="dashboard-control rounded px-1.5 py-0.5 focus:outline-none"
                   >
                     <option value={20}>20 lines</option>
                     <option value={50}>50 lines</option>
@@ -1044,15 +990,14 @@ export default function App() {
                     <option value={300}>300 lines</option>
                   </select>
 
-                  <span className="text-zinc-800">|</span>
+                  <span className="text-border">|</span>
 
-                  {/* Polling Switch */}
                   <button
                     onClick={() => setPollLogsActive(!pollLogsActive)}
-                    className={`dashboard-control px-1.5 py-0.5 rounded border font-semibold tracking-wider text-[9px] flex items-center gap-1.5 ${
+                    className={`dashboard-control flex items-center gap-1.5 rounded border px-1.5 py-0.5 text-[9px] font-semibold tracking-wider ${
                       pollLogsActive 
-                        ? 'bg-emerald-950/40 text-emerald-400 border-emerald-900' 
-                        : 'bg-black text-zinc-500'
+                        ? 'border-emerald-600/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' 
+                        : 'text-muted-foreground'
                     }`}
                   >
                     {pollLogsActive && (
@@ -1073,7 +1018,7 @@ export default function App() {
                       onClick={exportLoadedLogTail}
                       aria-label={`Export loaded tail for Implementation Issue #${logTail.issue_number}`}
                       title="Export loaded tail"
-                      className="dashboard-control text-zinc-400 hover:text-white"
+                      className="dashboard-control text-muted-foreground hover:text-foreground"
                     >
                       <Download data-icon="inline-start" />
                     </Button>
@@ -1081,12 +1026,12 @@ export default function App() {
                 </div>
               )}
             </CardHeader>
-            <CardContent className="p-0 grow bg-black flex flex-col font-mono overflow-hidden">
+            <CardContent className="flex grow flex-col overflow-hidden bg-card p-0 font-mono">
               {selectedRunIssue === null ? (
-                <div className="grow flex flex-col items-center justify-center p-6 text-zinc-600 text-center font-mono">
-                  <Terminal className="size-8 text-zinc-800 mb-2" />
+                <div className="flex grow flex-col items-center justify-center p-6 text-center font-mono text-muted-foreground">
+                  <Terminal className="mb-2 size-8 text-muted-foreground/45" />
                   <p className="text-xs">Console is offline.</p>
-                  <p className="text-[9px] text-zinc-700 mt-1">Pick a claimed/active run from the list to display active logs.</p>
+                  <p className="mt-1 text-[9px] text-muted-foreground">Pick a claimed/active run from the list to display active logs.</p>
                 </div>
               ) : !logTail ? (
                 <div className="grow flex items-center justify-center p-6">
@@ -1097,7 +1042,7 @@ export default function App() {
                 </div>
               ) : (
                 <div className="grow flex flex-col overflow-hidden text-[10px]">
-                  <div className="bg-black px-4 py-1.5 border-b border-zinc-900 text-zinc-500 text-[9px] flex items-center justify-between shrink-0 font-mono">
+                  <div className="flex shrink-0 items-center justify-between border-b border-border bg-muted/20 px-4 py-1.5 text-[9px] font-mono text-muted-foreground">
                     <span className="truncate pr-4">PATH: {logTail.log_path}</span>
                     <span className="shrink-0">{logTail.lines_returned} lines</span>
                   </div>
@@ -1108,18 +1053,18 @@ export default function App() {
                     aria-label={`Issue #${logTail.issue_number} harness log tail`}
                     aria-live="polite"
                     onScroll={handleLogScroll}
-                    className="terminal-scrollbar dashboard-focus relative grow p-4 bg-black overflow-y-auto"
+                    className="terminal-scrollbar dashboard-focus relative grow overflow-y-auto bg-background p-4"
                   >
-                    <div className="space-y-1 font-mono text-zinc-300 whitespace-pre-wrap leading-relaxed select-text">
+                    <div className="space-y-1 font-mono text-foreground whitespace-pre-wrap leading-relaxed select-text">
                       {logTail.content ? (
                         logTail.content.split('\n').map((line, idx) => (
                           <div key={idx} className="table-row">
-                            <span className="table-cell text-muted-foreground/30 select-none pr-3 text-right w-8 font-mono">{idx + 1}</span>
-                            <span className="table-cell text-[#f4f4f5]">{highlightMatches(line, logSearchQuery)}</span>
+                            <span className="table-cell w-8 select-none pr-3 text-right font-mono text-muted-foreground/55">{idx + 1}</span>
+                            <span className="table-cell text-foreground">{highlightMatches(line, logSearchQuery)}</span>
                           </div>
                         ))
                       ) : (
-                        <div className="text-zinc-600 text-center py-4">
+                        <div className="py-4 text-center text-muted-foreground">
                           Log is empty. No outputs written by harness.
                         </div>
                       )}
@@ -1131,7 +1076,7 @@ export default function App() {
                         variant="outline"
                         onClick={jumpToLatestLogOutput}
                         aria-label="Jump to latest log output"
-                        className="dashboard-control sticky bottom-2 ml-auto text-zinc-100 font-mono text-[9px] uppercase tracking-wider"
+                        className="dashboard-control sticky bottom-2 ml-auto font-mono text-[9px] uppercase tracking-wider text-foreground"
                       >
                         <ArrowDown data-icon="inline-start" />
                         Latest output
@@ -1145,72 +1090,16 @@ export default function App() {
         </section>
 
         {/* RIGHT COLUMN: PRDS & CHILD IMPLEMENTATION ISSUES */}
-        <section className="xl:col-span-2 flex flex-col gap-6 h-full overflow-hidden">
-          {/* Central Topology Card: System Dependency Topology */}
-          <Card className="dashboard-glass-panel border border-zinc-800 bg-[#0d0d0f]/85 flex flex-col shadow-[0_4px_20px_rgba(0,0,0,0.4)] overflow-hidden shrink-0">
-            <CardHeader className="py-4 border-b border-zinc-800 px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 select-none">
-              <div>
-                <CardTitle className="text-xs tracking-wider font-bold uppercase text-white flex items-center gap-2">
-                  <GitMerge className="size-3.5 text-emerald-400 rotate-90" />
-                  System Dependency Topology
-                </CardTitle>
-                <CardDescription className="text-[10px] text-zinc-500">
-                  Interactive sorted execution dependency pipeline map
-                </CardDescription>
-              </div>
-
-              {/* PRD Scope Filters (matching time filters in design.png) */}
-              <div className="flex flex-wrap items-center gap-1.5 bg-black/40 p-1 rounded-lg border border-zinc-800/80">
-                <button
-                  onClick={() => setSelectedPrdScope('all')}
-                  className={`px-3 py-1 rounded-md text-[10px] font-mono font-bold tracking-wider transition-all uppercase cursor-pointer ${
-                    selectedPrdScope === 'all'
-                      ? 'bg-zinc-800 text-white shadow-sm border border-zinc-700'
-                      : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/40 border border-transparent'
-                  }`}
-                >
-                  All
-                </button>
-                {prdIssues.map(prd => (
-                  <button
-                    key={prd.number}
-                    onClick={() => setSelectedPrdScope(prd.number)}
-                    className={`px-3 py-1 rounded-md text-[10px] font-mono font-bold tracking-wider transition-all uppercase cursor-pointer ${
-                      selectedPrdScope === prd.number
-                        ? 'bg-zinc-800 text-white shadow-sm border border-zinc-700'
-                        : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/40 border border-transparent'
-                    }`}
-                  >
-                    PRD #{prd.number}
-                  </button>
-                ))}
-              </div>
-            </CardHeader>
-            <CardContent className="px-6 py-4 flex flex-col justify-center min-h-[110px]">
-              {loading ? (
-                <div className="h-[80px] flex items-center justify-center">
-                  <Skeleton className="h-3 w-full max-w-[200px] animate-shimmer" />
-                </div>
-              ) : topologyNodes.length === 0 ? (
-                <div className="h-[80px] flex flex-col items-center justify-center text-center font-mono">
-                  <GitMerge className="size-6 text-zinc-800 mb-1" />
-                  <p className="text-[10px] text-zinc-500">No active dependency nodes observed in this scope</p>
-                </div>
-              ) : (
-                <DependencyPipeline children={topologyNodes} />
-              )}
-            </CardContent>
-          </Card>
-
-          <Card className="dashboard-glass-panel flex flex-col grow h-full overflow-hidden">
+        <section className="flex h-full min-h-0 flex-col gap-6 overflow-hidden xl:col-span-2">
+          <Card className="dashboard-glass-panel flex h-full min-h-0 grow flex-col overflow-hidden border border-border bg-card text-card-foreground">
             {/* Header Controls for filtering */}
-            <CardHeader className="py-4 border-b border-zinc-800 px-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <CardHeader className="py-4 border-b border-border px-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
               <div>
-                <CardTitle className="text-sm text-white flex items-center gap-2 uppercase tracking-wider">
-                  <Database className="size-4 text-zinc-500" />
+                <CardTitle className="text-sm text-foreground flex items-center gap-2 uppercase tracking-wider">
+                  <Database className="size-4 text-muted-foreground" />
                   Product Roadmap & Implementation Lifecycle
                 </CardTitle>
-                <CardDescription className="text-xs text-zinc-500">
+                <CardDescription className="text-xs text-muted-foreground">
                   PRD issues hierarchy derived from GitHub Issues state
                 </CardDescription>
               </div>
@@ -1223,30 +1112,30 @@ export default function App() {
                   placeholder="SEARCH ISSUE..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="dashboard-control text-zinc-300 rounded px-2.5 py-1.5 focus:outline-none placeholder-zinc-700 w-[140px] text-xs"
+                  className="dashboard-control bg-transparent border border-border text-foreground rounded px-2.5 py-1.5 focus:outline-none placeholder:text-muted-foreground w-[140px] text-xs"
                 />
 
                 {/* Filter */}
-                <div className="dashboard-control flex items-center gap-1.5 border rounded px-2 py-1">
-                  <ListFilter className="size-3 text-zinc-500" />
+                <div className="dashboard-control flex items-center gap-1.5 border border-border rounded px-2 py-1">
+                  <ListFilter className="size-3 text-muted-foreground" />
                   <select
                     value={filterStatus}
                     onChange={(e) => setFilterStatus(e.target.value)}
-                    className="dashboard-focus bg-transparent text-zinc-300 focus:outline-none cursor-pointer text-xs font-semibold pr-1 rounded"
+                    className="dashboard-focus bg-transparent text-foreground focus:outline-none cursor-pointer text-xs font-semibold pr-1 rounded"
                   >
-                    <option value="all" className="bg-[#09090b]">ALL STATUS</option>
-                    <option value="ready" className="bg-[#09090b]">READY</option>
-                    <option value="claimed" className="bg-[#09090b]">CLAIMED</option>
-                    <option value="running" className="bg-[#09090b]">RUNNING</option>
-                    <option value="succeeded" className="bg-[#09090b]">SUCCEEDED</option>
-                    <option value="failed" className="bg-[#09090b]">FAILED</option>
-                    <option value="blocked" className="bg-[#09090b]">BLOCKED</option>
-                    <option value="unready" className="bg-[#09090b]">UNREADY</option>
+                    <option value="all" className="bg-background text-foreground">ALL STATUS</option>
+                    <option value="ready" className="bg-background text-foreground">READY</option>
+                    <option value="claimed" className="bg-background text-foreground">CLAIMED</option>
+                    <option value="running" className="bg-background text-foreground">RUNNING</option>
+                    <option value="succeeded" className="bg-background text-foreground">SUCCEEDED</option>
+                    <option value="failed" className="bg-background text-foreground">FAILED</option>
+                    <option value="blocked" className="bg-background text-foreground">BLOCKED</option>
+                    <option value="unready" className="bg-background text-foreground">UNREADY</option>
                   </select>
                 </div>
               </div>
             </CardHeader>
-            <CardContent className="p-0 grow overflow-hidden">
+            <CardContent className="min-h-0 grow overflow-hidden p-0">
               {loading ? (
                 <div className="h-full flex items-center justify-center p-8">
                   <div className="flex flex-col gap-2 w-full max-w-[220px]">
@@ -1258,14 +1147,14 @@ export default function App() {
                 </div>
               ) : filteredPrds.length === 0 ? (
                 <div className="h-full flex flex-col items-center justify-center p-12 text-center">
-                  <FileText className="size-8 text-zinc-700 mb-2" />
-                  <p className="text-xs text-zinc-500">No PRD Issues found matching search criteria</p>
-                  <p className="text-[10px] text-zinc-600 mt-1 max-w-[340px]">
+                  <FileText className="mb-2 size-8 text-muted-foreground" />
+                  <p className="text-xs text-muted-foreground">No PRD Issues found matching search criteria</p>
+                  <p className="mt-1 max-w-[340px] text-[10px] text-muted-foreground">
                     Configure issue gateways and ensure issues carry labels such as 'prd' or 'implementation'.
                   </p>
                 </div>
               ) : (
-                <ScrollArea className="h-[600px] px-6 py-4">
+                <ScrollArea className="h-full px-6 py-4">
                   <div className="space-y-6">
                     {filteredPrds.map((prd) => {
                       const isExpanded = expandedPrds[prd.number];
@@ -1277,20 +1166,20 @@ export default function App() {
                       return (
                         <div 
                           key={prd.number}
-                          className="dashboard-glass-surface border rounded overflow-hidden transition-all duration-200 hover:border-zinc-600"
+                          className="dashboard-glass-surface border border-border rounded overflow-hidden transition-all duration-200 hover:border-border"
                         >
                           {/* PRD Main Bar */}
                           <div 
                             onClick={() => togglePrdExpand(prd.number)}
-                            className="dashboard-row bg-[#0d0d0f]/80 px-4 py-3.5 cursor-pointer flex items-center justify-between border-b border-zinc-800 transition"
+                            className="dashboard-row bg-card hover:bg-muted/40 px-4 py-3.5 cursor-pointer flex items-center justify-between border-b border-border transition"
                           >
                             <div className="flex items-center gap-3">
-                              <span className="font-mono text-xs font-extrabold text-zinc-400 bg-zinc-900 border border-zinc-800 px-1.5 py-0.5 rounded">
+                              <span className="font-mono text-xs font-extrabold text-muted-foreground bg-muted border border-border px-1.5 py-0.5 rounded">
                                 PRD #{prd.number}
                               </span>
                               <div>
                                 <h3
-                                  className="text-xs font-bold text-white tracking-wide leading-none mb-1.5 cursor-pointer hover:text-teal-400 transition-colors"
+                                  className="text-xs font-bold text-foreground tracking-wide leading-none mb-1.5 cursor-pointer hover:text-primary transition-colors"
                                   onClick={(event) => {
                                     event.stopPropagation();
                                     setDrawerIssue(prd);
@@ -1301,8 +1190,8 @@ export default function App() {
                                   {prd.title}
                                 </h3>
                                 {prd.prd_branch && (
-                                  <div className="flex items-center gap-1 text-[9px] text-zinc-500 font-mono">
-                                    <GitBranch className="size-2.5 text-zinc-600" />
+                                  <div className="flex items-center gap-1 text-[9px] text-muted-foreground font-mono">
+                                    <GitBranch className="size-2.5 text-muted-foreground" />
                                     <span>BRANCH: {prd.prd_branch}</span>
                                   </div>
                                 )}
@@ -1320,19 +1209,19 @@ export default function App() {
                                     preparePrdIssue(prd.number);
                                   }}
                                   disabled={isPreparingPrd}
-                                  className="dashboard-control text-[9px] uppercase tracking-wider text-zinc-200"
+                                  className="dashboard-control text-[9px] uppercase tracking-wider text-muted-foreground"
                                 >
                                   <GitBranch data-icon="inline-start" className={isPreparingPrd ? 'animate-pulse' : ''} />
                                   {isPreparingPrd ? 'Preparing' : 'Prepare'} PRD #{prd.number}
                                 </Button>
                               )}
-                              <Badge variant="outline" className="font-mono text-[9px] border-zinc-800 text-zinc-500 bg-zinc-900 px-2 py-0.5">
+                              <Badge variant="outline" className="font-mono text-[9px] border-border text-muted-foreground bg-muted px-2 py-0.5">
                                 {children.length} Slices
                               </Badge>
                               {isExpanded ? (
-                                <ChevronDown className="size-4 text-zinc-500" />
+                                <ChevronDown className="size-4 text-muted-foreground" />
                               ) : (
-                                <ChevronRight className="size-4 text-zinc-500" />
+                                <ChevronRight className="size-4 text-muted-foreground" />
                               )}
                             </div>
                           </div>
@@ -1341,8 +1230,8 @@ export default function App() {
                             <div
                               className={`px-4 py-2 border-b text-[10px] font-mono ${
                                 prepareState.status === 'succeeded'
-                                  ? 'bg-emerald-950/20 border-emerald-950/60 text-emerald-300'
-                                  : 'bg-red-950/25 border-red-950/70 text-red-300'
+                                  ? 'border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-500/35 dark:bg-emerald-500/10 dark:text-emerald-300'
+                                  : 'border-red-200 bg-red-50 text-red-900 dark:border-red-500/35 dark:bg-red-500/10 dark:text-red-300'
                               }`}
                               role={prepareState.status === 'failed' ? 'alert' : 'status'}
                             >
@@ -1357,9 +1246,9 @@ export default function App() {
 
                           {/* PRD Children (Implementation Issues) */}
                           {isExpanded && (
-                            <div className="p-4 bg-[#050506] divide-y divide-zinc-900">
+                            <div className="p-4 bg-muted/20 divide-y divide-border">
                               {children.length === 0 ? (
-                                <div className="text-center py-4 text-[10px] text-zinc-600">
+                                <div className="text-center py-4 text-[10px] text-muted-foreground">
                                   No implementation issue slices declared for this PRD.
                                 </div>
                               ) : (
@@ -1381,19 +1270,19 @@ export default function App() {
                                     <div 
                                       key={c.number}
                                       className={`dashboard-row py-3.5 flex flex-col md:flex-row md:items-start justify-between gap-4 font-mono ${
-                                        isSelectedLog ? 'bg-zinc-900/40 px-2 -mx-2 rounded border border-zinc-800' : ''
+                                        isSelectedLog ? 'bg-muted/60 px-2 -mx-2 rounded border border-border' : ''
                                       }`}
                                     >
                                       {/* Issue Title / Kind */}
                                       <div className="flex items-start gap-2.5 grow">
-                                        <CornerDownRight className="size-4 text-zinc-700 shrink-0 mt-0.5" />
+                                        <CornerDownRight className="size-4 text-muted-foreground shrink-0 mt-0.5" />
                                         <div className="space-y-1.5 max-w-[480px]">
                                           <div className="flex flex-wrap items-center gap-2">
-                                            <span className="text-[10px] font-bold text-white hover:underline cursor-pointer">
+                                            <span className="text-[10px] font-bold text-foreground hover:underline cursor-pointer">
                                               #{c.number}
                                             </span>
                                             <span
-                                              className="text-[11px] text-zinc-300 font-semibold leading-tight font-sans cursor-pointer hover:text-teal-400 transition-colors"
+                                              className="text-[11px] text-muted-foreground font-semibold leading-tight font-sans cursor-pointer hover:text-primary transition-colors"
                                               onClick={() => {
                                                 setDrawerIssue(c);
                                                 setDrawerReadOnly(false);
@@ -1405,11 +1294,11 @@ export default function App() {
                                           </div>
                                           
                                           {/* Branch & Dates */}
-                                          <div className="flex flex-col gap-1 text-[9.5px] text-zinc-500">
+                                          <div className="flex flex-col gap-1 text-[9.5px] text-muted-foreground">
                                             {c.implementation_branch && (
                                               <span className="flex items-center gap-1.5">
-                                                <GitBranch className="size-3 text-zinc-700 shrink-0" />
-                                                <span className="truncate max-w-[380px] text-zinc-400">
+                                                <GitBranch className="size-3 text-muted-foreground shrink-0" />
+                                                <span className="truncate max-w-[380px] text-muted-foreground/80">
                                                   {c.implementation_branch}
                                                 </span>
                                               </span>
@@ -1417,7 +1306,7 @@ export default function App() {
                                             
                                             {c.started_at && (
                                               <span className="flex items-center gap-1.5">
-                                                <Clock className="size-3 text-zinc-700 shrink-0" />
+                                                <Clock className="size-3 text-muted-foreground shrink-0" />
                                                 <span>
                                                   Started: {formatDate(c.started_at)}
                                                   {c.finished_at && ` | Done: ${formatDate(c.finished_at)}`}
@@ -1426,7 +1315,7 @@ export default function App() {
                                             )}
                                             {c.claimed_at && (
                                               <span className="flex items-center gap-1.5">
-                                                <Clock className="size-3 text-zinc-700 shrink-0" />
+                                                <Clock className="size-3 text-muted-foreground shrink-0" />
                                                 <span>
                                                   Claimed: {formatDate(c.claimed_at)}
                                                   {c.agent_run_id && ` | ${c.agent_run_id}`}
@@ -1442,10 +1331,10 @@ export default function App() {
                                               aria-label={`Blocking Dependency rail for Implementation Issue #${c.number}`}
                                               className="dashboard-glass-surface flex flex-wrap items-center gap-2 rounded border px-2 py-1.5"
                                             >
-                                              <span className="text-[9px] text-zinc-500 font-bold uppercase tracking-wider">
+                                              <span className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground">
                                                 Blocking Dependency
                                               </span>
-                                              <div className="relative flex flex-wrap items-center gap-1.5 pl-1 before:absolute before:left-1 before:right-1 before:top-1/2 before:h-px before:-translate-y-1/2 before:bg-zinc-800">
+                                              <div className="relative flex flex-wrap items-center gap-1.5 pl-1 before:absolute before:left-1 before:right-1 before:top-1/2 before:h-px before:-translate-y-1/2 before:bg-border">
                                                 {c.blocked_by.map(num => {
                                                   const isOpenBlockingDependency = c.active_blockers?.includes(num) ?? false;
 
@@ -1455,8 +1344,8 @@ export default function App() {
                                                       aria-label={`${isOpenBlockingDependency ? 'Open' : 'Resolved'} Blocking Dependency #${num}`}
                                                       className={`relative z-10 inline-flex h-5 items-center gap-1 rounded-full border px-1.5 text-[9px] font-bold uppercase tracking-wider ${
                                                         isOpenBlockingDependency
-                                                          ? 'border-orange-800 bg-orange-950/60 text-orange-300'
-                                                          : 'border-zinc-800 bg-[#050506] text-zinc-600'
+                                                          ? 'border-orange-200 bg-orange-50 text-orange-900 dark:border-orange-500/35 dark:bg-orange-500/15 dark:text-orange-300'
+                                                          : 'border-border bg-muted text-muted-foreground'
                                                       }`}
                                                     >
                                                       {isOpenBlockingDependency ? (
@@ -1476,8 +1365,8 @@ export default function App() {
                                             <div
                                               className={`rounded border px-2 py-1 text-[9.5px] font-mono ${
                                                 integrateState.status === 'succeeded'
-                                                  ? 'bg-emerald-950/20 border-emerald-950/60 text-emerald-300'
-                                                  : 'bg-red-950/25 border-red-950/70 text-red-300'
+                                                  ? 'border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-500/35 dark:bg-emerald-500/10 dark:text-emerald-300'
+                                                  : 'border-red-200 bg-red-50 text-red-900 dark:border-red-500/35 dark:bg-red-500/10 dark:text-red-300'
                                               }`}
                                               role={integrateState.status === 'failed' ? 'alert' : 'status'}
                                             >
@@ -1489,8 +1378,8 @@ export default function App() {
                                             <div
                                               className={`rounded border px-2 py-1 text-[9.5px] font-mono ${
                                                 startState.status === 'succeeded'
-                                                  ? 'bg-emerald-950/20 border-emerald-950/60 text-emerald-300'
-                                                  : 'bg-red-950/25 border-red-950/70 text-red-300'
+                                                  ? 'border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-500/35 dark:bg-emerald-500/10 dark:text-emerald-300'
+                                                  : 'border-red-200 bg-red-50 text-red-900 dark:border-red-500/35 dark:bg-red-500/10 dark:text-red-300'
                                               }`}
                                               role={startState.status === 'failed' ? 'alert' : 'status'}
                                             >
@@ -1500,7 +1389,7 @@ export default function App() {
 
                                           {isClaimFormOpen && (
                                             <form
-                                              className="rounded border border-zinc-900 bg-zinc-950/70 px-2 py-2 flex flex-col gap-2"
+                                              className="flex flex-col gap-2 rounded border border-border bg-muted/40 px-2 py-2"
                                               aria-label={`Claim Implementation Issue #${c.number}`}
                                               onSubmit={(event) => {
                                                 event.preventDefault();
@@ -1509,7 +1398,7 @@ export default function App() {
                                             >
                                               <label
                                                 htmlFor={`claim-agent-run-${c.number}`}
-                                                className="text-[9px] text-zinc-500 font-bold uppercase tracking-wider"
+                                                className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground"
                                               >
                                                 Agent Run identifier for Implementation Issue #{c.number}
                                               </label>
@@ -1522,7 +1411,7 @@ export default function App() {
                                                     ...prev,
                                                     [c.number]: event.target.value
                                                   }))}
-                                                  className="dashboard-control min-w-0 w-full sm:w-[260px] rounded px-2 py-1 text-[10px] text-zinc-200 focus:outline-none font-mono"
+                                                  className="dashboard-control min-w-0 w-full rounded px-2 py-1 font-mono text-[10px] text-foreground focus:outline-none sm:w-[260px]"
                                                 />
                                                 <Button
                                                   type="submit"
@@ -1534,7 +1423,7 @@ export default function App() {
                                                       : `Submit claim for Implementation Issue #${c.number}`
                                                   }
                                                   disabled={isClaimingIssue}
-                                                  className="dashboard-control text-[9px] uppercase tracking-wider text-zinc-200"
+                                                  className="dashboard-control text-[9px] uppercase tracking-wider text-foreground"
                                                 >
                                                   <Send data-icon="inline-start" className={isClaimingIssue ? 'animate-pulse' : ''} />
                                                   {isClaimingIssue ? 'Claiming' : 'Submit'} #{c.number}
@@ -1547,8 +1436,8 @@ export default function App() {
                                             <div
                                               className={`rounded border px-2 py-1 text-[9.5px] font-mono ${
                                                 claimState.status === 'succeeded'
-                                                  ? 'bg-emerald-950/20 border-emerald-950/60 text-emerald-300'
-                                                  : 'bg-red-950/25 border-red-950/70 text-red-300'
+                                                  ? 'border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-500/35 dark:bg-emerald-500/10 dark:text-emerald-300'
+                                                  : 'border-red-200 bg-red-50 text-red-900 dark:border-red-500/35 dark:bg-red-500/10 dark:text-red-300'
                                               }`}
                                               role={claimState.status === 'failed' ? 'alert' : 'status'}
                                             >
@@ -1570,12 +1459,12 @@ export default function App() {
                                           >
                                             {isSelectedLog ? (
                                               <>
-                                                <EyeOff className="size-3 text-zinc-500" />
+                                                <EyeOff className="size-3 text-muted-foreground" />
                                                 Hide Log
                                               </>
                                             ) : (
                                               <>
-                                                <Eye className="size-3 text-emerald-400" />
+                                                <Eye className="size-3 text-muted-foreground" />
                                                 View Log
                                               </>
                                             )}
@@ -1589,7 +1478,7 @@ export default function App() {
                                             variant="outline"
                                             onClick={() => integrateImplementationIssue(c.number)}
                                             disabled={isIntegratingIssue}
-                                            className="dashboard-control text-[9px] uppercase tracking-wider text-zinc-200"
+                                            className="dashboard-control text-[9px] uppercase tracking-wider text-foreground"
                                           >
                                             <GitMerge data-icon="inline-start" className={isIntegratingIssue ? 'animate-pulse' : ''} />
                                             {isIntegratingIssue ? 'Integrating' : 'Integrate'} #{c.number}
@@ -1608,7 +1497,7 @@ export default function App() {
                                             }
                                             onClick={() => startImplementationIssue(c.number)}
                                             disabled={isStartingIssue}
-                                            className="dashboard-control text-[9px] uppercase tracking-wider text-zinc-200"
+                                            className="dashboard-control text-[9px] uppercase tracking-wider text-foreground"
                                           >
                                             <Play data-icon="inline-start" className={isStartingIssue ? 'animate-pulse' : ''} />
                                             {isStartingIssue ? 'Starting' : 'Start'} #{c.number}
@@ -1621,7 +1510,7 @@ export default function App() {
                                             size="xs"
                                             variant="outline"
                                             onClick={() => openClaimForm(c.number)}
-                                            className="dashboard-control text-[9px] uppercase tracking-wider text-zinc-200"
+                                            className="dashboard-control text-[9px] uppercase tracking-wider text-foreground"
                                           >
                                             <Hand data-icon="inline-start" />
                                             Claim #{c.number}
@@ -1669,7 +1558,7 @@ export default function App() {
       />
 
       {/* Footer Info Box */}
-      <footer className="dashboard-glass-panel border-t px-6 py-3 flex items-center justify-between text-[10px] text-zinc-500 mt-auto shrink-0">
+      <footer className="mt-auto flex shrink-0 items-center justify-between border-t px-6 py-3 text-[10px] text-muted-foreground">
         <div className="flex items-center gap-2">
           <span className="size-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
           <span>Engine Connected</span>
