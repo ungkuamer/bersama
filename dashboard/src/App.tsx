@@ -681,7 +681,7 @@ export default function App() {
   const getReadyIssuesCount = () => issues.filter(i => i.kind === 'implementation' && i.status === 'ready').length;
 
   return (
-    <div className="dashboard-shell relative min-h-screen text-[#d4d4d8] flex flex-col antialiased">
+    <div className="dashboard-shell relative min-h-screen text-foreground flex flex-col antialiased">
       {/* Top Banner Status Bar */}
       <header className="dashboard-glass-panel border-b px-6 py-4 flex flex-col md:flex-row md:items-center md:justify-between gap-4 sticky top-0 z-50">
         <div className="flex items-center gap-3">
@@ -689,7 +689,7 @@ export default function App() {
             B
           </div>
           <div>
-            <h1 className="text-sm font-bold text-white tracking-widest uppercase flex items-center gap-2">
+            <h1 className="text-sm font-bold text-foreground tracking-widest uppercase flex items-center gap-2">
               Bersama <span className="text-zinc-600">//</span> Agent Orchestration
             </h1>
             <p className="text-[10px] text-zinc-500 tracking-tight">Standalone Scaffold Dashboard</p>
@@ -706,7 +706,7 @@ export default function App() {
               <select 
                 value={selectedRepo} 
                 onChange={(e) => setSelectedRepo(e.target.value)}
-                className="dashboard-focus bg-transparent text-white focus:outline-none text-[11px] font-bold cursor-pointer pr-1 rounded"
+                className="dashboard-focus bg-transparent text-foreground focus:outline-none text-[11px] font-bold cursor-pointer pr-1 rounded"
               >
                 {repos.map(r => (
                   <option key={r.name} value={r.name} className="bg-zinc-950 text-white">{r.name}</option>
@@ -717,20 +717,20 @@ export default function App() {
 
           {/* Quick Metrics */}
           <div className="dashboard-glass-surface flex items-center gap-3 border rounded px-3 py-1 text-[11px]">
-            <div className="flex items-center gap-1.5 border-r border-zinc-800 pr-3">
+            <div className="flex items-center gap-1.5 border-r border-border pr-3">
               <span className="size-1.5 rounded-full bg-amber-500 animate-pulse"></span>
               <span className="text-zinc-400">ACTIVE RUNS:</span>
-              <span className="text-white font-bold">{getActiveRunsCount()}</span>
+              <span className="text-foreground font-bold">{getActiveRunsCount()}</span>
             </div>
-            <div className="flex items-center gap-1.5 border-r border-zinc-800 pr-3">
+            <div className="flex items-center gap-1.5 border-r border-border pr-3">
               <span className="size-1.5 rounded-full bg-blue-500"></span>
               <span className="text-zinc-400">READY ISSUES:</span>
-              <span className="text-white font-bold">{getReadyIssuesCount()}</span>
+              <span className="text-foreground font-bold">{getReadyIssuesCount()}</span>
             </div>
             <div className="flex items-center gap-1.5">
               <span className="size-1.5 rounded-full bg-red-500"></span>
               <span className="text-zinc-400">FAILED RUNS:</span>
-              <span className="text-white font-bold">{getFailedRunsCount()}</span>
+              <span className="text-foreground font-bold">{getFailedRunsCount()}</span>
             </div>
           </div>
 
