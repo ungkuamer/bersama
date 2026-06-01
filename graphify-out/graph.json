@@ -1429,7 +1429,7 @@
       "source_file": "src/bersama/integration.py",
       "source_location": "L54",
       "id": "bersama_integration_gitrunner",
-      "community": 114,
+      "community": 117,
       "norm_label": "gitrunner"
     },
     {
@@ -1438,7 +1438,7 @@
       "source_file": "",
       "source_location": "",
       "id": "protocol",
-      "community": 114,
+      "community": 117,
       "norm_label": "protocol"
     },
     {
@@ -1474,7 +1474,7 @@
       "source_file": "src/bersama/integration.py",
       "source_location": "L70",
       "id": "bersama_integration_integrationresult",
-      "community": 111,
+      "community": 3,
       "norm_label": "integrationresult"
     },
     {
@@ -1483,7 +1483,7 @@
       "source_file": "src/bersama/integration.py",
       "source_location": "L80",
       "id": "bersama_integration_integrationresult_succeeded",
-      "community": 114,
+      "community": 3,
       "norm_label": ".succeeded()"
     },
     {
@@ -1492,7 +1492,7 @@
       "source_file": "src/bersama/integration.py",
       "source_location": "L80",
       "id": "src_bersama_integration_py_bool",
-      "community": 114,
+      "community": 136,
       "norm_label": "bool"
     },
     {
@@ -1510,7 +1510,7 @@
       "source_file": "src/bersama/integration.py",
       "source_location": "L85",
       "id": "bersama_integration_integrationworkspacegateway_init",
-      "community": 114,
+      "community": 117,
       "norm_label": ".__init__()"
     },
     {
@@ -1519,7 +1519,7 @@
       "source_file": "src/bersama/integration.py",
       "source_location": "L85",
       "id": "src_bersama_integration_py_commandexecutor",
-      "community": 114,
+      "community": 117,
       "norm_label": "commandexecutor"
     },
     {
@@ -1582,7 +1582,7 @@
       "source_file": "src/bersama/integration.py",
       "source_location": "L255",
       "id": "bersama_integration_integrationworkspacegateway_run",
-      "community": 106,
+      "community": 112,
       "norm_label": "._run()"
     },
     {
@@ -1591,7 +1591,7 @@
       "source_file": "src/bersama/integration.py",
       "source_location": "L255",
       "id": "src_bersama_integration_py_commandphase",
-      "community": 114,
+      "community": 117,
       "norm_label": "commandphase"
     },
     {
@@ -1627,7 +1627,7 @@
       "source_file": "src/bersama/integration.py",
       "source_location": "L299",
       "id": "src_bersama_integration_py_githubissuerecord",
-      "community": 114,
+      "community": 117,
       "norm_label": "githubissuerecord"
     },
     {
@@ -1681,7 +1681,7 @@
       "source_file": "src/bersama/integration.py",
       "source_location": "L307",
       "id": "bersama_integration_all_checks_pass",
-      "community": 120,
+      "community": 136,
       "norm_label": "_all_checks_pass()"
     },
     {
@@ -1753,7 +1753,7 @@
       "source_file": "src/bersama/integration.py",
       "source_location": "L1059",
       "id": "bersama_integration_exc_to_failure_type",
-      "community": 112,
+      "community": 106,
       "norm_label": "_exc_to_failure_type()"
     },
     {
@@ -1762,7 +1762,7 @@
       "source_file": "src/bersama/integration.py",
       "source_location": "L1059",
       "id": "src_bersama_integration_py_exception",
-      "community": 114,
+      "community": 106,
       "norm_label": "exception"
     },
     {
@@ -1861,7 +1861,7 @@
       "source_file": "src/bersama/integration.py",
       "source_location": "L308",
       "id": "bersama_integration_rationale_308",
-      "community": 120,
+      "community": 136,
       "norm_label": "return true if all checks passed, false if any failed, none if still in progress"
     },
     {
@@ -1906,7 +1906,7 @@
       "source_file": "src/bersama/integration.py",
       "source_location": "L1060",
       "id": "bersama_integration_rationale_1060",
-      "community": 112,
+      "community": 106,
       "norm_label": "map an exception to a failure_type string."
     },
     {
@@ -1915,7 +1915,7 @@
       "source_file": "src/bersama/command_executor.py",
       "source_location": "L1",
       "id": "src_bersama_command_executor_py",
-      "community": 114,
+      "community": 104,
       "norm_label": "command_executor.py"
     },
     {
@@ -1924,7 +1924,7 @@
       "source_file": "src/bersama/command_executor.py",
       "source_location": "L21",
       "id": "bersama_command_executor_commandphase",
-      "community": 114,
+      "community": 117,
       "norm_label": "commandphase"
     },
     {
@@ -1951,7 +1951,7 @@
       "source_file": "src/bersama/command_executor.py",
       "source_location": "L43",
       "id": "bersama_command_executor_commandresult_succeeded",
-      "community": 104,
+      "community": 115,
       "norm_label": ".succeeded()"
     },
     {
@@ -1960,7 +1960,7 @@
       "source_file": "src/bersama/command_executor.py",
       "source_location": "L43",
       "id": "src_bersama_command_executor_py_bool",
-      "community": 104,
+      "community": 115,
       "norm_label": "bool"
     },
     {
@@ -1969,7 +1969,7 @@
       "source_file": "src/bersama/command_executor.py",
       "source_location": "L48",
       "id": "bersama_command_executor_commanderror",
-      "community": 114,
+      "community": 117,
       "norm_label": "commanderror"
     },
     {
@@ -1978,7 +1978,7 @@
       "source_file": "",
       "source_location": "",
       "id": "exception",
-      "community": 114,
+      "community": 106,
       "norm_label": "exception"
     },
     {
@@ -1996,7 +1996,7 @@
       "source_file": "src/bersama/command_executor.py",
       "source_location": "L67",
       "id": "bersama_command_executor_commandexecutor",
-      "community": 114,
+      "community": 104,
       "norm_label": "commandexecutor"
     },
     {
@@ -2095,7 +2095,7 @@
       "source_file": "src/bersama/command_executor.py",
       "source_location": "L337",
       "id": "bersama_command_executor_is_transient_failure",
-      "community": 104,
+      "community": 115,
       "norm_label": "_is_transient_failure()"
     },
     {
@@ -2104,7 +2104,7 @@
       "source_file": "src/bersama/command_executor.py",
       "source_location": "L1",
       "id": "bersama_command_executor_rationale_1",
-      "community": 114,
+      "community": 104,
       "norm_label": "command-execution abstraction for external orchestration commands.  classifies c"
     },
     {
@@ -2113,7 +2113,7 @@
       "source_file": "src/bersama/command_executor.py",
       "source_location": "L22",
       "id": "bersama_command_executor_rationale_22",
-      "community": 114,
+      "community": 117,
       "norm_label": "classification of a command's operational impact."
     },
     {
@@ -2131,7 +2131,7 @@
       "source_file": "src/bersama/command_executor.py",
       "source_location": "L44",
       "id": "bersama_command_executor_rationale_44",
-      "community": 104,
+      "community": 115,
       "norm_label": "true when the final attempt exited zero and did not time out."
     },
     {
@@ -2140,7 +2140,7 @@
       "source_file": "src/bersama/command_executor.py",
       "source_location": "L49",
       "id": "bersama_command_executor_rationale_49",
-      "community": 114,
+      "community": 117,
       "norm_label": "raised when a command fails after exhausting all retries."
     },
     {
@@ -2149,7 +2149,7 @@
       "source_file": "src/bersama/command_executor.py",
       "source_location": "L68",
       "id": "bersama_command_executor_rationale_68",
-      "community": 114,
+      "community": 104,
       "norm_label": "phase-aware command execution with timeout, retry, and jittered backoff.      di"
     },
     {
@@ -2194,7 +2194,7 @@
       "source_file": "src/bersama/command_executor.py",
       "source_location": "L338",
       "id": "bersama_command_executor_rationale_338",
-      "community": 104,
+      "community": 115,
       "norm_label": "heuristic check: is this failure likely transient (network, timeout)?"
     },
     {
@@ -2230,7 +2230,7 @@
       "source_file": "worktrees/issue-61/src/bersama/config.py",
       "source_location": "L14",
       "id": "bersama_config_harnessconfig",
-      "community": 111,
+      "community": 3,
       "norm_label": "harnessconfig"
     },
     {
@@ -2617,7 +2617,7 @@
       "source_file": "src/bersama/execution.py",
       "source_location": "L11",
       "id": "src_bersama_execution_py_githubissuerecord",
-      "community": 20,
+      "community": 1,
       "norm_label": "githubissuerecord"
     },
     {
@@ -2662,7 +2662,7 @@
       "source_file": "src/bersama/execution.py",
       "source_location": "L18",
       "id": "bersama_execution_executionresult",
-      "community": 111,
+      "community": 3,
       "norm_label": "executionresult"
     },
     {
@@ -2716,7 +2716,7 @@
       "source_file": "src/bersama/execution.py",
       "source_location": "L58",
       "id": "src_bersama_execution_py_appconfig",
-      "community": 20,
+      "community": 1,
       "norm_label": "appconfig"
     },
     {
@@ -2761,7 +2761,7 @@
       "source_file": "worktrees/issue-61/src/bersama/repo_lock.py",
       "source_location": "L35",
       "id": "bersama_repo_lock_repolock_acquire",
-      "community": 1,
+      "community": 120,
       "norm_label": ".acquire()"
     },
     {
@@ -2770,7 +2770,7 @@
       "source_file": "worktrees/issue-61/src/bersama/repo_lock.py",
       "source_location": "L35",
       "id": "worktrees_issue_61_src_bersama_repo_lock_py_bool",
-      "community": 1,
+      "community": 120,
       "norm_label": "bool"
     },
     {
@@ -2779,7 +2779,7 @@
       "source_file": "worktrees/issue-61/src/bersama/repo_lock.py",
       "source_location": "L35",
       "id": "worktrees_issue_61_src_bersama_repo_lock_py_float",
-      "community": 1,
+      "community": 120,
       "norm_label": "float"
     },
     {
@@ -2797,7 +2797,7 @@
       "source_file": "worktrees/issue-61/src/bersama/repo_lock.py",
       "source_location": "L83",
       "id": "bersama_repo_lock_repolock_locked",
-      "community": 1,
+      "community": 120,
       "norm_label": ".locked()"
     },
     {
@@ -2806,7 +2806,7 @@
       "source_file": "worktrees/issue-61/src/bersama/repo_lock.py",
       "source_location": "L89",
       "id": "bersama_repo_lock_repolock_enter",
-      "community": 1,
+      "community": 120,
       "norm_label": ".__enter__()"
     },
     {
@@ -2815,7 +2815,7 @@
       "source_file": "worktrees/issue-61/src/bersama/repo_lock.py",
       "source_location": "L89",
       "id": "self",
-      "community": 1,
+      "community": 120,
       "norm_label": "self"
     },
     {
@@ -2869,7 +2869,7 @@
       "source_file": "worktrees/issue-61/src/bersama/repo_lock.py",
       "source_location": "L36",
       "id": "bersama_repo_lock_rationale_36",
-      "community": 1,
+      "community": 120,
       "norm_label": "acquire the exclusive file lock.          args:             blocking: if ``true`"
     },
     {
@@ -2887,7 +2887,7 @@
       "source_file": "worktrees/issue-61/src/bersama/repo_lock.py",
       "source_location": "L84",
       "id": "bersama_repo_lock_rationale_84",
-      "community": 1,
+      "community": 120,
       "norm_label": "return ``true`` if the lock is currently held."
     },
     {
@@ -3031,7 +3031,7 @@
       "source_file": "src/bersama/issues.py",
       "source_location": "L105",
       "id": "bersama_issues_prdissue",
-      "community": 20,
+      "community": 1,
       "norm_label": "prdissue"
     },
     {
@@ -3184,7 +3184,7 @@
       "source_file": "src/bersama/github_issues.py",
       "source_location": "L16",
       "id": "bersama_github_issues_githubissuerecord",
-      "community": 20,
+      "community": 106,
       "norm_label": "githubissuerecord"
     },
     {
@@ -3256,7 +3256,7 @@
       "source_file": "src/bersama/github_issues.py",
       "source_location": "L40",
       "id": "src_bersama_github_issues_py_commandexecutor",
-      "community": 114,
+      "community": 14,
       "norm_label": "commandexecutor"
     },
     {
@@ -3274,7 +3274,7 @@
       "source_file": "src/bersama/github_issues.py",
       "source_location": "L51",
       "id": "src_bersama_github_issues_py_commandphase",
-      "community": 114,
+      "community": 104,
       "norm_label": "commandphase"
     },
     {
@@ -3292,7 +3292,7 @@
       "source_file": "src/bersama/github_issues.py",
       "source_location": "L70",
       "id": "src_bersama_github_issues_py_callable",
-      "community": 114,
+      "community": 104,
       "norm_label": "callable"
     },
     {
@@ -3382,7 +3382,7 @@
       "source_file": "src/bersama/github_issues.py",
       "source_location": "L222",
       "id": "src_bersama_github_issues_py_bool",
-      "community": 114,
+      "community": 104,
       "norm_label": "bool"
     },
     {
@@ -3409,7 +3409,7 @@
       "source_file": "src/bersama/github_issues.py",
       "source_location": "L245",
       "id": "src_bersama_github_issues_py_object",
-      "community": 114,
+      "community": 104,
       "norm_label": "object"
     },
     {
@@ -3481,7 +3481,7 @@
       "source_file": "src/bersama/claiming.py",
       "source_location": "L26",
       "id": "bersama_claiming_gitrunner",
-      "community": 114,
+      "community": 117,
       "norm_label": "gitrunner"
     },
     {
@@ -3490,7 +3490,7 @@
       "source_file": "src/bersama/claiming.py",
       "source_location": "L27",
       "id": "bersama_claiming_gitrunner_call",
-      "community": 114,
+      "community": 117,
       "norm_label": ".__call__()"
     },
     {
@@ -3517,7 +3517,7 @@
       "source_file": "src/bersama/claiming.py",
       "source_location": "L42",
       "id": "bersama_claiming_claimresult",
-      "community": 111,
+      "community": 3,
       "norm_label": "claimresult"
     },
     {
@@ -3526,7 +3526,7 @@
       "source_file": "src/bersama/claiming.py",
       "source_location": "L50",
       "id": "bersama_claiming_claimresult_succeeded",
-      "community": 0,
+      "community": 3,
       "norm_label": ".succeeded()"
     },
     {
@@ -3553,7 +3553,7 @@
       "source_file": "src/bersama/claiming.py",
       "source_location": "L55",
       "id": "bersama_claiming_claimworkspacegateway_init",
-      "community": 114,
+      "community": 117,
       "norm_label": ".__init__()"
     },
     {
@@ -3562,7 +3562,7 @@
       "source_file": "src/bersama/claiming.py",
       "source_location": "L55",
       "id": "src_bersama_claiming_py_commandexecutor",
-      "community": 114,
+      "community": 117,
       "norm_label": "commandexecutor"
     },
     {
@@ -3634,7 +3634,7 @@
       "source_file": "src/bersama/claiming.py",
       "source_location": "L151",
       "id": "bersama_claiming_implementationclaimservice_init",
-      "community": 114,
+      "community": 117,
       "norm_label": ".__init__()"
     },
     {
@@ -3643,7 +3643,7 @@
       "source_file": "src/bersama/claiming.py",
       "source_location": "L151",
       "id": "src_bersama_claiming_py_githubissuegateway",
-      "community": 114,
+      "community": 117,
       "norm_label": "githubissuegateway"
     },
     {
@@ -3652,7 +3652,7 @@
       "source_file": "src/bersama/claiming.py",
       "source_location": "L151",
       "id": "src_bersama_claiming_py_callable",
-      "community": 114,
+      "community": 117,
       "norm_label": "callable"
     },
     {
@@ -3913,7 +3913,7 @@
       "source_file": "src/bersama/scheduling_readiness.py",
       "source_location": "L1",
       "id": "src_bersama_scheduling_readiness_py",
-      "community": 90,
+      "community": 1,
       "norm_label": "scheduling_readiness.py"
     },
     {
@@ -3922,7 +3922,7 @@
       "source_file": "src/bersama/scheduling_readiness.py",
       "source_location": "L35",
       "id": "bersama_scheduling_readiness_readinesscheck",
-      "community": 90,
+      "community": 1,
       "norm_label": "readinesscheck"
     },
     {
@@ -3931,7 +3931,7 @@
       "source_file": "src/bersama/scheduling_readiness.py",
       "source_location": "L42",
       "id": "bersama_scheduling_readiness_checkprovidercontext",
-      "community": 90,
+      "community": 1,
       "norm_label": "checkprovidercontext"
     },
     {
@@ -3940,7 +3940,7 @@
       "source_file": "src/bersama/scheduling_readiness.py",
       "source_location": "L51",
       "id": "bersama_scheduling_readiness_readinesscheckprovider",
-      "community": 90,
+      "community": 1,
       "norm_label": "readinesscheckprovider"
     },
     {
@@ -3949,7 +3949,7 @@
       "source_file": "src/bersama/scheduling_readiness.py",
       "source_location": "L52",
       "id": "bersama_scheduling_readiness_readinesscheckprovider_evaluate",
-      "community": 90,
+      "community": 1,
       "norm_label": ".evaluate()"
     },
     {
@@ -3967,7 +3967,7 @@
       "source_file": "src/bersama/scheduling_readiness.py",
       "source_location": "L61",
       "id": "bersama_scheduling_readiness_schedulingreadinessprovider_post_init",
-      "community": 90,
+      "community": 1,
       "norm_label": ".__post_init__()"
     },
     {
@@ -3976,7 +3976,7 @@
       "source_file": "src/bersama/scheduling_readiness.py",
       "source_location": "L74",
       "id": "bersama_scheduling_readiness_schedulingreadinessprovider_build_snapshot",
-      "community": 90,
+      "community": 1,
       "norm_label": ".build_snapshot()"
     },
     {
@@ -3985,7 +3985,7 @@
       "source_file": "src/bersama/scheduling_readiness.py",
       "source_location": "L74",
       "id": "src_bersama_scheduling_readiness_py_str",
-      "community": 90,
+      "community": 1,
       "norm_label": "str"
     },
     {
@@ -3994,7 +3994,7 @@
       "source_file": "src/bersama/scheduling_readiness.py",
       "source_location": "L74",
       "id": "src_bersama_scheduling_readiness_py_object",
-      "community": 90,
+      "community": 1,
       "norm_label": "object"
     },
     {
@@ -4003,7 +4003,7 @@
       "source_file": "src/bersama/scheduling_readiness.py",
       "source_location": "L143",
       "id": "bersama_scheduling_readiness_schedulingreadinessprovider_evaluate_checks",
-      "community": 90,
+      "community": 1,
       "norm_label": "._evaluate_checks()"
     },
     {
@@ -4012,7 +4012,7 @@
       "source_file": "src/bersama/scheduling_readiness.py",
       "source_location": "L156",
       "id": "bersama_scheduling_readiness_configreadinesscheckprovider",
-      "community": 90,
+      "community": 1,
       "norm_label": "configreadinesscheckprovider"
     },
     {
@@ -4021,7 +4021,7 @@
       "source_file": "src/bersama/scheduling_readiness.py",
       "source_location": "L157",
       "id": "bersama_scheduling_readiness_configreadinesscheckprovider_evaluate",
-      "community": 90,
+      "community": 1,
       "norm_label": ".evaluate()"
     },
     {
@@ -4030,7 +4030,7 @@
       "source_file": "src/bersama/scheduling_readiness.py",
       "source_location": "L174",
       "id": "bersama_scheduling_readiness_repositoryreadinesscheckprovider",
-      "community": 90,
+      "community": 1,
       "norm_label": "repositoryreadinesscheckprovider"
     },
     {
@@ -4039,7 +4039,7 @@
       "source_file": "src/bersama/scheduling_readiness.py",
       "source_location": "L175",
       "id": "bersama_scheduling_readiness_repositoryreadinesscheckprovider_evaluate",
-      "community": 90,
+      "community": 1,
       "norm_label": ".evaluate()"
     },
     {
@@ -4048,7 +4048,7 @@
       "source_file": "src/bersama/scheduling_readiness.py",
       "source_location": "L284",
       "id": "bersama_scheduling_readiness_githubreadinesscheckprovider",
-      "community": 90,
+      "community": 1,
       "norm_label": "githubreadinesscheckprovider"
     },
     {
@@ -4057,7 +4057,7 @@
       "source_file": "src/bersama/scheduling_readiness.py",
       "source_location": "L285",
       "id": "bersama_scheduling_readiness_githubreadinesscheckprovider_evaluate",
-      "community": 90,
+      "community": 1,
       "norm_label": ".evaluate()"
     },
     {
@@ -4066,7 +4066,7 @@
       "source_file": "src/bersama/scheduling_readiness.py",
       "source_location": "L335",
       "id": "bersama_scheduling_readiness_harnessreadinesscheckprovider",
-      "community": 90,
+      "community": 1,
       "norm_label": "harnessreadinesscheckprovider"
     },
     {
@@ -4075,7 +4075,7 @@
       "source_file": "src/bersama/scheduling_readiness.py",
       "source_location": "L336",
       "id": "bersama_scheduling_readiness_harnessreadinesscheckprovider_evaluate",
-      "community": 90,
+      "community": 1,
       "norm_label": ".evaluate()"
     },
     {
@@ -4084,7 +4084,7 @@
       "source_file": "src/bersama/scheduling_readiness.py",
       "source_location": "L398",
       "id": "bersama_scheduling_readiness_serialize_repo",
-      "community": 90,
+      "community": 1,
       "norm_label": "_serialize_repo()"
     },
     {
@@ -4093,7 +4093,7 @@
       "source_file": "src/bersama/scheduling_readiness.py",
       "source_location": "L398",
       "id": "repoconfig",
-      "community": 90,
+      "community": 1,
       "norm_label": "repoconfig"
     },
     {
@@ -4102,7 +4102,7 @@
       "source_file": "src/bersama/scheduling_readiness.py",
       "source_location": "L414",
       "id": "bersama_scheduling_readiness_build_empty_implementation_issue_state",
-      "community": 90,
+      "community": 1,
       "norm_label": "_build_empty_implementation_issue_state()"
     },
     {
@@ -4111,7 +4111,7 @@
       "source_file": "src/bersama/scheduling_readiness.py",
       "source_location": "L435",
       "id": "bersama_scheduling_readiness_normalize_run_summary",
-      "community": 90,
+      "community": 1,
       "norm_label": "_normalize_run_summary()"
     },
     {
@@ -4120,7 +4120,7 @@
       "source_file": "src/bersama/scheduling_readiness.py",
       "source_location": "L435",
       "id": "src_bersama_scheduling_readiness_py_implementationissue",
-      "community": 90,
+      "community": 1,
       "norm_label": "implementationissue"
     },
     {
@@ -4129,7 +4129,7 @@
       "source_file": "src/bersama/scheduling_readiness.py",
       "source_location": "L445",
       "id": "bersama_scheduling_readiness_normalize_claim_summary",
-      "community": 90,
+      "community": 1,
       "norm_label": "_normalize_claim_summary()"
     },
     {
@@ -4138,7 +4138,7 @@
       "source_file": "src/bersama/scheduling_readiness.py",
       "source_location": "L453",
       "id": "bersama_scheduling_readiness_normalize_integration_summary",
-      "community": 90,
+      "community": 1,
       "norm_label": "_normalize_integration_summary()"
     },
     {
@@ -4147,7 +4147,7 @@
       "source_file": "src/bersama/scheduling_readiness.py",
       "source_location": "L460",
       "id": "bersama_scheduling_readiness_build_timeline_step",
-      "community": 90,
+      "community": 1,
       "norm_label": "_build_timeline_step()"
     },
     {
@@ -4156,7 +4156,7 @@
       "source_file": "src/bersama/scheduling_readiness.py",
       "source_location": "L477",
       "id": "bersama_scheduling_readiness_build_implementation_issue_timeline",
-      "community": 90,
+      "community": 1,
       "norm_label": "_build_implementation_issue_timeline()"
     },
     {
@@ -4174,7 +4174,7 @@
       "source_file": "src/bersama/scheduling_readiness.py",
       "source_location": "L607",
       "id": "bersama_scheduling_readiness_safe_repo_lookup",
-      "community": 90,
+      "community": 1,
       "norm_label": "_safe_repo_lookup()"
     },
     {
@@ -4183,7 +4183,7 @@
       "source_file": "src/bersama/scheduling_readiness.py",
       "source_location": "L607",
       "id": "src_bersama_scheduling_readiness_py_appconfig",
-      "community": 90,
+      "community": 1,
       "norm_label": "appconfig"
     },
     {
@@ -4201,7 +4201,7 @@
       "source_file": "src/bersama/scheduling_readiness.py",
       "source_location": "L614",
       "id": "bersama_scheduling_readiness_safe_harness_timeout",
-      "community": 90,
+      "community": 1,
       "norm_label": "_safe_harness_timeout()"
     },
     {
@@ -4210,7 +4210,7 @@
       "source_file": "src/bersama/scheduling_readiness.py",
       "source_location": "L614",
       "id": "src_bersama_scheduling_readiness_py_int",
-      "community": 90,
+      "community": 1,
       "norm_label": "int"
     },
     {
@@ -4219,7 +4219,7 @@
       "source_file": "src/bersama/scheduling_readiness.py",
       "source_location": "L623",
       "id": "bersama_scheduling_readiness_safe_harness_command",
-      "community": 90,
+      "community": 1,
       "norm_label": "_safe_harness_command()"
     },
     {
@@ -4228,7 +4228,7 @@
       "source_file": "src/bersama/scheduling_readiness.py",
       "source_location": "L632",
       "id": "bersama_scheduling_readiness_has_harness",
-      "community": 90,
+      "community": 1,
       "norm_label": "_has_harness()"
     },
     {
@@ -4237,7 +4237,7 @@
       "source_file": "src/bersama/scheduling_readiness.py",
       "source_location": "L632",
       "id": "src_bersama_scheduling_readiness_py_bool",
-      "community": 90,
+      "community": 1,
       "norm_label": "bool"
     },
     {
@@ -4246,7 +4246,7 @@
       "source_file": "src/bersama/scheduling_readiness.py",
       "source_location": "L642",
       "id": "bersama_scheduling_readiness_run_command",
-      "community": 90,
+      "community": 1,
       "norm_label": "_run_command()"
     },
     {
@@ -4255,7 +4255,7 @@
       "source_file": "src/bersama/scheduling_readiness.py",
       "source_location": "L642",
       "id": "src_bersama_scheduling_readiness_py_path",
-      "community": 90,
+      "community": 1,
       "norm_label": "path"
     },
     {
@@ -4273,7 +4273,7 @@
       "source_file": "src/bersama/scheduling_readiness.py",
       "source_location": "L652",
       "id": "bersama_scheduling_readiness_fetch_repo_labels",
-      "community": 90,
+      "community": 1,
       "norm_label": "_fetch_repo_labels()"
     },
     {
@@ -4282,7 +4282,7 @@
       "source_file": "src/bersama/scheduling_readiness.py",
       "source_location": "L662",
       "id": "bersama_scheduling_readiness_build_implementation_issue_state",
-      "community": 90,
+      "community": 1,
       "norm_label": "_build_implementation_issue_state()"
     },
     {
@@ -4291,7 +4291,7 @@
       "source_file": "src/bersama/scheduling_readiness.py",
       "source_location": "L853",
       "id": "bersama_scheduling_readiness_fetch_issue_records",
-      "community": 90,
+      "community": 1,
       "norm_label": "_fetch_issue_records()"
     },
     {
@@ -4300,7 +4300,7 @@
       "source_file": "src/bersama/scheduling_readiness.py",
       "source_location": "L888",
       "id": "bersama_scheduling_readiness_derive_observed_status",
-      "community": 90,
+      "community": 1,
       "norm_label": "_derive_observed_status()"
     },
     {
@@ -4309,7 +4309,7 @@
       "source_file": "src/bersama/scheduling_readiness.py",
       "source_location": "L919",
       "id": "bersama_scheduling_readiness_read_run_state",
-      "community": 90,
+      "community": 1,
       "norm_label": "_read_run_state()"
     },
     {
@@ -4318,7 +4318,7 @@
       "source_file": "src/bersama/scheduling_readiness.py",
       "source_location": "L928",
       "id": "bersama_scheduling_readiness_has_claim_metadata",
-      "community": 90,
+      "community": 1,
       "norm_label": "_has_claim_metadata()"
     },
     {
@@ -4327,7 +4327,7 @@
       "source_file": "src/bersama/scheduling_readiness.py",
       "source_location": "L939",
       "id": "bersama_scheduling_readiness_is_stale_claim",
-      "community": 90,
+      "community": 1,
       "norm_label": "_is_stale_claim()"
     },
     {
@@ -4336,7 +4336,7 @@
       "source_file": "src/bersama/scheduling_readiness.py",
       "source_location": "L950",
       "id": "bersama_scheduling_readiness_append_warning",
-      "community": 90,
+      "community": 1,
       "norm_label": "_append_warning()"
     },
     {
@@ -4345,7 +4345,7 @@
       "source_file": "src/bersama/scheduling_readiness.py",
       "source_location": "L977",
       "id": "bersama_scheduling_readiness_git_permission",
-      "community": 90,
+      "community": 1,
       "norm_label": "_git_permission()"
     },
     {
@@ -4354,7 +4354,7 @@
       "source_file": "src/bersama/scheduling_readiness.py",
       "source_location": "L993",
       "id": "bersama_scheduling_readiness_working_tree_dirty",
-      "community": 90,
+      "community": 1,
       "norm_label": "_working_tree_dirty()"
     },
     {
@@ -4363,7 +4363,7 @@
       "source_file": "src/bersama/prd_preparation.py",
       "source_location": "L1",
       "id": "src_bersama_prd_preparation_py",
-      "community": 130,
+      "community": 114,
       "norm_label": "prd_preparation.py"
     },
     {
@@ -4372,7 +4372,7 @@
       "source_file": "src/bersama/prd_preparation.py",
       "source_location": "L20",
       "id": "bersama_prd_preparation_branchpreparationerror",
-      "community": 130,
+      "community": 114,
       "norm_label": "branchpreparationerror"
     },
     {
@@ -4399,7 +4399,7 @@
       "source_file": "src/bersama/prd_preparation.py",
       "source_location": "L25",
       "id": "src_bersama_prd_preparation_py_str",
-      "community": 130,
+      "community": 114,
       "norm_label": "str"
     },
     {
@@ -4408,7 +4408,7 @@
       "source_file": "src/bersama/prd_preparation.py",
       "source_location": "L28",
       "id": "bersama_prd_preparation_run_git",
-      "community": 130,
+      "community": 114,
       "norm_label": "run_git()"
     },
     {
@@ -4417,7 +4417,7 @@
       "source_file": "src/bersama/prd_preparation.py",
       "source_location": "L40",
       "id": "bersama_prd_preparation_prdpreparationresult",
-      "community": 111,
+      "community": 3,
       "norm_label": "prdpreparationresult"
     },
     {
@@ -4426,7 +4426,7 @@
       "source_file": "src/bersama/prd_preparation.py",
       "source_location": "L48",
       "id": "bersama_prd_preparation_prdpreparationresult_succeeded",
-      "community": 130,
+      "community": 3,
       "norm_label": ".succeeded()"
     },
     {
@@ -4435,7 +4435,7 @@
       "source_file": "src/bersama/prd_preparation.py",
       "source_location": "L48",
       "id": "src_bersama_prd_preparation_py_bool",
-      "community": 130,
+      "community": 114,
       "norm_label": "bool"
     },
     {
@@ -4471,7 +4471,7 @@
       "source_file": "src/bersama/prd_preparation.py",
       "source_location": "L64",
       "id": "bersama_prd_preparation_gitworkspacegateway_ensure_remote_branch",
-      "community": 130,
+      "community": 114,
       "norm_label": ".ensure_remote_branch()"
     },
     {
@@ -4480,7 +4480,7 @@
       "source_file": "src/bersama/prd_preparation.py",
       "source_location": "L89",
       "id": "bersama_prd_preparation_gitworkspacegateway_remote_branch_exists",
-      "community": 130,
+      "community": 114,
       "norm_label": ".remote_branch_exists()"
     },
     {
@@ -4489,7 +4489,7 @@
       "source_file": "src/bersama/prd_preparation.py",
       "source_location": "L97",
       "id": "bersama_prd_preparation_gitworkspacegateway_run",
-      "community": 130,
+      "community": 114,
       "norm_label": "._run()"
     },
     {
@@ -4498,7 +4498,7 @@
       "source_file": "src/bersama/prd_preparation.py",
       "source_location": "L97",
       "id": "src_bersama_prd_preparation_py_commandphase",
-      "community": 130,
+      "community": 114,
       "norm_label": "commandphase"
     },
     {
@@ -4525,7 +4525,7 @@
       "source_file": "src/bersama/prd_preparation.py",
       "source_location": "L114",
       "id": "src_bersama_prd_preparation_py_githubissuegateway",
-      "community": 114,
+      "community": 117,
       "norm_label": "githubissuegateway"
     },
     {
@@ -4534,7 +4534,7 @@
       "source_file": "src/bersama/prd_preparation.py",
       "source_location": "L123",
       "id": "bersama_prd_preparation_prdpreparationservice_prepare_issue",
-      "community": 130,
+      "community": 114,
       "norm_label": ".prepare_issue()"
     },
     {
@@ -4543,7 +4543,7 @@
       "source_file": "src/bersama/prd_preparation.py",
       "source_location": "L123",
       "id": "src_bersama_prd_preparation_py_int",
-      "community": 130,
+      "community": 114,
       "norm_label": "int"
     },
     {
@@ -4552,7 +4552,7 @@
       "source_file": "src/bersama/prd_preparation.py",
       "source_location": "L179",
       "id": "bersama_prd_preparation_build_prd_branch_name",
-      "community": 130,
+      "community": 114,
       "norm_label": "build_prd_branch_name()"
     },
     {
@@ -4561,7 +4561,7 @@
       "source_file": "src/bersama/prd_preparation.py",
       "source_location": "L186",
       "id": "bersama_prd_preparation_upsert_prd_branch_metadata",
-      "community": 130,
+      "community": 114,
       "norm_label": "upsert_prd_branch_metadata()"
     },
     {
@@ -4570,7 +4570,7 @@
       "source_file": "src/bersama/prd_preparation.py",
       "source_location": "L21",
       "id": "bersama_prd_preparation_rationale_21",
-      "community": 130,
+      "community": 114,
       "norm_label": "raised when git branch setup fails."
     },
     {
@@ -4624,7 +4624,7 @@
       "source_file": "src/bersama/cli.py",
       "source_location": "L136",
       "id": "bersama_cli_main",
-      "community": 21,
+      "community": 90,
       "norm_label": "main()"
     },
     {
@@ -4903,7 +4903,7 @@
       "source_file": "src/bersama/orchestrator.py",
       "source_location": "L23",
       "id": "bersama_orchestrator_schedulerevent",
-      "community": 107,
+      "community": 1,
       "norm_label": "schedulerevent"
     },
     {
@@ -4984,7 +4984,7 @@
       "source_file": "src/bersama/orchestrator.py",
       "source_location": "L79",
       "id": "bersama_orchestrator_default_event_emitter",
-      "community": 107,
+      "community": 1,
       "norm_label": "_default_event_emitter()"
     },
     {
@@ -5011,7 +5011,7 @@
       "source_file": "src/bersama/orchestrator.py",
       "source_location": "L95",
       "id": "bersama_orchestrator_orchestrator",
-      "community": 2,
+      "community": 116,
       "norm_label": "orchestrator"
     },
     {
@@ -5056,7 +5056,7 @@
       "source_file": "src/bersama/orchestrator.py",
       "source_location": "L144",
       "id": "bersama_orchestrator_orchestrator_emit_scheduler_diagnostic",
-      "community": 107,
+      "community": 1,
       "norm_label": "._emit_scheduler_diagnostic()"
     },
     {
@@ -5074,7 +5074,7 @@
       "source_file": "src/bersama/orchestrator.py",
       "source_location": "L153",
       "id": "bersama_orchestrator_orchestrator_bind_repo_lock",
-      "community": 1,
+      "community": 116,
       "norm_label": "._bind_repo_lock()"
     },
     {
@@ -5083,7 +5083,7 @@
       "source_file": "src/bersama/orchestrator.py",
       "source_location": "L170",
       "id": "bersama_orchestrator_orchestrator_reconcile_start",
-      "community": 107,
+      "community": 1,
       "norm_label": ".reconcile_start()"
     },
     {
@@ -5119,7 +5119,7 @@
       "source_file": "src/bersama/orchestrator.py",
       "source_location": "L413",
       "id": "bersama_orchestrator_orchestrator_execute_claims",
-      "community": 1,
+      "community": 116,
       "norm_label": ".execute_claims()"
     },
     {
@@ -5128,7 +5128,7 @@
       "source_file": "src/bersama/orchestrator.py",
       "source_location": "L451",
       "id": "bersama_orchestrator_orchestrator_reconcile_end",
-      "community": 107,
+      "community": 1,
       "norm_label": ".reconcile_end()"
     },
     {
@@ -5137,7 +5137,7 @@
       "source_file": "src/bersama/orchestrator.py",
       "source_location": "L456",
       "id": "bersama_orchestrator_orchestrator_poll_pending_integrations",
-      "community": 107,
+      "community": 1,
       "norm_label": "._poll_pending_integrations()"
     },
     {
@@ -5146,7 +5146,7 @@
       "source_file": "src/bersama/orchestrator.py",
       "source_location": "L524",
       "id": "bersama_orchestrator_orchestrator_build_workflow",
-      "community": 1,
+      "community": 116,
       "norm_label": ".build_workflow()"
     },
     {
@@ -5155,7 +5155,7 @@
       "source_file": "src/bersama/orchestrator.py",
       "source_location": "L541",
       "id": "bersama_orchestrator_orchestrator_run",
-      "community": 1,
+      "community": 116,
       "norm_label": ".run()"
     },
     {
@@ -5173,7 +5173,7 @@
       "source_file": "src/bersama/orchestrator.py",
       "source_location": "L555",
       "id": "bersama_orchestrator_orchestrator_run_continuous",
-      "community": 1,
+      "community": 116,
       "norm_label": "._run_continuous()"
     },
     {
@@ -5182,7 +5182,7 @@
       "source_file": "src/bersama/orchestrator.py",
       "source_location": "L154",
       "id": "bersama_orchestrator_rationale_154",
-      "community": 1,
+      "community": 116,
       "norm_label": "create a system-wide repolock bound to *repo_path* and inject it         into th"
     },
     {
@@ -5200,7 +5200,7 @@
       "source_file": "src/bersama/orchestrator.py",
       "source_location": "L457",
       "id": "bersama_orchestrator_rationale_457",
-      "community": 107,
+      "community": 1,
       "norm_label": "poll integration prs whose status is ``pending_validation``.          called fro"
     },
     {
@@ -5209,7 +5209,7 @@
       "source_file": "src/bersama/orchestrator.py",
       "source_location": "L556",
       "id": "bersama_orchestrator_rationale_556",
-      "community": 1,
+      "community": 116,
       "norm_label": "continuous drain scheduling for dependency waves.          reconciliation runs a"
     },
     {
@@ -5233,16 +5233,16 @@
     {
       "label": "package.json",
       "file_type": "code",
-      "source_file": "worktrees/issue-61/dashboard/package.json",
+      "source_file": "dashboard/package.json",
       "source_location": "L1",
-      "id": "home_ungku_programming_bersama_worktrees_issue_61_dashboard_package_json",
+      "id": "dashboard_package_json",
       "community": 5,
       "norm_label": "package.json"
     },
     {
       "label": "name",
       "file_type": "code",
-      "source_file": "worktrees/issue-61/dashboard/package.json",
+      "source_file": "dashboard/package.json",
       "source_location": "L2",
       "id": "dashboard_package_name",
       "community": 5,
@@ -5251,7 +5251,7 @@
     {
       "label": "private",
       "file_type": "code",
-      "source_file": "worktrees/issue-61/dashboard/package.json",
+      "source_file": "dashboard/package.json",
       "source_location": "L3",
       "id": "dashboard_package_private",
       "community": 5,
@@ -5260,7 +5260,7 @@
     {
       "label": "version",
       "file_type": "code",
-      "source_file": "worktrees/issue-61/dashboard/package.json",
+      "source_file": "dashboard/package.json",
       "source_location": "L4",
       "id": "dashboard_package_version",
       "community": 5,
@@ -5269,7 +5269,7 @@
     {
       "label": "type",
       "file_type": "code",
-      "source_file": "worktrees/issue-61/dashboard/package.json",
+      "source_file": "dashboard/package.json",
       "source_location": "L5",
       "id": "dashboard_package_type",
       "community": 5,
@@ -5278,7 +5278,7 @@
     {
       "label": "scripts",
       "file_type": "code",
-      "source_file": "worktrees/issue-61/dashboard/package.json",
+      "source_file": "dashboard/package.json",
       "source_location": "L6",
       "id": "dashboard_package_scripts",
       "community": 5,
@@ -5287,7 +5287,7 @@
     {
       "label": "dev",
       "file_type": "code",
-      "source_file": "worktrees/issue-61/dashboard/package.json",
+      "source_file": "dashboard/package.json",
       "source_location": "L7",
       "id": "dashboard_package_scripts_dev",
       "community": 5,
@@ -5296,7 +5296,7 @@
     {
       "label": "build",
       "file_type": "code",
-      "source_file": "worktrees/issue-61/dashboard/package.json",
+      "source_file": "dashboard/package.json",
       "source_location": "L8",
       "id": "dashboard_package_scripts_build",
       "community": 5,
@@ -5305,7 +5305,7 @@
     {
       "label": "lint",
       "file_type": "code",
-      "source_file": "worktrees/issue-61/dashboard/package.json",
+      "source_file": "dashboard/package.json",
       "source_location": "L9",
       "id": "dashboard_package_scripts_lint",
       "community": 5,
@@ -5314,7 +5314,7 @@
     {
       "label": "preview",
       "file_type": "code",
-      "source_file": "worktrees/issue-61/dashboard/package.json",
+      "source_file": "dashboard/package.json",
       "source_location": "L10",
       "id": "dashboard_package_scripts_preview",
       "community": 5,
@@ -5323,7 +5323,7 @@
     {
       "label": "dependencies",
       "file_type": "code",
-      "source_file": "worktrees/issue-61/dashboard/package.json",
+      "source_file": "dashboard/package.json",
       "source_location": "L12",
       "id": "dashboard_package_dependencies",
       "community": 5,
@@ -5332,7 +5332,7 @@
     {
       "label": "@fontsource-variable/geist",
       "file_type": "code",
-      "source_file": "worktrees/issue-61/dashboard/package.json",
+      "source_file": "dashboard/package.json",
       "source_location": "L13",
       "id": "dashboard_package_dependencies_fontsource_variable_geist",
       "community": 5,
@@ -5341,7 +5341,7 @@
     {
       "label": "@fontsource-variable/geist-mono",
       "file_type": "code",
-      "source_file": "worktrees/issue-61/dashboard/package.json",
+      "source_file": "dashboard/package.json",
       "source_location": "L14",
       "id": "dashboard_package_dependencies_fontsource_variable_geist_mono",
       "community": 5,
@@ -5350,7 +5350,7 @@
     {
       "label": "@tailwindcss/vite",
       "file_type": "code",
-      "source_file": "worktrees/issue-61/dashboard/package.json",
+      "source_file": "dashboard/package.json",
       "source_location": "L15",
       "id": "dashboard_package_dependencies_tailwindcss_vite",
       "community": 5,
@@ -5359,7 +5359,7 @@
     {
       "label": "class-variance-authority",
       "file_type": "code",
-      "source_file": "worktrees/issue-61/dashboard/package.json",
+      "source_file": "dashboard/package.json",
       "source_location": "L16",
       "id": "dashboard_package_dependencies_class_variance_authority",
       "community": 5,
@@ -5368,7 +5368,7 @@
     {
       "label": "clsx",
       "file_type": "code",
-      "source_file": "worktrees/issue-61/dashboard/package.json",
+      "source_file": "dashboard/package.json",
       "source_location": "L17",
       "id": "dashboard_package_dependencies_clsx",
       "community": 5,
@@ -5377,7 +5377,7 @@
     {
       "label": "lucide-react",
       "file_type": "code",
-      "source_file": "worktrees/issue-61/dashboard/package.json",
+      "source_file": "dashboard/package.json",
       "source_location": "L18",
       "id": "dashboard_package_dependencies_lucide_react",
       "community": 5,
@@ -5386,7 +5386,7 @@
     {
       "label": "radix-ui",
       "file_type": "code",
-      "source_file": "worktrees/issue-61/dashboard/package.json",
+      "source_file": "dashboard/package.json",
       "source_location": "L19",
       "id": "dashboard_package_dependencies_radix_ui",
       "community": 5,
@@ -5395,7 +5395,7 @@
     {
       "label": "react",
       "file_type": "code",
-      "source_file": "worktrees/issue-61/dashboard/package.json",
+      "source_file": "dashboard/package.json",
       "source_location": "L20",
       "id": "dashboard_package_dependencies_react",
       "community": 5,
@@ -5404,7 +5404,7 @@
     {
       "label": "react-dom",
       "file_type": "code",
-      "source_file": "worktrees/issue-61/dashboard/package.json",
+      "source_file": "dashboard/package.json",
       "source_location": "L21",
       "id": "dashboard_package_dependencies_react_dom",
       "community": 5,
@@ -5413,7 +5413,7 @@
     {
       "label": "shadcn",
       "file_type": "code",
-      "source_file": "worktrees/issue-61/dashboard/package.json",
+      "source_file": "dashboard/package.json",
       "source_location": "L22",
       "id": "dashboard_package_dependencies_shadcn",
       "community": 5,
@@ -5422,7 +5422,7 @@
     {
       "label": "tailwind-merge",
       "file_type": "code",
-      "source_file": "worktrees/issue-61/dashboard/package.json",
+      "source_file": "dashboard/package.json",
       "source_location": "L23",
       "id": "dashboard_package_dependencies_tailwind_merge",
       "community": 5,
@@ -5431,7 +5431,7 @@
     {
       "label": "tailwindcss",
       "file_type": "code",
-      "source_file": "worktrees/issue-61/dashboard/package.json",
+      "source_file": "dashboard/package.json",
       "source_location": "L24",
       "id": "dashboard_package_dependencies_tailwindcss",
       "community": 5,
@@ -5440,7 +5440,7 @@
     {
       "label": "tw-animate-css",
       "file_type": "code",
-      "source_file": "worktrees/issue-61/dashboard/package.json",
+      "source_file": "dashboard/package.json",
       "source_location": "L25",
       "id": "dashboard_package_dependencies_tw_animate_css",
       "community": 5,
@@ -5449,7 +5449,7 @@
     {
       "label": "devDependencies",
       "file_type": "code",
-      "source_file": "worktrees/issue-61/dashboard/package.json",
+      "source_file": "dashboard/package.json",
       "source_location": "L27",
       "id": "dashboard_package_devdependencies",
       "community": 5,
@@ -5458,7 +5458,7 @@
     {
       "label": "@eslint/js",
       "file_type": "code",
-      "source_file": "worktrees/issue-61/dashboard/package.json",
+      "source_file": "dashboard/package.json",
       "source_location": "L28",
       "id": "dashboard_package_devdependencies_eslint_js",
       "community": 5,
@@ -5467,7 +5467,7 @@
     {
       "label": "@testing-library/dom",
       "file_type": "code",
-      "source_file": "worktrees/issue-61/dashboard/package.json",
+      "source_file": "dashboard/package.json",
       "source_location": "L29",
       "id": "dashboard_package_devdependencies_testing_library_dom",
       "community": 5,
@@ -5476,7 +5476,7 @@
     {
       "label": "@testing-library/jest-dom",
       "file_type": "code",
-      "source_file": "worktrees/issue-61/dashboard/package.json",
+      "source_file": "dashboard/package.json",
       "source_location": "L30",
       "id": "dashboard_package_devdependencies_testing_library_jest_dom",
       "community": 5,
@@ -5485,7 +5485,7 @@
     {
       "label": "@testing-library/react",
       "file_type": "code",
-      "source_file": "worktrees/issue-61/dashboard/package.json",
+      "source_file": "dashboard/package.json",
       "source_location": "L31",
       "id": "dashboard_package_devdependencies_testing_library_react",
       "community": 5,
@@ -5494,7 +5494,7 @@
     {
       "label": "@types/node",
       "file_type": "code",
-      "source_file": "worktrees/issue-61/dashboard/package.json",
+      "source_file": "dashboard/package.json",
       "source_location": "L32",
       "id": "dashboard_package_devdependencies_types_node",
       "community": 5,
@@ -5503,7 +5503,7 @@
     {
       "label": "@types/react",
       "file_type": "code",
-      "source_file": "worktrees/issue-61/dashboard/package.json",
+      "source_file": "dashboard/package.json",
       "source_location": "L33",
       "id": "dashboard_package_devdependencies_types_react",
       "community": 5,
@@ -5512,7 +5512,7 @@
     {
       "label": "@types/react-dom",
       "file_type": "code",
-      "source_file": "worktrees/issue-61/dashboard/package.json",
+      "source_file": "dashboard/package.json",
       "source_location": "L34",
       "id": "dashboard_package_devdependencies_types_react_dom",
       "community": 5,
@@ -5521,7 +5521,7 @@
     {
       "label": "@vitejs/plugin-react",
       "file_type": "code",
-      "source_file": "worktrees/issue-61/dashboard/package.json",
+      "source_file": "dashboard/package.json",
       "source_location": "L35",
       "id": "dashboard_package_devdependencies_vitejs_plugin_react",
       "community": 5,
@@ -5530,7 +5530,7 @@
     {
       "label": "eslint",
       "file_type": "code",
-      "source_file": "worktrees/issue-61/dashboard/package.json",
+      "source_file": "dashboard/package.json",
       "source_location": "L36",
       "id": "dashboard_package_devdependencies_eslint",
       "community": 5,
@@ -5539,7 +5539,7 @@
     {
       "label": "eslint-plugin-react-hooks",
       "file_type": "code",
-      "source_file": "worktrees/issue-61/dashboard/package.json",
+      "source_file": "dashboard/package.json",
       "source_location": "L37",
       "id": "dashboard_package_devdependencies_eslint_plugin_react_hooks",
       "community": 5,
@@ -5548,7 +5548,7 @@
     {
       "label": "eslint-plugin-react-refresh",
       "file_type": "code",
-      "source_file": "worktrees/issue-61/dashboard/package.json",
+      "source_file": "dashboard/package.json",
       "source_location": "L38",
       "id": "dashboard_package_devdependencies_eslint_plugin_react_refresh",
       "community": 5,
@@ -5557,7 +5557,7 @@
     {
       "label": "globals",
       "file_type": "code",
-      "source_file": "worktrees/issue-61/dashboard/package.json",
+      "source_file": "dashboard/package.json",
       "source_location": "L39",
       "id": "dashboard_package_devdependencies_globals",
       "community": 5,
@@ -5566,7 +5566,7 @@
     {
       "label": "jsdom",
       "file_type": "code",
-      "source_file": "worktrees/issue-61/dashboard/package.json",
+      "source_file": "dashboard/package.json",
       "source_location": "L40",
       "id": "dashboard_package_devdependencies_jsdom",
       "community": 5,
@@ -5575,7 +5575,7 @@
     {
       "label": "typescript",
       "file_type": "code",
-      "source_file": "worktrees/issue-61/dashboard/package.json",
+      "source_file": "dashboard/package.json",
       "source_location": "L41",
       "id": "dashboard_package_devdependencies_typescript",
       "community": 5,
@@ -5584,7 +5584,7 @@
     {
       "label": "typescript-eslint",
       "file_type": "code",
-      "source_file": "worktrees/issue-61/dashboard/package.json",
+      "source_file": "dashboard/package.json",
       "source_location": "L42",
       "id": "dashboard_package_devdependencies_typescript_eslint",
       "community": 5,
@@ -5593,7 +5593,7 @@
     {
       "label": "vite",
       "file_type": "code",
-      "source_file": "worktrees/issue-61/dashboard/package.json",
+      "source_file": "dashboard/package.json",
       "source_location": "L43",
       "id": "dashboard_package_devdependencies_vite",
       "community": 5,
@@ -5602,7 +5602,7 @@
     {
       "label": "vitest",
       "file_type": "code",
-      "source_file": "worktrees/issue-61/dashboard/package.json",
+      "source_file": "dashboard/package.json",
       "source_location": "L44",
       "id": "dashboard_package_devdependencies_vitest",
       "community": 5,
@@ -6215,7 +6215,7 @@
       "label": "Repo",
       "file_type": "code",
       "source_file": "dashboard/src/App.tsx",
-      "source_location": "L39",
+      "source_location": "L40",
       "id": "src_app_repo",
       "community": 6,
       "norm_label": "repo"
@@ -6224,7 +6224,7 @@
       "label": "Issue",
       "file_type": "code",
       "source_file": "dashboard/src/App.tsx",
-      "source_location": "L49",
+      "source_location": "L50",
       "id": "src_app_issue",
       "community": 6,
       "norm_label": "issue"
@@ -6233,7 +6233,7 @@
       "label": "RunState",
       "file_type": "code",
       "source_file": "dashboard/src/App.tsx",
-      "source_location": "L69",
+      "source_location": "L70",
       "id": "src_app_runstate",
       "community": 6,
       "norm_label": "runstate"
@@ -6242,7 +6242,7 @@
       "label": "LogTail",
       "file_type": "code",
       "source_file": "dashboard/src/App.tsx",
-      "source_location": "L81",
+      "source_location": "L82",
       "id": "src_app_logtail",
       "community": 6,
       "norm_label": "logtail"
@@ -6251,7 +6251,7 @@
       "label": "PrdPreparationState",
       "file_type": "code",
       "source_file": "dashboard/src/App.tsx",
-      "source_location": "L88",
+      "source_location": "L89",
       "id": "src_app_prdpreparationstate",
       "community": 6,
       "norm_label": "prdpreparationstate"
@@ -6260,7 +6260,7 @@
       "label": "ImplementationIntegrationState",
       "file_type": "code",
       "source_file": "dashboard/src/App.tsx",
-      "source_location": "L93",
+      "source_location": "L94",
       "id": "src_app_implementationintegrationstate",
       "community": 6,
       "norm_label": "implementationintegrationstate"
@@ -6269,7 +6269,7 @@
       "label": "ImplementationClaimState",
       "file_type": "code",
       "source_file": "dashboard/src/App.tsx",
-      "source_location": "L98",
+      "source_location": "L99",
       "id": "src_app_implementationclaimstate",
       "community": 6,
       "norm_label": "implementationclaimstate"
@@ -6278,7 +6278,7 @@
       "label": "ImplementationStartState",
       "file_type": "code",
       "source_file": "dashboard/src/App.tsx",
-      "source_location": "L103",
+      "source_location": "L104",
       "id": "src_app_implementationstartstate",
       "community": 6,
       "norm_label": "implementationstartstate"
@@ -6287,7 +6287,7 @@
       "label": "PrdPreparationResponse",
       "file_type": "code",
       "source_file": "dashboard/src/App.tsx",
-      "source_location": "L108",
+      "source_location": "L109",
       "id": "src_app_prdpreparationresponse",
       "community": 6,
       "norm_label": "prdpreparationresponse"
@@ -6296,7 +6296,7 @@
       "label": "ImplementationIntegrationResponse",
       "file_type": "code",
       "source_file": "dashboard/src/App.tsx",
-      "source_location": "L112",
+      "source_location": "L113",
       "id": "src_app_implementationintegrationresponse",
       "community": 6,
       "norm_label": "implementationintegrationresponse"
@@ -6305,7 +6305,7 @@
       "label": "ImplementationClaimResponse",
       "file_type": "code",
       "source_file": "dashboard/src/App.tsx",
-      "source_location": "L116",
+      "source_location": "L117",
       "id": "src_app_implementationclaimresponse",
       "community": 6,
       "norm_label": "implementationclaimresponse"
@@ -6314,7 +6314,7 @@
       "label": "ImplementationStartResponse",
       "file_type": "code",
       "source_file": "dashboard/src/App.tsx",
-      "source_location": "L120",
+      "source_location": "L121",
       "id": "src_app_implementationstartresponse",
       "community": 6,
       "norm_label": "implementationstartresponse"
@@ -6323,7 +6323,7 @@
       "label": "messageFromError()",
       "file_type": "code",
       "source_file": "dashboard/src/App.tsx",
-      "source_location": "L124",
+      "source_location": "L125",
       "id": "src_app_messagefromerror",
       "community": 6,
       "norm_label": "messagefromerror()"
@@ -6332,7 +6332,7 @@
       "label": "detailFromResponse()",
       "file_type": "code",
       "source_file": "dashboard/src/App.tsx",
-      "source_location": "L128",
+      "source_location": "L129",
       "id": "src_app_detailfromresponse",
       "community": 6,
       "norm_label": "detailfromresponse()"
@@ -6341,7 +6341,7 @@
       "label": "isNearBottom()",
       "file_type": "code",
       "source_file": "dashboard/src/App.tsx",
-      "source_location": "L139",
+      "source_location": "L140",
       "id": "src_app_isnearbottom",
       "community": 6,
       "norm_label": "isnearbottom()"
@@ -6350,7 +6350,7 @@
       "label": "buildAgentRunId()",
       "file_type": "code",
       "source_file": "dashboard/src/App.tsx",
-      "source_location": "L143",
+      "source_location": "L144",
       "id": "src_app_buildagentrunid",
       "community": 6,
       "norm_label": "buildagentrunid()"
@@ -6359,7 +6359,7 @@
       "label": "App()",
       "file_type": "code",
       "source_file": "dashboard/src/App.tsx",
-      "source_location": "L147",
+      "source_location": "L148",
       "id": "src_app_app",
       "community": 6,
       "norm_label": "app()"
@@ -6615,6 +6615,42 @@
       "id": "components_sidedrawer_sidedrawer",
       "community": 96,
       "norm_label": "sidedrawer()"
+    },
+    {
+      "label": "Sidebar.tsx",
+      "file_type": "code",
+      "source_file": "dashboard/src/components/Sidebar.tsx",
+      "source_location": "L1",
+      "id": "dashboard_src_components_sidebar_tsx",
+      "community": 137,
+      "norm_label": "sidebar.tsx"
+    },
+    {
+      "label": "Repo",
+      "file_type": "code",
+      "source_file": "dashboard/src/components/Sidebar.tsx",
+      "source_location": "L12",
+      "id": "components_sidebar_repo",
+      "community": 137,
+      "norm_label": "repo"
+    },
+    {
+      "label": "SidebarProps",
+      "file_type": "code",
+      "source_file": "dashboard/src/components/Sidebar.tsx",
+      "source_location": "L22",
+      "id": "components_sidebar_sidebarprops",
+      "community": 137,
+      "norm_label": "sidebarprops"
+    },
+    {
+      "label": "Sidebar()",
+      "file_type": "code",
+      "source_file": "dashboard/src/components/Sidebar.tsx",
+      "source_location": "L32",
+      "id": "components_sidebar_sidebar",
+      "community": 137,
+      "norm_label": "sidebar()"
     },
     {
       "label": "DependencyPipeline.test.tsx",
@@ -7081,7 +7117,7 @@
       "source_file": "tests/test_github_issues.py",
       "source_location": "L10",
       "id": "tests_test_github_issues_py_str",
-      "community": 29,
+      "community": 117,
       "norm_label": "str"
     },
     {
@@ -7099,7 +7135,7 @@
       "source_file": "tests/test_github_issues.py",
       "source_location": "L21",
       "id": "tests_test_github_issues_stubexecutor",
-      "community": 29,
+      "community": 117,
       "norm_label": "stubexecutor"
     },
     {
@@ -7108,7 +7144,7 @@
       "source_file": "tests/test_github_issues.py",
       "source_location": "L22",
       "id": "tests_test_github_issues_stubexecutor_init",
-      "community": 29,
+      "community": 117,
       "norm_label": ".__init__()"
     },
     {
@@ -7117,7 +7153,7 @@
       "source_file": "tests/test_github_issues.py",
       "source_location": "L22",
       "id": "tests_test_github_issues_py_commandresult",
-      "community": 29,
+      "community": 117,
       "norm_label": "commandresult"
     },
     {
@@ -7126,7 +7162,7 @@
       "source_file": "tests/test_github_issues.py",
       "source_location": "L26",
       "id": "tests_test_github_issues_stubexecutor_execute",
-      "community": 29,
+      "community": 117,
       "norm_label": ".execute()"
     },
     {
@@ -7135,7 +7171,7 @@
       "source_file": "tests/test_github_issues.py",
       "source_location": "L26",
       "id": "tests_test_github_issues_py_commandphase",
-      "community": 29,
+      "community": 117,
       "norm_label": "commandphase"
     },
     {
@@ -7144,7 +7180,7 @@
       "source_file": "tests/test_github_issues.py",
       "source_location": "L26",
       "id": "tests_test_github_issues_py_float",
-      "community": 29,
+      "community": 117,
       "norm_label": "float"
     },
     {
@@ -7153,7 +7189,7 @@
       "source_file": "tests/test_github_issues.py",
       "source_location": "L26",
       "id": "tests_test_github_issues_py_int",
-      "community": 29,
+      "community": 117,
       "norm_label": "int"
     },
     {
@@ -7162,7 +7198,7 @@
       "source_file": "tests/test_github_issues.py",
       "source_location": "L44",
       "id": "tests_test_github_issues_command_result",
-      "community": 29,
+      "community": 117,
       "norm_label": "_command_result()"
     },
     {
@@ -7171,7 +7207,7 @@
       "source_file": "tests/test_github_issues.py",
       "source_location": "L44",
       "id": "tests_test_github_issues_py_bool",
-      "community": 29,
+      "community": 117,
       "norm_label": "bool"
     },
     {
@@ -7288,7 +7324,7 @@
       "source_file": "tests/test_github_issues.py",
       "source_location": "L370",
       "id": "tests_test_github_issues_test_discovery_timeout_raises_without_mutation_fallback",
-      "community": 29,
+      "community": 117,
       "norm_label": "test_discovery_timeout_raises_without_mutation_fallback()"
     },
     {
@@ -7297,7 +7333,7 @@
       "source_file": "tests/test_github_issues.py",
       "source_location": "L397",
       "id": "tests_test_github_issues_test_mutation_timeout_with_read_back_success_treats_add_labels_as_succeeded",
-      "community": 29,
+      "community": 117,
       "norm_label": "test_mutation_timeout_with_read_back_success_treats_add_labels_as_succeeded()"
     },
     {
@@ -7306,7 +7342,7 @@
       "source_file": "tests/test_github_issues.py",
       "source_location": "L439",
       "id": "tests_test_github_issues_test_mutation_timeout_with_read_back_failure_surfaces_ambiguity_diagnostics",
-      "community": 29,
+      "community": 117,
       "norm_label": "test_mutation_timeout_with_read_back_failure_surfaces_ambiguity_diagnostics()"
     },
     {
@@ -7315,7 +7351,7 @@
       "source_file": "tests/test_github_issues.py",
       "source_location": "L485",
       "id": "tests_test_github_issues_test_non_retryable_mutation_failure_raises_without_read_back",
-      "community": 29,
+      "community": 117,
       "norm_label": "test_non_retryable_mutation_failure_raises_without_read_back()"
     },
     {
@@ -7414,7 +7450,7 @@
       "source_file": "tests/test_prd_preparation.py",
       "source_location": "L18",
       "id": "tests_test_prd_preparation_py_int",
-      "community": 1,
+      "community": 118,
       "norm_label": "int"
     },
     {
@@ -7936,7 +7972,7 @@
       "source_file": "tests/test_dashboard.py",
       "source_location": "L18",
       "id": "tests_test_dashboard_fakereconciliationservice",
-      "community": 111,
+      "community": 3,
       "norm_label": "fakereconciliationservice"
     },
     {
@@ -7945,7 +7981,7 @@
       "source_file": "tests/test_dashboard.py",
       "source_location": "L19",
       "id": "tests_test_dashboard_fakereconciliationservice_init",
-      "community": 111,
+      "community": 3,
       "norm_label": ".__init__()"
     },
     {
@@ -7954,7 +7990,7 @@
       "source_file": "tests/test_dashboard.py",
       "source_location": "L22",
       "id": "tests_test_dashboard_fakereconciliationservice_reconcile",
-      "community": 111,
+      "community": 3,
       "norm_label": ".reconcile()"
     },
     {
@@ -7963,7 +7999,7 @@
       "source_file": "tests/test_dashboard.py",
       "source_location": "L26",
       "id": "tests_test_dashboard_fakeprdpreparationservice",
-      "community": 111,
+      "community": 3,
       "norm_label": "fakeprdpreparationservice"
     },
     {
@@ -7972,7 +8008,7 @@
       "source_file": "tests/test_dashboard.py",
       "source_location": "L27",
       "id": "tests_test_dashboard_fakeprdpreparationservice_init",
-      "community": 111,
+      "community": 3,
       "norm_label": ".__init__()"
     },
     {
@@ -7981,7 +8017,7 @@
       "source_file": "tests/test_dashboard.py",
       "source_location": "L27",
       "id": "prdpreparationresult",
-      "community": 111,
+      "community": 3,
       "norm_label": "prdpreparationresult"
     },
     {
@@ -7990,7 +8026,7 @@
       "source_file": "tests/test_dashboard.py",
       "source_location": "L31",
       "id": "tests_test_dashboard_fakeprdpreparationservice_prepare_issue",
-      "community": 111,
+      "community": 3,
       "norm_label": ".prepare_issue()"
     },
     {
@@ -7999,7 +8035,7 @@
       "source_file": "tests/test_dashboard.py",
       "source_location": "L31",
       "id": "tests_test_dashboard_py_str",
-      "community": 111,
+      "community": 3,
       "norm_label": "str"
     },
     {
@@ -8008,7 +8044,7 @@
       "source_file": "tests/test_dashboard.py",
       "source_location": "L31",
       "id": "tests_test_dashboard_py_int",
-      "community": 111,
+      "community": 3,
       "norm_label": "int"
     },
     {
@@ -8017,7 +8053,7 @@
       "source_file": "tests/test_dashboard.py",
       "source_location": "L38",
       "id": "tests_test_dashboard_fakeimplementationclaimservice",
-      "community": 111,
+      "community": 3,
       "norm_label": "fakeimplementationclaimservice"
     },
     {
@@ -8026,7 +8062,7 @@
       "source_file": "tests/test_dashboard.py",
       "source_location": "L39",
       "id": "tests_test_dashboard_fakeimplementationclaimservice_init",
-      "community": 111,
+      "community": 3,
       "norm_label": ".__init__()"
     },
     {
@@ -8035,7 +8071,7 @@
       "source_file": "tests/test_dashboard.py",
       "source_location": "L39",
       "id": "claimresult",
-      "community": 111,
+      "community": 3,
       "norm_label": "claimresult"
     },
     {
@@ -8044,7 +8080,7 @@
       "source_file": "tests/test_dashboard.py",
       "source_location": "L43",
       "id": "tests_test_dashboard_fakeimplementationclaimservice_claim_issue",
-      "community": 111,
+      "community": 3,
       "norm_label": ".claim_issue()"
     },
     {
@@ -8053,7 +8089,7 @@
       "source_file": "tests/test_dashboard.py",
       "source_location": "L55",
       "id": "tests_test_dashboard_fakeexecutionservice",
-      "community": 111,
+      "community": 3,
       "norm_label": "fakeexecutionservice"
     },
     {
@@ -8062,7 +8098,7 @@
       "source_file": "tests/test_dashboard.py",
       "source_location": "L56",
       "id": "tests_test_dashboard_fakeexecutionservice_init",
-      "community": 111,
+      "community": 3,
       "norm_label": ".__init__()"
     },
     {
@@ -8071,7 +8107,7 @@
       "source_file": "tests/test_dashboard.py",
       "source_location": "L56",
       "id": "executionresult",
-      "community": 111,
+      "community": 3,
       "norm_label": "executionresult"
     },
     {
@@ -8080,7 +8116,7 @@
       "source_file": "tests/test_dashboard.py",
       "source_location": "L67",
       "id": "tests_test_dashboard_fakeexecutionservice_execute_run",
-      "community": 111,
+      "community": 3,
       "norm_label": ".execute_run()"
     },
     {
@@ -8098,7 +8134,7 @@
       "source_file": "tests/test_dashboard.py",
       "source_location": "L75",
       "id": "tests_test_dashboard_fakeintegrationservice",
-      "community": 111,
+      "community": 3,
       "norm_label": "fakeintegrationservice"
     },
     {
@@ -8107,7 +8143,7 @@
       "source_file": "tests/test_dashboard.py",
       "source_location": "L76",
       "id": "tests_test_dashboard_fakeintegrationservice_init",
-      "community": 111,
+      "community": 3,
       "norm_label": ".__init__()"
     },
     {
@@ -8116,7 +8152,7 @@
       "source_file": "tests/test_dashboard.py",
       "source_location": "L76",
       "id": "integrationresult",
-      "community": 111,
+      "community": 3,
       "norm_label": "integrationresult"
     },
     {
@@ -8125,7 +8161,7 @@
       "source_file": "tests/test_dashboard.py",
       "source_location": "L80",
       "id": "tests_test_dashboard_fakeintegrationservice_integrate_issue",
-      "community": 111,
+      "community": 3,
       "norm_label": ".integrate_issue()"
     },
     {
@@ -8134,7 +8170,7 @@
       "source_file": "tests/test_dashboard.py",
       "source_location": "L87",
       "id": "tests_test_dashboard_fakereconciliationrunner",
-      "community": 111,
+      "community": 3,
       "norm_label": "fakereconciliationrunner"
     },
     {
@@ -8143,7 +8179,7 @@
       "source_file": "tests/test_dashboard.py",
       "source_location": "L88",
       "id": "tests_test_dashboard_fakereconciliationrunner_init",
-      "community": 111,
+      "community": 3,
       "norm_label": ".__init__()"
     },
     {
@@ -8152,7 +8188,7 @@
       "source_file": "tests/test_dashboard.py",
       "source_location": "L91",
       "id": "tests_test_dashboard_fakereconciliationrunner_reconcile",
-      "community": 111,
+      "community": 3,
       "norm_label": ".reconcile()"
     },
     {
@@ -8161,7 +8197,7 @@
       "source_file": "tests/test_dashboard.py",
       "source_location": "L95",
       "id": "tests_test_dashboard_fakeissuegateway",
-      "community": 111,
+      "community": 3,
       "norm_label": "fakeissuegateway"
     },
     {
@@ -8170,7 +8206,7 @@
       "source_file": "tests/test_dashboard.py",
       "source_location": "L96",
       "id": "tests_test_dashboard_fakeissuegateway_init",
-      "community": 111,
+      "community": 3,
       "norm_label": ".__init__()"
     },
     {
@@ -8188,7 +8224,7 @@
       "source_file": "tests/test_dashboard.py",
       "source_location": "L99",
       "id": "tests_test_dashboard_fakeissuegateway_view_issue",
-      "community": 111,
+      "community": 3,
       "norm_label": ".view_issue()"
     },
     {
@@ -8197,7 +8233,7 @@
       "source_file": "tests/test_dashboard.py",
       "source_location": "L103",
       "id": "tests_test_dashboard_fakeschedulingreadinessprovider",
-      "community": 111,
+      "community": 3,
       "norm_label": "fakeschedulingreadinessprovider"
     },
     {
@@ -8206,7 +8242,7 @@
       "source_file": "tests/test_dashboard.py",
       "source_location": "L104",
       "id": "tests_test_dashboard_fakeschedulingreadinessprovider_init",
-      "community": 111,
+      "community": 3,
       "norm_label": ".__init__()"
     },
     {
@@ -8215,7 +8251,7 @@
       "source_file": "tests/test_dashboard.py",
       "source_location": "L104",
       "id": "tests_test_dashboard_py_object",
-      "community": 111,
+      "community": 3,
       "norm_label": "object"
     },
     {
@@ -8224,7 +8260,7 @@
       "source_file": "tests/test_dashboard.py",
       "source_location": "L108",
       "id": "tests_test_dashboard_fakeschedulingreadinessprovider_build_snapshot",
-      "community": 111,
+      "community": 3,
       "norm_label": ".build_snapshot()"
     },
     {
@@ -9799,7 +9835,7 @@
       "source_file": "tests/test_command_executor.py",
       "source_location": "L216",
       "id": "tests_test_command_executor_testnonretryablefailure",
-      "community": 115,
+      "community": 121,
       "norm_label": "testnonretryablefailure"
     },
     {
@@ -9808,7 +9844,7 @@
       "source_file": "tests/test_command_executor.py",
       "source_location": "L217",
       "id": "tests_test_command_executor_testnonretryablefailure_test_discovery_non_transient_not_retried",
-      "community": 115,
+      "community": 121,
       "norm_label": ".test_discovery_non_transient_not_retried()"
     },
     {
@@ -9817,7 +9853,7 @@
       "source_file": "tests/test_command_executor.py",
       "source_location": "L225",
       "id": "tests_test_command_executor_testnonretryablefailure_test_mutation_non_transient_no_retry",
-      "community": 115,
+      "community": 121,
       "norm_label": ".test_mutation_non_transient_no_retry()"
     },
     {
@@ -9826,7 +9862,7 @@
       "source_file": "tests/test_command_executor.py",
       "source_location": "L235",
       "id": "tests_test_command_executor_testnonretryablefailure_test_mutation_safety_check_blocks_retry",
-      "community": 115,
+      "community": 121,
       "norm_label": ".test_mutation_safety_check_blocks_retry()"
     },
     {
@@ -9889,7 +9925,7 @@
       "source_file": "tests/test_command_executor.py",
       "source_location": "L383",
       "id": "tests_test_command_executor_testcommanderror",
-      "community": 114,
+      "community": 117,
       "norm_label": "testcommanderror"
     },
     {
@@ -9898,7 +9934,7 @@
       "source_file": "tests/test_command_executor.py",
       "source_location": "L384",
       "id": "tests_test_command_executor_testcommanderror_test_command_error_includes_diagnostics",
-      "community": 114,
+      "community": 117,
       "norm_label": ".test_command_error_includes_diagnostics()"
     },
     {
@@ -9907,7 +9943,7 @@
       "source_file": "tests/test_command_executor.py",
       "source_location": "L397",
       "id": "tests_test_command_executor_testcommanderror_test_command_error_timed_out",
-      "community": 114,
+      "community": 117,
       "norm_label": ".test_command_error_timed_out()"
     },
     {
@@ -9916,7 +9952,7 @@
       "source_file": "tests/test_command_executor.py",
       "source_location": "L407",
       "id": "tests_test_command_executor_testistransientfailure",
-      "community": 104,
+      "community": 115,
       "norm_label": "testistransientfailure"
     },
     {
@@ -9925,7 +9961,7 @@
       "source_file": "tests/test_command_executor.py",
       "source_location": "L408",
       "id": "tests_test_command_executor_testistransientfailure_test_timed_out_is_transient",
-      "community": 104,
+      "community": 115,
       "norm_label": ".test_timed_out_is_transient()"
     },
     {
@@ -9934,7 +9970,7 @@
       "source_file": "tests/test_command_executor.py",
       "source_location": "L412",
       "id": "tests_test_command_executor_testistransientfailure_test_network_patterns_are_transient",
-      "community": 104,
+      "community": 115,
       "norm_label": ".test_network_patterns_are_transient()"
     },
     {
@@ -9943,7 +9979,7 @@
       "source_file": "tests/test_command_executor.py",
       "source_location": "L423",
       "id": "tests_test_command_executor_testistransientfailure_test_non_network_exit_is_not_transient",
-      "community": 104,
+      "community": 115,
       "norm_label": ".test_non_network_exit_is_not_transient()"
     },
     {
@@ -9952,7 +9988,7 @@
       "source_file": "tests/test_command_executor.py",
       "source_location": "L427",
       "id": "tests_test_command_executor_testistransientfailure_test_empty_stderr_not_transient",
-      "community": 104,
+      "community": 115,
       "norm_label": ".test_empty_stderr_not_transient()"
     },
     {
@@ -9961,7 +9997,7 @@
       "source_file": "tests/test_command_executor.py",
       "source_location": "L436",
       "id": "tests_test_command_executor_testsubprocesserror",
-      "community": 114,
+      "community": 104,
       "norm_label": "testsubprocesserror"
     },
     {
@@ -9970,7 +10006,7 @@
       "source_file": "tests/test_command_executor.py",
       "source_location": "L437",
       "id": "tests_test_command_executor_testsubprocesserror_test_file_not_found",
-      "community": 114,
+      "community": 104,
       "norm_label": ".test_file_not_found()"
     },
     {
@@ -10051,7 +10087,7 @@
       "source_file": "tests/test_command_executor.py",
       "source_location": "L236",
       "id": "tests_test_command_executor_rationale_236",
-      "community": 115,
+      "community": 121,
       "norm_label": "even on a transient-looking failure, safety check can block retry."
     },
     {
@@ -10087,7 +10123,7 @@
       "source_file": "tests/test_orchestrator.py",
       "source_location": "L17",
       "id": "tests_test_orchestrator_fakeexecutor",
-      "community": 2,
+      "community": 122,
       "norm_label": "fakeexecutor"
     },
     {
@@ -10096,7 +10132,7 @@
       "source_file": "tests/test_orchestrator.py",
       "source_location": "L20",
       "id": "tests_test_orchestrator_fakeexecutor_init",
-      "community": 2,
+      "community": 122,
       "norm_label": ".__init__()"
     },
     {
@@ -10105,7 +10141,7 @@
       "source_file": "tests/test_orchestrator.py",
       "source_location": "L24",
       "id": "tests_test_orchestrator_fakeexecutor_submit",
-      "community": 2,
+      "community": 122,
       "norm_label": ".submit()"
     },
     {
@@ -10132,7 +10168,7 @@
       "source_file": "tests/test_orchestrator.py",
       "source_location": "L35",
       "id": "tests_test_orchestrator_raisingfutureexecutor",
-      "community": 107,
+      "community": 123,
       "norm_label": "raisingfutureexecutor"
     },
     {
@@ -10141,7 +10177,7 @@
       "source_file": "tests/test_orchestrator.py",
       "source_location": "L38",
       "id": "tests_test_orchestrator_raisingfutureexecutor_init",
-      "community": 107,
+      "community": 123,
       "norm_label": ".__init__()"
     },
     {
@@ -10150,7 +10186,7 @@
       "source_file": "tests/test_orchestrator.py",
       "source_location": "L38",
       "id": "tests_test_orchestrator_py_exception",
-      "community": 111,
+      "community": 123,
       "norm_label": "exception"
     },
     {
@@ -10159,7 +10195,7 @@
       "source_file": "tests/test_orchestrator.py",
       "source_location": "L42",
       "id": "tests_test_orchestrator_raisingfutureexecutor_submit",
-      "community": 107,
+      "community": 123,
       "norm_label": ".submit()"
     },
     {
@@ -10177,7 +10213,7 @@
       "source_file": "tests/test_orchestrator.py",
       "source_location": "L52",
       "id": "tests_test_orchestrator_passbasedlistissuesmock",
-      "community": 107,
+      "community": 111,
       "norm_label": "passbasedlistissuesmock"
     },
     {
@@ -10186,7 +10222,7 @@
       "source_file": "tests/test_orchestrator.py",
       "source_location": "L56",
       "id": "tests_test_orchestrator_passbasedlistissuesmock_init",
-      "community": 107,
+      "community": 111,
       "norm_label": ".__init__()"
     },
     {
@@ -10195,7 +10231,7 @@
       "source_file": "tests/test_orchestrator.py",
       "source_location": "L61",
       "id": "tests_test_orchestrator_passbasedlistissuesmock_call",
-      "community": 107,
+      "community": 111,
       "norm_label": ".__call__()"
     },
     {
@@ -10222,7 +10258,7 @@
       "source_file": "tests/test_orchestrator.py",
       "source_location": "L92",
       "id": "tests_test_orchestrator_test_scheduler_emits_claim_attempt_events",
-      "community": 2,
+      "community": 123,
       "norm_label": "test_scheduler_emits_claim_attempt_events()"
     },
     {
@@ -10231,7 +10267,7 @@
       "source_file": "tests/test_orchestrator.py",
       "source_location": "L200",
       "id": "tests_test_orchestrator_test_scheduler_emits_agent_run_start_and_finish_events",
-      "community": 2,
+      "community": 124,
       "norm_label": "test_scheduler_emits_agent_run_start_and_finish_events()"
     },
     {
@@ -10240,7 +10276,7 @@
       "source_file": "tests/test_orchestrator.py",
       "source_location": "L290",
       "id": "tests_test_orchestrator_test_scheduler_emits_integration_events",
-      "community": 2,
+      "community": 134,
       "norm_label": "test_scheduler_emits_integration_events()"
     },
     {
@@ -10249,7 +10285,7 @@
       "source_file": "tests/test_orchestrator.py",
       "source_location": "L357",
       "id": "tests_test_orchestrator_test_per_issue_failure_events_include_rich_context",
-      "community": 2,
+      "community": 135,
       "norm_label": "test_per_issue_failure_events_include_rich_context()"
     },
     {
@@ -10339,7 +10375,7 @@
       "source_file": "tests/test_orchestrator.py",
       "source_location": "L1210",
       "id": "tests_test_orchestrator_test_execution_exception_does_not_block_concurrent_issues",
-      "community": 2,
+      "community": 122,
       "norm_label": "test_execution_exception_does_not_block_concurrent_issues()"
     },
     {
@@ -10357,7 +10393,7 @@
       "source_file": "tests/test_orchestrator.py",
       "source_location": "L1438",
       "id": "tests_test_orchestrator_test_execute_claims_tracks_active_agent_runs_in_memory",
-      "community": 2,
+      "community": 122,
       "norm_label": "test_execute_claims_tracks_active_agent_runs_in_memory()"
     },
     {
@@ -10366,7 +10402,7 @@
       "source_file": "tests/test_orchestrator.py",
       "source_location": "L1538",
       "id": "tests_test_orchestrator_test_execute_claims_clears_in_memory_active_runs_after_raised_future",
-      "community": 2,
+      "community": 123,
       "norm_label": "test_execute_claims_clears_in_memory_active_runs_after_raised_future()"
     },
     {
@@ -10375,7 +10411,7 @@
       "source_file": "tests/test_orchestrator.py",
       "source_location": "L1589",
       "id": "tests_test_orchestrator_test_continuous_mode_passes_active_runs_to_planner",
-      "community": 2,
+      "community": 111,
       "norm_label": "test_continuous_mode_passes_active_runs_to_planner()"
     },
     {
@@ -10465,7 +10501,7 @@
       "source_file": "tests/test_orchestrator.py",
       "source_location": "L1862",
       "id": "tests_test_orchestrator_test_later_issue_integrates_before_earlier_still_running_issue_when_no_blocking_dependency",
-      "community": 2,
+      "community": 125,
       "norm_label": "test_later_issue_integrates_before_earlier_still_running_issue_when_no_blocking_dependency()"
     },
     {
@@ -10474,7 +10510,7 @@
       "source_file": "tests/test_orchestrator.py",
       "source_location": "L1974",
       "id": "tests_test_orchestrator_test_agent_run_capacity_freed_after_execution_not_after_integration",
-      "community": 2,
+      "community": 127,
       "norm_label": "test_agent_run_capacity_freed_after_execution_not_after_integration()"
     },
     {
@@ -10483,7 +10519,7 @@
       "source_file": "tests/test_orchestrator.py",
       "source_location": "L2040",
       "id": "tests_test_orchestrator_test_integration_failure_leaves_issue_for_human_review_in_orchestrator_context",
-      "community": 2,
+      "community": 128,
       "norm_label": "test_integration_failure_leaves_issue_for_human_review_in_orchestrator_context()"
     },
     {
@@ -10492,7 +10528,7 @@
       "source_file": "tests/test_orchestrator.py",
       "source_location": "L2120",
       "id": "tests_test_orchestrator_test_continuous_mode_drains_dependency_waves",
-      "community": 107,
+      "community": 111,
       "norm_label": "test_continuous_mode_drains_dependency_waves()"
     },
     {
@@ -10501,7 +10537,7 @@
       "source_file": "tests/test_orchestrator.py",
       "source_location": "L2219",
       "id": "tests_test_orchestrator_test_continuous_mode_stops_when_truly_idle",
-      "community": 2,
+      "community": 130,
       "norm_label": "test_continuous_mode_stops_when_truly_idle()"
     },
     {
@@ -10510,7 +10546,7 @@
       "source_file": "tests/test_orchestrator.py",
       "source_location": "L2274",
       "id": "tests_test_orchestrator_test_continuous_mode_does_not_exit_early_while_integrations_pending",
-      "community": 2,
+      "community": 132,
       "norm_label": "test_continuous_mode_does_not_exit_early_while_integrations_pending()"
     },
     {
@@ -10555,7 +10591,7 @@
       "source_file": "tests/test_orchestrator.py",
       "source_location": "L2636",
       "id": "tests_test_orchestrator_test_plan_actions_with_sliding_window_passes_labels_and_updated_since",
-      "community": 2,
+      "community": 138,
       "norm_label": "test_plan_actions_with_sliding_window_passes_labels_and_updated_since()"
     },
     {
@@ -10564,7 +10600,7 @@
       "source_file": "tests/test_orchestrator.py",
       "source_location": "L18",
       "id": "tests_test_orchestrator_rationale_18",
-      "community": 2,
+      "community": 122,
       "norm_label": "deterministic fake executor that runs tasks synchronously and records submission"
     },
     {
@@ -10573,7 +10609,7 @@
       "source_file": "tests/test_orchestrator.py",
       "source_location": "L36",
       "id": "tests_test_orchestrator_rationale_36",
-      "community": 107,
+      "community": 123,
       "norm_label": "executor that reports a raised future after dispatch."
     },
     {
@@ -10582,7 +10618,7 @@
       "source_file": "tests/test_orchestrator.py",
       "source_location": "L53",
       "id": "tests_test_orchestrator_rationale_53",
-      "community": 107,
+      "community": 111,
       "norm_label": "a mock list_issues side effect that tracks continuous mode loop passes     and c"
     },
     {
@@ -10591,7 +10627,7 @@
       "source_file": "tests/test_orchestrator.py",
       "source_location": "L93",
       "id": "tests_test_orchestrator_rationale_93",
-      "community": 2,
+      "community": 123,
       "norm_label": "the scheduler emits claim.succeeded and claim.failed events with issue/run conte"
     },
     {
@@ -10600,7 +10636,7 @@
       "source_file": "tests/test_orchestrator.py",
       "source_location": "L201",
       "id": "tests_test_orchestrator_rationale_201",
-      "community": 2,
+      "community": 124,
       "norm_label": "the scheduler emits agent_run.start and agent_run.finished events."
     },
     {
@@ -10609,7 +10645,7 @@
       "source_file": "tests/test_orchestrator.py",
       "source_location": "L291",
       "id": "tests_test_orchestrator_rationale_291",
-      "community": 2,
+      "community": 134,
       "norm_label": "the scheduler emits integration.pr_created event after successful execution."
     },
     {
@@ -10618,7 +10654,7 @@
       "source_file": "tests/test_orchestrator.py",
       "source_location": "L358",
       "id": "tests_test_orchestrator_rationale_358",
-      "community": 2,
+      "community": 135,
       "norm_label": "failure events at any stage (claim, execution, integration) emit     per-issue e"
     },
     {
@@ -10627,7 +10663,7 @@
       "source_file": "tests/test_orchestrator.py",
       "source_location": "L1211",
       "id": "tests_test_orchestrator_rationale_1211",
-      "community": 2,
+      "community": 122,
       "norm_label": "when execute_run raises an exception for one issue, other concurrent issues stil"
     },
     {
@@ -10636,7 +10672,7 @@
       "source_file": "tests/test_orchestrator.py",
       "source_location": "L1439",
       "id": "tests_test_orchestrator_rationale_1439",
-      "community": 2,
+      "community": 122,
       "norm_label": "the orchestrator tracks dispatched issues as in-memory active runs during execut"
     },
     {
@@ -10645,7 +10681,7 @@
       "source_file": "tests/test_orchestrator.py",
       "source_location": "L1539",
       "id": "tests_test_orchestrator_rationale_1539",
-      "community": 2,
+      "community": 123,
       "norm_label": "unexpected raised futures must not leak in-memory agent run capacity."
     },
     {
@@ -10654,7 +10690,7 @@
       "source_file": "tests/test_orchestrator.py",
       "source_location": "L1590",
       "id": "tests_test_orchestrator_rationale_1590",
-      "community": 2,
+      "community": 111,
       "norm_label": "in continuous mode, in-memory active runs are passed to the planner on subsequen"
     },
     {
@@ -10690,7 +10726,7 @@
       "source_file": "tests/test_orchestrator.py",
       "source_location": "L1863",
       "id": "tests_test_orchestrator_rationale_1863",
-      "community": 2,
+      "community": 125,
       "norm_label": "when issue #3 finishes execution before issue #2 (which is still running),     #"
     },
     {
@@ -10699,7 +10735,7 @@
       "source_file": "tests/test_orchestrator.py",
       "source_location": "L1975",
       "id": "tests_test_orchestrator_rationale_1975",
-      "community": 2,
+      "community": 127,
       "norm_label": "agent run capacity must be freed when execution completes, not when integration"
     },
     {
@@ -10708,7 +10744,7 @@
       "source_file": "tests/test_orchestrator.py",
       "source_location": "L2041",
       "id": "tests_test_orchestrator_rationale_2041",
-      "community": 2,
+      "community": 128,
       "norm_label": "when integration fails, the issue should get needs-triage label and not be retri"
     },
     {
@@ -10717,7 +10753,7 @@
       "source_file": "tests/test_orchestrator.py",
       "source_location": "L2121",
       "id": "tests_test_orchestrator_rationale_2121",
-      "community": 107,
+      "community": 111,
       "norm_label": "when an issue integrates and closes, a previously-blocked dependent     issue sh"
     },
     {
@@ -10726,7 +10762,7 @@
       "source_file": "tests/test_orchestrator.py",
       "source_location": "L2220",
       "id": "tests_test_orchestrator_rationale_2220",
-      "community": 2,
+      "community": 130,
       "norm_label": "continuous mode stops when no claimable issues, no active agent runs,     and no"
     },
     {
@@ -10735,7 +10771,7 @@
       "source_file": "tests/test_orchestrator.py",
       "source_location": "L2275",
       "id": "tests_test_orchestrator_rationale_2275",
-      "community": 2,
+      "community": 132,
       "norm_label": "continuous mode must not exit while integrations are still pending,     because"
     },
     {
@@ -10780,7 +10816,7 @@
       "source_file": "tests/test_orchestrator.py",
       "source_location": "L2637",
       "id": "tests_test_orchestrator_rationale_2637",
-      "community": 2,
+      "community": 138,
       "norm_label": "the orchestrator fetches open issues without a time window     and closed issues"
     },
     {
@@ -11275,7 +11311,7 @@
       "source_file": "tests/test_integration.py",
       "source_location": "L25",
       "id": "tests_test_integration_py_str",
-      "community": 117,
+      "community": 106,
       "norm_label": "str"
     },
     {
@@ -11302,7 +11338,7 @@
       "source_file": "tests/test_integration.py",
       "source_location": "L43",
       "id": "tests_test_integration_fakeissuegateway",
-      "community": 116,
+      "community": 12,
       "norm_label": "fakeissuegateway"
     },
     {
@@ -11311,7 +11347,7 @@
       "source_file": "tests/test_integration.py",
       "source_location": "L44",
       "id": "tests_test_integration_fakeissuegateway_init",
-      "community": 116,
+      "community": 12,
       "norm_label": ".__init__()"
     },
     {
@@ -11320,7 +11356,7 @@
       "source_file": "tests/test_integration.py",
       "source_location": "L44",
       "id": "tests_test_integration_py_githubissuerecord",
-      "community": 116,
+      "community": 12,
       "norm_label": "githubissuerecord"
     },
     {
@@ -11329,7 +11365,7 @@
       "source_file": "tests/test_integration.py",
       "source_location": "L52",
       "id": "tests_test_integration_fakeissuegateway_view_issue",
-      "community": 116,
+      "community": 12,
       "norm_label": ".view_issue()"
     },
     {
@@ -11338,7 +11374,7 @@
       "source_file": "tests/test_integration.py",
       "source_location": "L52",
       "id": "tests_test_integration_py_int",
-      "community": 116,
+      "community": 106,
       "norm_label": "int"
     },
     {
@@ -11347,7 +11383,7 @@
       "source_file": "tests/test_integration.py",
       "source_location": "L55",
       "id": "tests_test_integration_fakeissuegateway_add_comment",
-      "community": 116,
+      "community": 106,
       "norm_label": ".add_comment()"
     },
     {
@@ -11356,7 +11392,7 @@
       "source_file": "tests/test_integration.py",
       "source_location": "L58",
       "id": "tests_test_integration_fakeissuegateway_add_labels",
-      "community": 116,
+      "community": 106,
       "norm_label": ".add_labels()"
     },
     {
@@ -11365,7 +11401,7 @@
       "source_file": "tests/test_integration.py",
       "source_location": "L61",
       "id": "tests_test_integration_fakeissuegateway_remove_labels",
-      "community": 116,
+      "community": 106,
       "norm_label": ".remove_labels()"
     },
     {
@@ -11374,7 +11410,7 @@
       "source_file": "tests/test_integration.py",
       "source_location": "L64",
       "id": "tests_test_integration_fakeissuegateway_close_issue",
-      "community": 116,
+      "community": 12,
       "norm_label": ".close_issue()"
     },
     {
@@ -11383,7 +11419,7 @@
       "source_file": "tests/test_integration.py",
       "source_location": "L67",
       "id": "tests_test_integration_fakeissuegateway_update_body",
-      "community": 116,
+      "community": 12,
       "norm_label": ".update_body()"
     },
     {
@@ -11401,7 +11437,7 @@
       "source_file": "tests/test_integration.py",
       "source_location": "L82",
       "id": "tests_test_integration_fakegitrunner_init",
-      "community": 117,
+      "community": 12,
       "norm_label": ".__init__()"
     },
     {
@@ -11419,7 +11455,7 @@
       "source_file": "tests/test_integration.py",
       "source_location": "L92",
       "id": "tests_test_integration_fakegitrunner_call",
-      "community": 117,
+      "community": 12,
       "norm_label": ".__call__()"
     },
     {
@@ -11518,7 +11554,7 @@
       "source_file": "tests/test_integration.py",
       "source_location": "L624",
       "id": "tests_test_integration_hybridgitrunner",
-      "community": 117,
+      "community": 106,
       "norm_label": "hybridgitrunner"
     },
     {
@@ -11527,7 +11563,7 @@
       "source_file": "tests/test_integration.py",
       "source_location": "L634",
       "id": "tests_test_integration_hybridgitrunner_init",
-      "community": 117,
+      "community": 106,
       "norm_label": ".__init__()"
     },
     {
@@ -11536,7 +11572,7 @@
       "source_file": "tests/test_integration.py",
       "source_location": "L638",
       "id": "tests_test_integration_hybridgitrunner_call",
-      "community": 117,
+      "community": 106,
       "norm_label": ".__call__()"
     },
     {
@@ -11545,7 +11581,7 @@
       "source_file": "tests/test_integration.py",
       "source_location": "L652",
       "id": "tests_test_integration_hybridgitrunner_handle_gh",
-      "community": 117,
+      "community": 106,
       "norm_label": "._handle_gh()"
     },
     {
@@ -11563,7 +11599,7 @@
       "source_file": "tests/test_integration.py",
       "source_location": "L710",
       "id": "tests_test_integration_get_mock_issues_for_async",
-      "community": 116,
+      "community": 12,
       "norm_label": "get_mock_issues_for_async()"
     },
     {
@@ -11608,7 +11644,7 @@
       "source_file": "tests/test_integration.py",
       "source_location": "L981",
       "id": "tests_test_integration_test_poll_integration_pr_skips_when_not_pending_validation",
-      "community": 116,
+      "community": 12,
       "norm_label": "test_poll_integration_pr_skips_when_not_pending_validation()"
     },
     {
@@ -11626,7 +11662,7 @@
       "source_file": "tests/test_integration.py",
       "source_location": "L1101",
       "id": "tests_test_integration_test_poll_integration_pr_merge_conflict_detected",
-      "community": 116,
+      "community": 12,
       "norm_label": "test_poll_integration_pr_merge_conflict_detected()"
     },
     {
@@ -11644,7 +11680,7 @@
       "source_file": "tests/test_integration.py",
       "source_location": "L1238",
       "id": "tests_test_integration_test_poll_integration_pr_already_merged_externally",
-      "community": 116,
+      "community": 12,
       "norm_label": "test_poll_integration_pr_already_merged_externally()"
     },
     {
@@ -11653,7 +11689,7 @@
       "source_file": "tests/test_integration.py",
       "source_location": "L625",
       "id": "tests_test_integration_rationale_625",
-      "community": 117,
+      "community": 106,
       "norm_label": "a gitrunner that delegates real git commands to subprocess but fakes     gh comm"
     },
     {
@@ -11662,7 +11698,7 @@
       "source_file": "tests/test_integration.py",
       "source_location": "L711",
       "id": "tests_test_integration_rationale_711",
-      "community": 116,
+      "community": 12,
       "norm_label": "mock issues where #8 is ready for async integration (has claim metadata)."
     },
     {
@@ -11707,7 +11743,7 @@
       "source_file": "tests/test_integration.py",
       "source_location": "L982",
       "id": "tests_test_integration_rationale_982",
-      "community": 116,
+      "community": 12,
       "norm_label": "poll_integration_pr skips issues whose status is not pending_validation."
     },
     {
@@ -11725,7 +11761,7 @@
       "source_file": "tests/test_integration.py",
       "source_location": "L1102",
       "id": "tests_test_integration_rationale_1102",
-      "community": 116,
+      "community": 12,
       "norm_label": "poll_integration_pr detects pr conflicts and marks needs-triage."
     },
     {
@@ -11743,7 +11779,7 @@
       "source_file": "tests/test_integration.py",
       "source_location": "L1239",
       "id": "tests_test_integration_rationale_1239",
-      "community": 116,
+      "community": 12,
       "norm_label": "poll_integration_pr closes issue when pr was already merged externally."
     },
     {
@@ -11752,7 +11788,7 @@
       "source_file": "tests/test_cli.py",
       "source_location": "L1",
       "id": "tests_test_cli_py",
-      "community": 21,
+      "community": 90,
       "norm_label": "test_cli.py"
     },
     {
@@ -11761,7 +11797,7 @@
       "source_file": "tests/test_cli.py",
       "source_location": "L12",
       "id": "tests_test_cli_write_config",
-      "community": 21,
+      "community": 90,
       "norm_label": "write_config()"
     },
     {
@@ -11770,7 +11806,7 @@
       "source_file": "tests/test_cli.py",
       "source_location": "L12",
       "id": "tests_test_cli_py_path",
-      "community": 21,
+      "community": 90,
       "norm_label": "path"
     },
     {
@@ -11779,7 +11815,7 @@
       "source_file": "tests/test_cli.py",
       "source_location": "L12",
       "id": "tests_test_cli_py_str",
-      "community": 111,
+      "community": 3,
       "norm_label": "str"
     },
     {
@@ -11788,7 +11824,7 @@
       "source_file": "tests/test_cli.py",
       "source_location": "L18",
       "id": "tests_test_cli_test_run_command_reports_selected_repo",
-      "community": 21,
+      "community": 90,
       "norm_label": "test_run_command_reports_selected_repo()"
     },
     {
@@ -11797,7 +11833,7 @@
       "source_file": "tests/test_cli.py",
       "source_location": "L47",
       "id": "tests_test_cli_test_invalid_config_exits_without_starting_orchestration",
-      "community": 21,
+      "community": 90,
       "norm_label": "test_invalid_config_exits_without_starting_orchestration()"
     },
     {
@@ -11806,7 +11842,7 @@
       "source_file": "tests/test_cli.py",
       "source_location": "L71",
       "id": "tests_test_cli_test_prepare_prd_command_reports_created_branch",
-      "community": 21,
+      "community": 90,
       "norm_label": "test_prepare_prd_command_reports_created_branch()"
     },
     {
@@ -11815,7 +11851,7 @@
       "source_file": "tests/test_cli.py",
       "source_location": "L109",
       "id": "tests_test_cli_test_prepare_prd_command_reports_failures_to_stderr",
-      "community": 21,
+      "community": 90,
       "norm_label": "test_prepare_prd_command_reports_failures_to_stderr()"
     },
     {
@@ -11824,7 +11860,7 @@
       "source_file": "tests/test_cli.py",
       "source_location": "L146",
       "id": "tests_test_cli_test_claim_issue_command_reports_branch_and_worktree",
-      "community": 21,
+      "community": 90,
       "norm_label": "test_claim_issue_command_reports_branch_and_worktree()"
     },
     {
@@ -11833,7 +11869,7 @@
       "source_file": "tests/test_cli.py",
       "source_location": "L190",
       "id": "tests_test_cli_test_claim_issue_command_reports_failures_to_stderr",
-      "community": 21,
+      "community": 90,
       "norm_label": "test_claim_issue_command_reports_failures_to_stderr()"
     },
     {
@@ -11842,7 +11878,7 @@
       "source_file": "tests/test_cli.py",
       "source_location": "L238",
       "id": "tests_test_cli_test_execute_run_command_success",
-      "community": 21,
+      "community": 90,
       "norm_label": "test_execute_run_command_success()"
     },
     {
@@ -11851,7 +11887,7 @@
       "source_file": "tests/test_cli.py",
       "source_location": "L283",
       "id": "tests_test_cli_test_execute_run_command_failure",
-      "community": 21,
+      "community": 90,
       "norm_label": "test_execute_run_command_failure()"
     },
     {
@@ -11860,7 +11896,7 @@
       "source_file": "tests/test_cli.py",
       "source_location": "L326",
       "id": "tests_test_cli_test_integrate_run_command_success",
-      "community": 21,
+      "community": 90,
       "norm_label": "test_integrate_run_command_success()"
     },
     {
@@ -11869,7 +11905,7 @@
       "source_file": "tests/test_cli.py",
       "source_location": "L368",
       "id": "tests_test_cli_test_integrate_run_command_failure",
-      "community": 21,
+      "community": 90,
       "norm_label": "test_integrate_run_command_failure()"
     },
     {
@@ -11878,7 +11914,7 @@
       "source_file": "tests/test_cli.py",
       "source_location": "L410",
       "id": "tests_test_cli_test_reconcile_command_success",
-      "community": 21,
+      "community": 90,
       "norm_label": "test_reconcile_command_success()"
     },
     {
@@ -11887,7 +11923,7 @@
       "source_file": "tests/test_cli.py",
       "source_location": "L443",
       "id": "tests_test_cli_test_dashboard_command_starts_server",
-      "community": 21,
+      "community": 90,
       "norm_label": "test_dashboard_command_starts_server()"
     },
     {
@@ -11896,7 +11932,7 @@
       "source_file": "tests/test_cli.py",
       "source_location": "L478",
       "id": "tests_test_cli_test_run_command_builds_bounded_issue_gateway",
-      "community": 21,
+      "community": 90,
       "norm_label": "test_run_command_builds_bounded_issue_gateway()"
     },
     {
@@ -11905,7 +11941,7 @@
       "source_file": "tests/test_cli.py",
       "source_location": "L504",
       "id": "tests_test_cli_test_prepare_claim_and_integrate_commands_inject_bounded_command_executor_into_workspace_gateways",
-      "community": 21,
+      "community": 90,
       "norm_label": "test_prepare_claim_and_integrate_commands_inject_bounded_command_executor_into_workspace_gateways()"
     },
     {
@@ -11914,7 +11950,7 @@
       "source_file": "tests/test_cli.py",
       "source_location": "L604",
       "id": "tests_test_cli_test_execute_run_command_does_not_construct_command_executor_for_harness_execution",
-      "community": 21,
+      "community": 90,
       "norm_label": "test_execute_run_command_does_not_construct_command_executor_for_harness_execution()"
     },
     {
@@ -12427,7 +12463,7 @@
       "source_file": "tests/test_scheduling_readiness.py",
       "source_location": "L11",
       "id": "tests_test_scheduling_readiness_py_appconfig",
-      "community": 111,
+      "community": 1,
       "norm_label": "appconfig"
     },
     {
@@ -12499,7 +12535,7 @@
       "source_file": "tests/test_scheduling_readiness.py",
       "source_location": "L602",
       "id": "tests_test_scheduling_readiness_py_int",
-      "community": 111,
+      "community": 1,
       "norm_label": "int"
     },
     {
@@ -16161,7 +16197,7 @@
       "file_type": "rationale",
       "source_file": "tests/test_orchestrator.py",
       "source_location": "L200",
-      "community": 2,
+      "community": 124,
       "norm_label": "the scheduler emits agent_run.start and agent_run.finished events.",
       "id": "tests_test_orchestrator_rationale_200"
     },
@@ -16170,7 +16206,7 @@
       "file_type": "rationale",
       "source_file": "tests/test_orchestrator.py",
       "source_location": "L289",
-      "community": 2,
+      "community": 134,
       "norm_label": "the scheduler emits integration.pr_created event after successful execution.",
       "id": "tests_test_orchestrator_rationale_289"
     },
@@ -16179,7 +16215,7 @@
       "file_type": "rationale",
       "source_file": "tests/test_orchestrator.py",
       "source_location": "L356",
-      "community": 2,
+      "community": 135,
       "norm_label": "failure events at any stage (claim, execution, integration) emit     per-issue e",
       "id": "tests_test_orchestrator_rationale_356"
     },
@@ -16188,7 +16224,7 @@
       "file_type": "rationale",
       "source_file": "tests/test_orchestrator.py",
       "source_location": "L1209",
-      "community": 2,
+      "community": 122,
       "norm_label": "when execute_run raises an exception for one issue, other concurrent issues stil",
       "id": "tests_test_orchestrator_rationale_1209"
     },
@@ -16197,7 +16233,7 @@
       "file_type": "rationale",
       "source_file": "tests/test_orchestrator.py",
       "source_location": "L1437",
-      "community": 2,
+      "community": 122,
       "norm_label": "the orchestrator tracks dispatched issues as in-memory active runs during execut",
       "id": "tests_test_orchestrator_rationale_1437"
     },
@@ -16206,7 +16242,7 @@
       "file_type": "rationale",
       "source_file": "tests/test_orchestrator.py",
       "source_location": "L1537",
-      "community": 2,
+      "community": 123,
       "norm_label": "unexpected raised futures must not leak in-memory agent run capacity.",
       "id": "tests_test_orchestrator_rationale_1537"
     },
@@ -16215,7 +16251,7 @@
       "file_type": "rationale",
       "source_file": "tests/test_orchestrator.py",
       "source_location": "L1588",
-      "community": 2,
+      "community": 111,
       "norm_label": "in continuous mode, in-memory active runs are passed to the planner on subsequen",
       "id": "tests_test_orchestrator_rationale_1588"
     },
@@ -16251,7 +16287,7 @@
       "file_type": "rationale",
       "source_file": "tests/test_orchestrator.py",
       "source_location": "L1861",
-      "community": 2,
+      "community": 125,
       "norm_label": "when issue #3 finishes execution before issue #2 (which is still running),     #",
       "id": "tests_test_orchestrator_rationale_1861"
     },
@@ -16260,7 +16296,7 @@
       "file_type": "rationale",
       "source_file": "tests/test_orchestrator.py",
       "source_location": "L1973",
-      "community": 2,
+      "community": 127,
       "norm_label": "agent run capacity must be freed when execution completes, not when integration",
       "id": "tests_test_orchestrator_rationale_1973"
     },
@@ -16269,7 +16305,7 @@
       "file_type": "rationale",
       "source_file": "tests/test_orchestrator.py",
       "source_location": "L2039",
-      "community": 2,
+      "community": 128,
       "norm_label": "when integration fails, the issue should get needs-triage label and not be retri",
       "id": "tests_test_orchestrator_rationale_2039"
     },
@@ -16278,7 +16314,7 @@
       "file_type": "rationale",
       "source_file": "tests/test_orchestrator.py",
       "source_location": "L2119",
-      "community": 107,
+      "community": 111,
       "norm_label": "when an issue integrates and closes, a previously-blocked dependent     issue sh",
       "id": "tests_test_orchestrator_rationale_2119"
     },
@@ -16287,7 +16323,7 @@
       "file_type": "rationale",
       "source_file": "tests/test_orchestrator.py",
       "source_location": "L2218",
-      "community": 2,
+      "community": 130,
       "norm_label": "continuous mode stops when no claimable issues, no active agent runs,     and no",
       "id": "tests_test_orchestrator_rationale_2218"
     },
@@ -16296,7 +16332,7 @@
       "file_type": "rationale",
       "source_file": "tests/test_orchestrator.py",
       "source_location": "L2273",
-      "community": 2,
+      "community": 132,
       "norm_label": "continuous mode must not exit while integrations are still pending,     because",
       "id": "tests_test_orchestrator_rationale_2273"
     },
@@ -16341,7 +16377,7 @@
       "file_type": "rationale",
       "source_file": "tests/test_orchestrator.py",
       "source_location": "L2635",
-      "community": 2,
+      "community": 138,
       "norm_label": "the orchestrator fetches open issues without a time window     and closed issues",
       "id": "tests_test_orchestrator_rationale_2635"
     },
@@ -16507,7 +16543,7 @@
       "file_type": "rationale",
       "source_file": "src/bersama/integration.py",
       "source_location": "L271",
-      "community": 120,
+      "community": 136,
       "norm_label": "return true if all checks passed, false if any failed, none if still in progress",
       "id": "bersama_integration_rationale_271"
     },
@@ -16552,7 +16588,7 @@
       "file_type": "rationale",
       "source_file": "src/bersama/integration.py",
       "source_location": "L1023",
-      "community": 112,
+      "community": 106,
       "norm_label": "map an exception to a failure_type string.",
       "id": "bersama_integration_rationale_1023"
     },
@@ -16678,7 +16714,7 @@
       "file_type": "code",
       "source_file": "src/bersama/repo_lock.py",
       "source_location": "L35",
-      "community": 1,
+      "community": 120,
       "norm_label": "bool",
       "id": "src_bersama_repo_lock_py_bool"
     },
@@ -16687,7 +16723,7 @@
       "file_type": "code",
       "source_file": "src/bersama/repo_lock.py",
       "source_location": "L35",
-      "community": 1,
+      "community": 120,
       "norm_label": "float",
       "id": "src_bersama_repo_lock_py_float"
     },
@@ -16741,7 +16777,7 @@
       "file_type": "rationale",
       "source_file": "src/bersama/prd_preparation.py",
       "source_location": "L16",
-      "community": 130,
+      "community": 114,
       "norm_label": "raised when git branch setup fails.",
       "id": "bersama_prd_preparation_rationale_16"
     },
@@ -16786,7 +16822,7 @@
       "file_type": "rationale",
       "source_file": "src/bersama/orchestrator.py",
       "source_location": "L145",
-      "community": 1,
+      "community": 116,
       "norm_label": "create a system-wide repolock bound to *repo_path* and inject it         into th",
       "id": "bersama_orchestrator_rationale_145"
     },
@@ -16804,7 +16840,7 @@
       "file_type": "rationale",
       "source_file": "src/bersama/orchestrator.py",
       "source_location": "L442",
-      "community": 107,
+      "community": 1,
       "norm_label": "poll integration prs whose status is ``pending_validation``.          called fro",
       "id": "bersama_orchestrator_rationale_442"
     },
@@ -16813,18 +16849,9 @@
       "file_type": "rationale",
       "source_file": "src/bersama/orchestrator.py",
       "source_location": "L531",
-      "community": 1,
+      "community": 116,
       "norm_label": "continuous drain scheduling for dependency waves.          reconciliation runs a",
       "id": "bersama_orchestrator_rationale_531"
-    },
-    {
-      "label": "package.json",
-      "file_type": "code",
-      "source_file": "dashboard/package.json",
-      "source_location": "L1",
-      "community": 5,
-      "norm_label": "package.json",
-      "id": "dashboard_package_json"
     },
     {
       "label": "tsconfig.json",
@@ -16834,15 +16861,6 @@
       "community": 73,
       "norm_label": "tsconfig.json",
       "id": "home_ungku_programming_bersama_dashboard_tsconfig_json"
-    },
-    {
-      "label": "components.json",
-      "file_type": "code",
-      "source_file": "dashboard/components.json",
-      "source_location": "L1",
-      "community": 11,
-      "norm_label": "components.json",
-      "id": "home_ungku_programming_bersama_dashboard_components_json"
     },
     {
       "label": "tsconfig.node.json",
@@ -17101,7 +17119,7 @@
       "file_type": "rationale",
       "source_file": "tests/test_orchestrator.py",
       "source_location": "L76",
-      "community": 2,
+      "community": 123,
       "norm_label": "the scheduler emits claim.succeeded and claim.failed events with issue/run conte",
       "id": "tests_test_orchestrator_rationale_76"
     },
@@ -17110,7 +17128,7 @@
       "file_type": "rationale",
       "source_file": "tests/test_orchestrator.py",
       "source_location": "L183",
-      "community": 2,
+      "community": 124,
       "norm_label": "the scheduler emits agent_run.start and agent_run.finished events.",
       "id": "tests_test_orchestrator_rationale_183"
     },
@@ -17119,7 +17137,7 @@
       "file_type": "rationale",
       "source_file": "tests/test_orchestrator.py",
       "source_location": "L272",
-      "community": 2,
+      "community": 134,
       "norm_label": "the scheduler emits integration.pr_created event after successful execution.",
       "id": "tests_test_orchestrator_rationale_272"
     },
@@ -17128,7 +17146,7 @@
       "file_type": "rationale",
       "source_file": "tests/test_orchestrator.py",
       "source_location": "L339",
-      "community": 2,
+      "community": 135,
       "norm_label": "failure events at any stage (claim, execution, integration) emit     per-issue e",
       "id": "tests_test_orchestrator_rationale_339"
     },
@@ -17137,7 +17155,7 @@
       "file_type": "rationale",
       "source_file": "tests/test_orchestrator.py",
       "source_location": "L1095",
-      "community": 2,
+      "community": 122,
       "norm_label": "when execute_run raises an exception for one issue, other concurrent issues stil",
       "id": "tests_test_orchestrator_rationale_1095"
     },
@@ -17146,7 +17164,7 @@
       "file_type": "rationale",
       "source_file": "tests/test_orchestrator.py",
       "source_location": "L1323",
-      "community": 2,
+      "community": 122,
       "norm_label": "the orchestrator tracks dispatched issues as in-memory active runs during execut",
       "id": "tests_test_orchestrator_rationale_1323"
     },
@@ -17155,7 +17173,7 @@
       "file_type": "rationale",
       "source_file": "tests/test_orchestrator.py",
       "source_location": "L1423",
-      "community": 2,
+      "community": 111,
       "norm_label": "in continuous mode, in-memory active runs are passed to the planner on subsequen",
       "id": "tests_test_orchestrator_rationale_1423"
     },
@@ -17191,7 +17209,7 @@
       "file_type": "rationale",
       "source_file": "tests/test_orchestrator.py",
       "source_location": "L1696",
-      "community": 2,
+      "community": 125,
       "norm_label": "when issue #3 finishes execution before issue #2 (which is still running),     #",
       "id": "tests_test_orchestrator_rationale_1696"
     },
@@ -17200,7 +17218,7 @@
       "file_type": "rationale",
       "source_file": "tests/test_orchestrator.py",
       "source_location": "L1808",
-      "community": 2,
+      "community": 127,
       "norm_label": "agent run capacity must be freed when execution completes, not when integration",
       "id": "tests_test_orchestrator_rationale_1808"
     },
@@ -17209,7 +17227,7 @@
       "file_type": "rationale",
       "source_file": "tests/test_orchestrator.py",
       "source_location": "L1874",
-      "community": 2,
+      "community": 128,
       "norm_label": "when integration fails, the issue should get needs-triage label and not be retri",
       "id": "tests_test_orchestrator_rationale_1874"
     },
@@ -17218,7 +17236,7 @@
       "file_type": "rationale",
       "source_file": "tests/test_orchestrator.py",
       "source_location": "L1954",
-      "community": 107,
+      "community": 111,
       "norm_label": "when an issue integrates and closes, a previously-blocked dependent     issue sh",
       "id": "tests_test_orchestrator_rationale_1954"
     },
@@ -17227,7 +17245,7 @@
       "file_type": "rationale",
       "source_file": "tests/test_orchestrator.py",
       "source_location": "L2053",
-      "community": 2,
+      "community": 130,
       "norm_label": "continuous mode stops when no claimable issues, no active agent runs,     and no",
       "id": "tests_test_orchestrator_rationale_2053"
     },
@@ -17236,7 +17254,7 @@
       "file_type": "rationale",
       "source_file": "tests/test_orchestrator.py",
       "source_location": "L2108",
-      "community": 2,
+      "community": 132,
       "norm_label": "continuous mode must not exit while integrations are still pending,     because",
       "id": "tests_test_orchestrator_rationale_2108"
     },
@@ -17272,7 +17290,7 @@
       "file_type": "rationale",
       "source_file": "tests/test_orchestrator.py",
       "source_location": "L2405",
-      "community": 2,
+      "community": 138,
       "norm_label": "the orchestrator fetches open issues without a time window     and closed issues",
       "id": "tests_test_orchestrator_rationale_2405"
     },
@@ -17281,7 +17299,7 @@
       "file_type": "rationale",
       "source_file": "tests/test_integration.py",
       "source_location": "L502",
-      "community": 117,
+      "community": 106,
       "norm_label": "a gitrunner that delegates real git commands to subprocess but fakes     gh comm",
       "id": "tests_test_integration_rationale_502"
     },
@@ -17290,7 +17308,7 @@
       "file_type": "rationale",
       "source_file": "tests/test_integration.py",
       "source_location": "L588",
-      "community": 116,
+      "community": 12,
       "norm_label": "mock issues where #8 is ready for async integration (has claim metadata).",
       "id": "tests_test_integration_rationale_588"
     },
@@ -17335,7 +17353,7 @@
       "file_type": "rationale",
       "source_file": "tests/test_integration.py",
       "source_location": "L859",
-      "community": 116,
+      "community": 12,
       "norm_label": "poll_integration_pr skips issues whose status is not pending_validation.",
       "id": "tests_test_integration_rationale_859"
     },
@@ -17353,7 +17371,7 @@
       "file_type": "rationale",
       "source_file": "tests/test_integration.py",
       "source_location": "L979",
-      "community": 116,
+      "community": 12,
       "norm_label": "poll_integration_pr detects pr conflicts and marks needs-triage.",
       "id": "tests_test_integration_rationale_979"
     },
@@ -17371,7 +17389,7 @@
       "file_type": "rationale",
       "source_file": "tests/test_integration.py",
       "source_location": "L1116",
-      "community": 116,
+      "community": 12,
       "norm_label": "poll_integration_pr closes issue when pr was already merged externally.",
       "id": "tests_test_integration_rationale_1116"
     },
@@ -17380,7 +17398,7 @@
       "file_type": "code",
       "source_file": "tests/test_cli.py",
       "source_location": "L1",
-      "community": 21,
+      "community": 90,
       "norm_label": "test_cli.py",
       "id": "home_ungku_programming_bersama_tests_test_cli_py"
     },
@@ -17389,7 +17407,7 @@
       "file_type": "code",
       "source_file": "tests/test_cli.py",
       "source_location": "L10",
-      "community": 21,
+      "community": 90,
       "norm_label": "path",
       "id": "home_ungku_programming_bersama_tests_test_cli_py_path"
     },
@@ -17398,7 +17416,7 @@
       "file_type": "code",
       "source_file": "tests/test_cli.py",
       "source_location": "L10",
-      "community": 21,
+      "community": 90,
       "norm_label": "str",
       "id": "home_ungku_programming_bersama_tests_test_cli_py_str"
     },
@@ -17884,7 +17902,7 @@
       "file_type": "code",
       "source_file": "src/bersama/orchestrator.py",
       "source_location": "L210",
-      "community": 1,
+      "community": 116,
       "norm_label": "._ensure_integration_worker()",
       "id": "bersama_orchestrator_orchestrator_ensure_integration_worker"
     },
@@ -17893,7 +17911,7 @@
       "file_type": "code",
       "source_file": "src/bersama/orchestrator.py",
       "source_location": "L217",
-      "community": 107,
+      "community": 116,
       "norm_label": "._run_integration_worker()",
       "id": "bersama_orchestrator_orchestrator_run_integration_worker"
     },
@@ -17902,7 +17920,7 @@
       "file_type": "code",
       "source_file": "src/bersama/orchestrator.py",
       "source_location": "L257",
-      "community": 1,
+      "community": 116,
       "norm_label": "._drain_integration_queue()",
       "id": "bersama_orchestrator_orchestrator_drain_integration_queue"
     },
@@ -17911,7 +17929,7 @@
       "file_type": "rationale",
       "source_file": "src/bersama/orchestrator.py",
       "source_location": "L211",
-      "community": 1,
+      "community": 116,
       "norm_label": "start the serialized integration worker thread if not already running.",
       "id": "bersama_orchestrator_rationale_211"
     },
@@ -17920,7 +17938,7 @@
       "file_type": "rationale",
       "source_file": "src/bersama/orchestrator.py",
       "source_location": "L218",
-      "community": 107,
+      "community": 116,
       "norm_label": "continuously drain the integration queue, one issue at a time.         the lock",
       "id": "bersama_orchestrator_rationale_218"
     },
@@ -17929,7 +17947,7 @@
       "file_type": "rationale",
       "source_file": "src/bersama/orchestrator.py",
       "source_location": "L258",
-      "community": 1,
+      "community": 116,
       "norm_label": "wait for all pending integrations to complete. called before shutdown.",
       "id": "bersama_orchestrator_rationale_258"
     },
@@ -17947,7 +17965,7 @@
       "file_type": "rationale",
       "source_file": "src/bersama/orchestrator.py",
       "source_location": "L446",
-      "community": 1,
+      "community": 116,
       "norm_label": "continuous drain scheduling for dependency waves.          reconciliation runs a",
       "id": "bersama_orchestrator_rationale_446"
     },
@@ -18037,7 +18055,7 @@
       "file_type": "rationale",
       "source_file": "tests/test_orchestrator.py",
       "source_location": "L143",
-      "community": 2,
+      "community": 124,
       "norm_label": "the scheduler emits agent_run.start and agent_run.finished events.",
       "id": "tests_test_orchestrator_rationale_143"
     },
@@ -18046,7 +18064,7 @@
       "file_type": "rationale",
       "source_file": "tests/test_orchestrator.py",
       "source_location": "L232",
-      "community": 2,
+      "community": 134,
       "norm_label": "the scheduler emits integration.start and integration.finished events.",
       "id": "tests_test_orchestrator_rationale_232"
     },
@@ -18055,7 +18073,7 @@
       "file_type": "rationale",
       "source_file": "tests/test_orchestrator.py",
       "source_location": "L303",
-      "community": 2,
+      "community": 135,
       "norm_label": "failure events at any stage (claim, execution, integration) emit     per-issue e",
       "id": "tests_test_orchestrator_rationale_303"
     },
@@ -18064,7 +18082,7 @@
       "file_type": "rationale",
       "source_file": "tests/test_orchestrator.py",
       "source_location": "L1054",
-      "community": 2,
+      "community": 122,
       "norm_label": "when execute_run raises an exception for one issue, other concurrent issues stil",
       "id": "tests_test_orchestrator_rationale_1054"
     },
@@ -18073,7 +18091,7 @@
       "file_type": "rationale",
       "source_file": "tests/test_orchestrator.py",
       "source_location": "L1282",
-      "community": 2,
+      "community": 122,
       "norm_label": "the orchestrator tracks dispatched issues as in-memory active runs during execut",
       "id": "tests_test_orchestrator_rationale_1282"
     },
@@ -18082,7 +18100,7 @@
       "file_type": "rationale",
       "source_file": "tests/test_orchestrator.py",
       "source_location": "L1382",
-      "community": 2,
+      "community": 111,
       "norm_label": "in continuous mode, in-memory active runs are passed to the planner on subsequen",
       "id": "tests_test_orchestrator_rationale_1382"
     },
@@ -18118,7 +18136,7 @@
       "file_type": "rationale",
       "source_file": "tests/test_orchestrator.py",
       "source_location": "L1657",
-      "community": 2,
+      "community": 125,
       "norm_label": "when issue #3 finishes execution before issue #2 (which is still running),     #",
       "id": "tests_test_orchestrator_rationale_1657"
     },
@@ -18127,7 +18145,7 @@
       "file_type": "rationale",
       "source_file": "tests/test_orchestrator.py",
       "source_location": "L1769",
-      "community": 2,
+      "community": 127,
       "norm_label": "agent run capacity must be freed when execution completes, not when integration",
       "id": "tests_test_orchestrator_rationale_1769"
     },
@@ -18136,7 +18154,7 @@
       "file_type": "rationale",
       "source_file": "tests/test_orchestrator.py",
       "source_location": "L1835",
-      "community": 2,
+      "community": 128,
       "norm_label": "when integration fails, the issue should get needs-triage label and not be retri",
       "id": "tests_test_orchestrator_rationale_1835"
     },
@@ -18145,7 +18163,7 @@
       "file_type": "rationale",
       "source_file": "tests/test_orchestrator.py",
       "source_location": "L1915",
-      "community": 107,
+      "community": 111,
       "norm_label": "when an issue integrates and closes, a previously-blocked dependent     issue sh",
       "id": "tests_test_orchestrator_rationale_1915"
     },
@@ -18154,7 +18172,7 @@
       "file_type": "rationale",
       "source_file": "tests/test_orchestrator.py",
       "source_location": "L2019",
-      "community": 2,
+      "community": 130,
       "norm_label": "continuous mode stops when no claimable issues, no active agent runs,     and no",
       "id": "tests_test_orchestrator_rationale_2019"
     },
@@ -18163,7 +18181,7 @@
       "file_type": "rationale",
       "source_file": "tests/test_orchestrator.py",
       "source_location": "L2072",
-      "community": 2,
+      "community": 132,
       "norm_label": "continuous mode must not exit while integrations are still pending,     because",
       "id": "tests_test_orchestrator_rationale_2072"
     },
@@ -30868,9 +30886,9 @@
       "source_file": "tests/test_scheduling_readiness.py",
       "source_location": "L7",
       "weight": 0.8,
+      "confidence_score": 0.5,
       "source": "tests_test_scheduling_readiness_py_appconfig",
-      "target": "bersama_config_harnessconfig",
-      "confidence_score": 0.5
+      "target": "bersama_config_harnessconfig"
     },
     {
       "relation": "uses",
@@ -30878,9 +30896,9 @@
       "source_file": "tests/test_scheduling_readiness.py",
       "source_location": "L7",
       "weight": 0.8,
+      "confidence_score": 0.5,
       "source": "tests_test_scheduling_readiness_py_int",
-      "target": "bersama_config_harnessconfig",
-      "confidence_score": 0.5
+      "target": "bersama_config_harnessconfig"
     },
     {
       "relation": "uses",
@@ -30888,9 +30906,9 @@
       "source_file": "tests/test_scheduling_readiness.py",
       "source_location": "L7",
       "weight": 0.8,
+      "confidence_score": 0.5,
       "source": "tests_test_scheduling_readiness_py_path",
-      "target": "bersama_config_harnessconfig",
-      "confidence_score": 0.5
+      "target": "bersama_config_harnessconfig"
     },
     {
       "relation": "uses",
@@ -30898,9 +30916,9 @@
       "source_file": "tests/test_scheduling_readiness.py",
       "source_location": "L7",
       "weight": 0.8,
+      "confidence_score": 0.5,
       "source": "tests_test_scheduling_readiness_py_str",
-      "target": "bersama_config_harnessconfig",
-      "confidence_score": 0.5
+      "target": "bersama_config_harnessconfig"
     },
     {
       "relation": "uses",
@@ -32040,9 +32058,9 @@
       "source_file": "tests/test_scheduling_readiness.py",
       "source_location": "L7",
       "weight": 0.8,
+      "confidence_score": 0.5,
       "source": "tests_test_scheduling_readiness_py_appconfig",
-      "target": "bersama_config_repoconfig",
-      "confidence_score": 0.5
+      "target": "bersama_config_repoconfig"
     },
     {
       "relation": "uses",
@@ -32050,9 +32068,9 @@
       "source_file": "tests/test_scheduling_readiness.py",
       "source_location": "L7",
       "weight": 0.8,
+      "confidence_score": 0.5,
       "source": "tests_test_scheduling_readiness_py_int",
-      "target": "bersama_config_repoconfig",
-      "confidence_score": 0.5
+      "target": "bersama_config_repoconfig"
     },
     {
       "relation": "uses",
@@ -32060,9 +32078,9 @@
       "source_file": "tests/test_scheduling_readiness.py",
       "source_location": "L7",
       "weight": 0.8,
+      "confidence_score": 0.5,
       "source": "tests_test_scheduling_readiness_py_path",
-      "target": "bersama_config_repoconfig",
-      "confidence_score": 0.5
+      "target": "bersama_config_repoconfig"
     },
     {
       "relation": "uses",
@@ -32070,9 +32088,9 @@
       "source_file": "tests/test_scheduling_readiness.py",
       "source_location": "L7",
       "weight": 0.8,
+      "confidence_score": 0.5,
       "source": "tests_test_scheduling_readiness_py_str",
-      "target": "bersama_config_repoconfig",
-      "confidence_score": 0.5
+      "target": "bersama_config_repoconfig"
     },
     {
       "relation": "uses",
@@ -32981,9 +32999,9 @@
       "source_file": "tests/test_scheduling_readiness.py",
       "source_location": "L7",
       "weight": 0.8,
+      "confidence_score": 0.5,
       "source": "tests_test_scheduling_readiness_py_appconfig",
-      "target": "bersama_config_appconfig",
-      "confidence_score": 0.5
+      "target": "bersama_config_appconfig"
     },
     {
       "relation": "uses",
@@ -32991,9 +33009,9 @@
       "source_file": "tests/test_scheduling_readiness.py",
       "source_location": "L7",
       "weight": 0.8,
+      "confidence_score": 0.5,
       "source": "tests_test_scheduling_readiness_py_int",
-      "target": "bersama_config_appconfig",
-      "confidence_score": 0.5
+      "target": "bersama_config_appconfig"
     },
     {
       "relation": "uses",
@@ -33001,9 +33019,9 @@
       "source_file": "tests/test_scheduling_readiness.py",
       "source_location": "L7",
       "weight": 0.8,
+      "confidence_score": 0.5,
       "source": "tests_test_scheduling_readiness_py_path",
-      "target": "bersama_config_appconfig",
-      "confidence_score": 0.5
+      "target": "bersama_config_appconfig"
     },
     {
       "relation": "uses",
@@ -33011,9 +33029,9 @@
       "source_file": "tests/test_scheduling_readiness.py",
       "source_location": "L7",
       "weight": 0.8,
+      "confidence_score": 0.5,
       "source": "tests_test_scheduling_readiness_py_str",
-      "target": "bersama_config_appconfig",
-      "confidence_score": 0.5
+      "target": "bersama_config_appconfig"
     },
     {
       "relation": "references",
@@ -49127,9 +49145,9 @@
       "source_file": "tests/test_scheduling_readiness.py",
       "source_location": "L8",
       "weight": 0.8,
+      "confidence_score": 0.5,
       "source": "tests_test_scheduling_readiness_py_appconfig",
-      "target": "bersama_scheduling_readiness_schedulingreadinessprovider",
-      "confidence_score": 0.5
+      "target": "bersama_scheduling_readiness_schedulingreadinessprovider"
     },
     {
       "relation": "uses",
@@ -49137,9 +49155,9 @@
       "source_file": "tests/test_scheduling_readiness.py",
       "source_location": "L8",
       "weight": 0.8,
+      "confidence_score": 0.5,
       "source": "tests_test_scheduling_readiness_py_int",
-      "target": "bersama_scheduling_readiness_schedulingreadinessprovider",
-      "confidence_score": 0.5
+      "target": "bersama_scheduling_readiness_schedulingreadinessprovider"
     },
     {
       "relation": "uses",
@@ -49147,9 +49165,9 @@
       "source_file": "tests/test_scheduling_readiness.py",
       "source_location": "L8",
       "weight": 0.8,
+      "confidence_score": 0.5,
       "source": "tests_test_scheduling_readiness_py_path",
-      "target": "bersama_scheduling_readiness_schedulingreadinessprovider",
-      "confidence_score": 0.5
+      "target": "bersama_scheduling_readiness_schedulingreadinessprovider"
     },
     {
       "relation": "uses",
@@ -49157,9 +49175,9 @@
       "source_file": "tests/test_scheduling_readiness.py",
       "source_location": "L8",
       "weight": 0.8,
+      "confidence_score": 0.5,
       "source": "tests_test_scheduling_readiness_py_str",
-      "target": "bersama_scheduling_readiness_schedulingreadinessprovider",
-      "confidence_score": 0.5
+      "target": "bersama_scheduling_readiness_schedulingreadinessprovider"
     },
     {
       "relation": "calls",
@@ -55057,76 +55075,26 @@
     {
       "relation": "contains",
       "confidence": "EXTRACTED",
-      "source_file": "worktrees/issue-61/dashboard/package.json",
+      "source_file": "dashboard/package.json",
       "source_location": "L12",
       "weight": 1.0,
       "confidence_score": 1.0,
-      "source": "home_ungku_programming_bersama_worktrees_issue_61_dashboard_package_json",
+      "source": "dashboard_package_json",
       "target": "dashboard_package_dependencies"
     },
     {
       "relation": "contains",
       "confidence": "EXTRACTED",
-      "source_file": "worktrees/issue-61/dashboard/package.json",
-      "source_location": "L27",
+      "source_file": "dashboard/package.json",
+      "source_location": "L26",
       "weight": 1.0,
       "confidence_score": 1.0,
-      "source": "home_ungku_programming_bersama_worktrees_issue_61_dashboard_package_json",
+      "source": "dashboard_package_json",
       "target": "dashboard_package_devdependencies"
     },
     {
       "relation": "contains",
       "confidence": "EXTRACTED",
-      "source_file": "worktrees/issue-61/dashboard/package.json",
-      "source_location": "L2",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "home_ungku_programming_bersama_worktrees_issue_61_dashboard_package_json",
-      "target": "dashboard_package_name"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "worktrees/issue-61/dashboard/package.json",
-      "source_location": "L3",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "home_ungku_programming_bersama_worktrees_issue_61_dashboard_package_json",
-      "target": "dashboard_package_private"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "worktrees/issue-61/dashboard/package.json",
-      "source_location": "L6",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "home_ungku_programming_bersama_worktrees_issue_61_dashboard_package_json",
-      "target": "dashboard_package_scripts"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "worktrees/issue-61/dashboard/package.json",
-      "source_location": "L5",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "home_ungku_programming_bersama_worktrees_issue_61_dashboard_package_json",
-      "target": "dashboard_package_type"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "worktrees/issue-61/dashboard/package.json",
-      "source_location": "L4",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "home_ungku_programming_bersama_worktrees_issue_61_dashboard_package_json",
-      "target": "dashboard_package_version"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
       "source_file": "dashboard/package.json",
       "source_location": "L2",
       "weight": 1.0,
@@ -55148,11 +55116,11 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "dashboard/package.json",
-      "source_location": "L4",
+      "source_location": "L6",
       "weight": 1.0,
       "confidence_score": 1.0,
       "source": "dashboard_package_json",
-      "target": "dashboard_package_version"
+      "target": "dashboard_package_scripts"
     },
     {
       "relation": "contains",
@@ -55168,11 +55136,11 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "dashboard/package.json",
-      "source_location": "L6",
+      "source_location": "L4",
       "weight": 1.0,
       "confidence_score": 1.0,
       "source": "dashboard_package_json",
-      "target": "dashboard_package_scripts"
+      "target": "dashboard_package_version"
     },
     {
       "relation": "contains",
@@ -55348,16 +55316,6 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "dashboard/package.json",
-      "source_location": "L12",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "dashboard_package_json",
-      "target": "dashboard_package_dependencies"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "dashboard/package.json",
       "source_location": "L35",
       "weight": 1.0,
       "confidence_score": 1.0,
@@ -55527,16 +55485,6 @@
     {
       "relation": "contains",
       "confidence": "EXTRACTED",
-      "source_file": "dashboard/package.json",
-      "source_location": "L26",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "dashboard_package_json",
-      "target": "dashboard_package_devdependencies"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
       "source_file": "dashboard/tsconfig.json",
       "source_location": "L2",
       "weight": 1.0,
@@ -55682,46 +55630,6 @@
       "weight": 1.0,
       "confidence_score": 1.0,
       "source": "dashboard_components_json",
-      "target": "dashboard_components_tsx"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "dashboard/components.json",
-      "source_location": "L2",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "home_ungku_programming_bersama_dashboard_components_json",
-      "target": "dashboard_components_schema"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "dashboard/components.json",
-      "source_location": "L3",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "home_ungku_programming_bersama_dashboard_components_json",
-      "target": "dashboard_components_style"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "dashboard/components.json",
-      "source_location": "L4",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "home_ungku_programming_bersama_dashboard_components_json",
-      "target": "dashboard_components_rsc"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "dashboard/components.json",
-      "source_location": "L5",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "home_ungku_programming_bersama_dashboard_components_json",
       "target": "dashboard_components_tsx"
     },
     {
@@ -55778,36 +55686,6 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "dashboard/components.json",
-      "source_location": "L6",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "home_ungku_programming_bersama_dashboard_components_json",
-      "target": "dashboard_components_tailwind"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "dashboard/components.json",
-      "source_location": "L13",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "home_ungku_programming_bersama_dashboard_components_json",
-      "target": "dashboard_components_iconlibrary"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "dashboard/components.json",
-      "source_location": "L14",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "home_ungku_programming_bersama_dashboard_components_json",
-      "target": "dashboard_components_rtl"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "dashboard/components.json",
       "source_location": "L16",
       "weight": 1.0,
       "confidence_score": 1.0,
@@ -55853,46 +55731,6 @@
       "confidence_score": 1.0,
       "source": "dashboard_components_aliases",
       "target": "dashboard_components_aliases_utils"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "dashboard/components.json",
-      "source_location": "L15",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "home_ungku_programming_bersama_dashboard_components_json",
-      "target": "dashboard_components_aliases"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "dashboard/components.json",
-      "source_location": "L22",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "home_ungku_programming_bersama_dashboard_components_json",
-      "target": "dashboard_components_menucolor"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "dashboard/components.json",
-      "source_location": "L23",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "home_ungku_programming_bersama_dashboard_components_json",
-      "target": "dashboard_components_menuaccent"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "dashboard/components.json",
-      "source_location": "L24",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "home_ungku_programming_bersama_dashboard_components_json",
-      "target": "dashboard_components_registries"
     },
     {
       "relation": "contains",
@@ -56693,9 +56531,9 @@
       "source_file": "dashboard/src/components/SideDrawer.test.tsx",
       "source_location": "L4",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "dashboard_src_components_sidedrawer_test_tsx",
-      "target": "dashboard_src_components_sidedrawer_tsx",
-      "confidence_score": 1.0
+      "target": "dashboard_src_components_sidedrawer_tsx"
     },
     {
       "relation": "contains",
@@ -56784,9 +56622,9 @@
       "source_file": "dashboard/src/components/SideDrawer.test.tsx",
       "source_location": "L4",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "dashboard_src_components_sidedrawer_test_tsx",
-      "target": "components_sidedrawer_issue",
-      "confidence_score": 1.0
+      "target": "components_sidedrawer_issue"
     },
     {
       "relation": "calls",
@@ -56820,6 +56658,36 @@
       "confidence_score": 1.0,
       "source": "components_sidedrawer_sidedrawer",
       "target": "components_sidedrawer_formatelapsed"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "dashboard/src/components/Sidebar.tsx",
+      "source_location": "L12",
+      "weight": 1.0,
+      "source": "dashboard_src_components_sidebar_tsx",
+      "target": "components_sidebar_repo",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "dashboard/src/components/Sidebar.tsx",
+      "source_location": "L32",
+      "weight": 1.0,
+      "source": "dashboard_src_components_sidebar_tsx",
+      "target": "components_sidebar_sidebar",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "dashboard/src/components/Sidebar.tsx",
+      "source_location": "L22",
+      "weight": 1.0,
+      "source": "dashboard_src_components_sidebar_tsx",
+      "target": "components_sidebar_sidebarprops",
+      "confidence_score": 1.0
     },
     {
       "relation": "imports",
@@ -56949,9 +56817,9 @@
       "source_file": "dashboard/src/components/SideDrawer.test.tsx",
       "source_location": "L7",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "dashboard_src_components_sidedrawer_test_tsx",
-      "target": "components_sidedrawer_test_mockissue",
-      "confidence_score": 1.0
+      "target": "components_sidedrawer_test_mockissue"
     },
     {
       "relation": "contains",
@@ -72407,9 +72275,9 @@
       "source_file": "tests/test_scheduling_readiness.py",
       "source_location": "L11",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "tests_test_scheduling_readiness_build_config",
-      "target": "tests_test_scheduling_readiness_py_appconfig",
-      "confidence_score": 1.0
+      "target": "tests_test_scheduling_readiness_py_appconfig"
     },
     {
       "relation": "references",
@@ -72418,9 +72286,9 @@
       "source_file": "tests/test_scheduling_readiness.py",
       "source_location": "L11",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "tests_test_scheduling_readiness_build_config",
-      "target": "tests_test_scheduling_readiness_py_path",
-      "confidence_score": 1.0
+      "target": "tests_test_scheduling_readiness_py_path"
     },
     {
       "relation": "references",
@@ -72429,9 +72297,9 @@
       "source_file": "tests/test_scheduling_readiness.py",
       "source_location": "L11",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "tests_test_scheduling_readiness_build_config",
-      "target": "tests_test_scheduling_readiness_py_str",
-      "confidence_score": 1.0
+      "target": "tests_test_scheduling_readiness_py_str"
     },
     {
       "relation": "calls",
@@ -72506,9 +72374,9 @@
       "source_file": "tests/test_scheduling_readiness.py",
       "source_location": "L246",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "tests_test_scheduling_readiness_test_provider_builds_prd_grouped_implementation_issue_state_capacity_and_warnings",
-      "target": "tests_test_scheduling_readiness_py_path",
-      "confidence_score": 1.0
+      "target": "tests_test_scheduling_readiness_py_path"
     },
     {
       "relation": "references",
@@ -72517,9 +72385,9 @@
       "source_file": "tests/test_scheduling_readiness.py",
       "source_location": "L79",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "tests_test_scheduling_readiness_test_provider_reports_dirty_working_tree_as_warning_not_critical_failure",
-      "target": "tests_test_scheduling_readiness_py_path",
-      "confidence_score": 1.0
+      "target": "tests_test_scheduling_readiness_py_path"
     },
     {
       "relation": "references",
@@ -72528,9 +72396,9 @@
       "source_file": "tests/test_scheduling_readiness.py",
       "source_location": "L154",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "tests_test_scheduling_readiness_test_provider_reports_invalid_config_as_critical_failure_when_harness_is_missing",
-      "target": "tests_test_scheduling_readiness_py_path",
-      "confidence_score": 1.0
+      "target": "tests_test_scheduling_readiness_py_path"
     },
     {
       "relation": "references",
@@ -72539,9 +72407,9 @@
       "source_file": "tests/test_scheduling_readiness.py",
       "source_location": "L199",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "tests_test_scheduling_readiness_test_provider_reports_missing_harness_command_using_path_resolution_only",
-      "target": "tests_test_scheduling_readiness_py_path",
-      "confidence_score": 1.0
+      "target": "tests_test_scheduling_readiness_py_path"
     },
     {
       "relation": "references",
@@ -72550,9 +72418,9 @@
       "source_file": "tests/test_scheduling_readiness.py",
       "source_location": "L34",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "tests_test_scheduling_readiness_test_provider_reports_missing_required_labels_as_one_critical_failure",
-      "target": "tests_test_scheduling_readiness_py_path",
-      "confidence_score": 1.0
+      "target": "tests_test_scheduling_readiness_py_path"
     },
     {
       "relation": "references",
@@ -72561,9 +72429,9 @@
       "source_file": "tests/test_scheduling_readiness.py",
       "source_location": "L126",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "tests_test_scheduling_readiness_test_provider_returns_snapshot_with_critical_failure_when_repo_path_is_not_git",
-      "target": "tests_test_scheduling_readiness_py_path",
-      "confidence_score": 1.0
+      "target": "tests_test_scheduling_readiness_py_path"
     },
     {
       "relation": "references",
@@ -72572,9 +72440,9 @@
       "source_file": "tests/test_scheduling_readiness.py",
       "source_location": "L602",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "tests_test_scheduling_readiness_completed",
-      "target": "tests_test_scheduling_readiness_py_str",
-      "confidence_score": 1.0
+      "target": "tests_test_scheduling_readiness_py_str"
     },
     {
       "relation": "references",
@@ -72726,9 +72594,9 @@
       "source_file": "tests/test_scheduling_readiness.py",
       "source_location": "L602",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "tests_test_scheduling_readiness_completed",
-      "target": "tests_test_scheduling_readiness_py_int",
-      "confidence_score": 1.0
+      "target": "tests_test_scheduling_readiness_py_int"
     },
     {
       "relation": "contains",
@@ -76852,5 +76720,5 @@
     }
   ],
   "hyperedges": [],
-  "built_at_commit": "73927896a66a634bb0ead5fd14f688e1436d6f88"
+  "built_at_commit": "b5479ea91fcdc20d0e1ab107f7713591237d5cf8"
 }

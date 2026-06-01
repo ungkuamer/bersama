@@ -32,6 +32,7 @@ import SideDrawer from '@/components/SideDrawer'
 import { ShimmerText } from '@/components/Shimmer'
 import DependencyPipeline from '@/components/DependencyPipeline'
 import SchedulingReadinessPanel from '@/components/SchedulingReadinessPanel'
+import Sidebar from '@/components/Sidebar'
 
 const isTestEnv = typeof (globalThis as any).process !== 'undefined' && (globalThis as any).process.env.NODE_ENV === 'test';
 const API_BASE = import.meta.env.DEV ? `http://${window.location.hostname}:8000` : '';
@@ -176,6 +177,7 @@ export default function App() {
   const [drawerOpen, setDrawerOpen] = useState<boolean>(false);
   const [drawerReadOnly, setDrawerReadOnly] = useState<boolean>(false);
   const [activeTab, setActiveTab] = useState<'readiness' | 'operator'>(isTestEnv ? 'operator' : 'readiness');
+  const [isCollapsed, setIsCollapsed] = useState<boolean>(false);
   
   const terminalViewportRef = useRef<HTMLDivElement>(null);
   const previousLogContentRef = useRef<string | null>(null);
@@ -681,115 +683,93 @@ export default function App() {
   const getReadyIssuesCount = () => issues.filter(i => i.kind === 'implementation' && i.status === 'ready').length;
 
   return (
-    <div className="dashboard-shell relative min-h-screen text-foreground flex flex-col antialiased">
-      {/* Top Banner Status Bar */}
-      <header className="dashboard-glass-panel border-b px-6 py-4 flex flex-col md:flex-row md:items-center md:justify-between gap-4 sticky top-0 z-50">
-        <div className="flex items-center gap-3">
-          <div className="dashboard-glass-surface size-8 rounded border flex items-center justify-center text-emerald-400 font-bold">
-            B
-          </div>
-          <div>
-            <h1 className="text-sm font-bold text-foreground tracking-widest uppercase flex items-center gap-2">
-              Bersama <span className="text-zinc-600">//</span> Agent Orchestration
-            </h1>
-            <p className="text-[10px] text-zinc-500 tracking-tight">Standalone Scaffold Dashboard</p>
-          </div>
-        </div>
+    <div className="dashboard-shell relative min-h-screen text-foreground flex antialiased">
+      {/* Premium Collapsible Left Sidebar */}
+      <Sidebar 
+        repos={repos}
+        selectedRepo={selectedRepo}
+        setSelectedRepo={setSelectedRepo}
+        activeTab={activeTab}
+        setActiveTab={setActiveTab}
+        isCollapsed={isCollapsed}
+        setIsCollapsed={setIsCollapsed}
+      />
 
-        {/* Global Statistics Panel */}
-        <div className="flex flex-wrap items-center gap-4 text-xs">
-          {/* Active Repo Selector */}
-          {repos.length > 0 && (
-            <div className="dashboard-glass-surface flex items-center gap-2 border rounded px-2 py-1">
-              <Database className="size-3 text-zinc-500" />
-              <span className="text-[11px] text-zinc-400">REPO:</span>
-              <select 
-                value={selectedRepo} 
-                onChange={(e) => setSelectedRepo(e.target.value)}
-                className="dashboard-focus bg-transparent text-foreground focus:outline-none text-[11px] font-bold cursor-pointer pr-1 rounded"
+      {/* Main Panel Content Area */}
+      <div className="flex-1 flex flex-col min-h-screen min-w-0 overflow-y-auto bg-background">
+        {/* Top Banner Status Bar */}
+        <header className="dashboard-glass-panel border-b px-6 py-4 flex flex-col md:flex-row md:items-center md:justify-between gap-4 sticky top-0 z-50">
+          <div className="flex items-center gap-3">
+            {isCollapsed && (
+              <button 
+                onClick={() => setIsCollapsed(false)}
+                className="p-1 rounded bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-zinc-200 hover:border-zinc-700 transition mr-2 cursor-pointer"
+                title="Expand Sidebar"
               >
-                {repos.map(r => (
-                  <option key={r.name} value={r.name} className="bg-zinc-950 text-white">{r.name}</option>
-                ))}
-              </select>
-            </div>
-          )}
-
-          {/* Quick Metrics */}
-          <div className="dashboard-glass-surface flex items-center gap-3 border rounded px-3 py-1 text-[11px]">
-            <div className="flex items-center gap-1.5 border-r border-border pr-3">
-              <span className="size-1.5 rounded-full bg-amber-500 animate-pulse"></span>
-              <span className="text-zinc-400">ACTIVE RUNS:</span>
-              <span className="text-foreground font-bold">{getActiveRunsCount()}</span>
-            </div>
-            <div className="flex items-center gap-1.5 border-r border-border pr-3">
-              <span className="size-1.5 rounded-full bg-blue-500"></span>
-              <span className="text-zinc-400">READY ISSUES:</span>
-              <span className="text-foreground font-bold">{getReadyIssuesCount()}</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span className="size-1.5 rounded-full bg-red-500"></span>
-              <span className="text-zinc-400">FAILED RUNS:</span>
-              <span className="text-foreground font-bold">{getFailedRunsCount()}</span>
+                <ChevronRight className="size-4" />
+              </button>
+            )}
+            <div>
+              <h1 className="text-xs font-bold text-zinc-400 tracking-widest uppercase flex items-center gap-2 select-none">
+                Workspace <span className="text-zinc-700">//</span> <span className="text-white">{activeTab === 'readiness' ? 'Pre-Flight Validation' : 'Operations Command'}</span>
+              </h1>
+              <p className="text-[10px] text-zinc-500 tracking-tight select-none">
+                {activeTab === 'readiness' ? 'Observed parameters & validation metrics' : 'Active agent runs & lifecycle mutations'}
+              </p>
             </div>
           </div>
 
-          {/* Refresh / Polling controls */}
-          <div className="dashboard-glass-surface flex items-center gap-2 border rounded px-2 py-1">
-            <button 
-              onClick={() => fetchData(true)} 
-              disabled={refreshing}
-              className="dashboard-focus rounded text-zinc-400 hover:text-white transition disabled:opacity-50"
-              title="Manual Sync"
-            >
-              <RefreshCw className={`size-3.5 ${refreshing ? 'animate-spin' : ''}`} />
-            </button>
-            <span className="text-[10px] text-zinc-600">|</span>
-            <button
-              onClick={() => setPollingActive(!pollingActive)}
-              className="dashboard-focus rounded flex items-center gap-1 hover:text-white transition"
-            >
-              {pollingActive ? (
-                <>
-                  <Pause className="size-3 text-emerald-400" />
-                  <span className="text-[10px] text-zinc-400">AUTO SYNC ON</span>
-                </>
-              ) : (
-                <>
-                  <Play className="size-3 text-zinc-500" />
-                  <span className="text-[10px] text-zinc-500">AUTO SYNC OFF</span>
-                </>
-              )}
-            </button>
-          </div>
-        </div>
-      </header>
+          {/* Global Statistics Panel */}
+          <div className="flex flex-wrap items-center gap-4 text-xs">
+            {/* Quick Metrics */}
+            <div className="dashboard-glass-surface flex items-center gap-3 border rounded px-3 py-1 text-[11px]">
+              <div className="flex items-center gap-1.5 border-r border-border pr-3">
+                <span className="size-1.5 rounded-full bg-amber-500 animate-pulse"></span>
+                <span className="text-zinc-400">ACTIVE RUNS:</span>
+                <span className="text-foreground font-bold">{getActiveRunsCount()}</span>
+              </div>
+              <div className="flex items-center gap-1.5 border-r border-border pr-3">
+                <span className="size-1.5 rounded-full bg-blue-500"></span>
+                <span className="text-zinc-400">READY ISSUES:</span>
+                <span className="text-foreground font-bold">{getReadyIssuesCount()}</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="size-1.5 rounded-full bg-red-500"></span>
+                <span className="text-zinc-400">FAILED RUNS:</span>
+                <span className="text-foreground font-bold">{getFailedRunsCount()}</span>
+              </div>
+            </div>
 
-      {/* Premium Tabbed Navigation Switcher */}
-      <div className="border-b border-zinc-900 bg-black/60 px-6 py-2 sticky top-[73px] z-40 backdrop-blur-md">
-        <div className="flex items-center gap-6 text-xs font-sans tracking-wide">
-          <button
-            onClick={() => setActiveTab('readiness')}
-            className={`pb-2 pt-1 border-b-2 font-semibold transition-all duration-160 cursor-pointer ${
-              activeTab === 'readiness'
-                ? 'border-teal-500 text-teal-400 font-bold'
-                : 'border-transparent text-zinc-400 hover:text-zinc-200'
-            }`}
-          >
-            Scheduling Readiness
-          </button>
-          <button
-            onClick={() => setActiveTab('operator')}
-            className={`pb-2 pt-1 border-b-2 font-semibold transition-all duration-160 cursor-pointer ${
-              activeTab === 'operator'
-                ? 'border-teal-500 text-teal-400 font-bold'
-                : 'border-transparent text-zinc-400 hover:text-zinc-200'
-            }`}
-          >
-            Operator Console
-          </button>
-        </div>
-      </div>
+            {/* Refresh / Polling controls */}
+            <div className="dashboard-glass-surface flex items-center gap-2 border rounded px-2 py-1">
+              <button 
+                onClick={() => fetchData(true)} 
+                disabled={refreshing}
+                className="dashboard-focus rounded text-zinc-400 hover:text-white transition disabled:opacity-50"
+                title="Manual Sync"
+              >
+                <RefreshCw className={`size-3.5 ${refreshing ? 'animate-spin' : ''}`} />
+              </button>
+              <span className="text-[10px] text-zinc-600">|</span>
+              <button
+                onClick={() => setPollingActive(!pollingActive)}
+                className="dashboard-focus rounded flex items-center gap-1 hover:text-white transition"
+              >
+                {pollingActive ? (
+                  <>
+                    <Pause className="size-3 text-emerald-400" />
+                    <span className="text-[10px] text-zinc-400">AUTO SYNC ON</span>
+                  </>
+                ) : (
+                  <>
+                    <Play className="size-3 text-zinc-500" />
+                    <span className="text-[10px] text-zinc-500">AUTO SYNC OFF</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </header>
 
       {/* Connection Failure banner */}
       {error && (
@@ -1560,6 +1540,7 @@ export default function App() {
           <span>Antigravity Orchestration Scaffold v1.0.0</span>
         </div>
       </footer>
+      </div>
     </div>
   )
 }
