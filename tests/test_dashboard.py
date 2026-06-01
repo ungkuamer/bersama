@@ -1,6 +1,9 @@
+import json
+import asyncio
 from pathlib import Path
 from unittest.mock import patch
 
+import pytest
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
@@ -8,7 +11,9 @@ from bersama.claiming import ClaimResult
 from bersama.command_executor import CommandExecutor
 from bersama.config import AppConfig, HarnessConfig, RepoConfig
 from bersama.dashboard import create_dashboard_app
+from bersama.event_bus import Event
 from bersama.execution import ExecutionResult
+from bersama.file_watcher import FileWatcherService
 from bersama.github_issues import GitHubIssueGateway, GitHubIssueRecord
 from bersama.integration import IntegrationResult
 from bersama.prd_preparation import PrdPreparationResult
@@ -110,6 +115,18 @@ class FakeSchedulingReadinessProvider:
         return self._snapshot
 
 
+class FakeFileWatcherService:
+    def __init__(self) -> None:
+        self.start_calls = 0
+        self.stop_calls = 0
+
+    def start(self) -> None:
+        self.start_calls += 1
+
+    def stop(self) -> None:
+        self.stop_calls += 1
+
+
 def build_config() -> AppConfig:
     return AppConfig(
         repos={
@@ -194,6 +211,20 @@ def test_reconcile_endpoint_returns_success_response() -> None:
         "action": "reconcile",
     }
     assert service.calls == 1
+
+
+def test_dashboard_app_starts_and_stops_file_watcher_with_lifecycle() -> None:
+    watcher = FakeFileWatcherService()
+    app = create_dashboard_app(
+        config=build_config(),
+        file_watcher_factory=lambda event_bus, worktree_roots: watcher,
+    )
+
+    with TestClient(app):
+        assert watcher.start_calls == 1
+        assert app.state.file_watcher is watcher
+
+    assert watcher.stop_calls == 1
 
 
 def test_reconcile_endpoint_returns_not_found_for_unknown_repo() -> None:
@@ -1590,3 +1621,104 @@ def test_get_scheduling_readiness_snapshot_reports_critical_failures_separately_
             }
         ],
     }
+
+
+@pytest.mark.asyncio
+async def test_sse_events_endpoint_streams_published_repo_events() -> None:
+    app = create_dashboard_app(config=build_config())
+    endpoint = next(route.endpoint for route in app.routes if getattr(route, "path", None) == "/api/events")
+
+    response = await endpoint(repo="demo")
+
+    assert response.media_type == "text/event-stream"
+    assert response.status_code == 200
+
+    body_iterator = response.body_iterator
+    first_chunk_task = asyncio.create_task(body_iterator.__anext__())
+
+    for _ in range(100):
+        if app.state.event_bus._subscribers:
+            break
+        await asyncio.sleep(0)
+    else:
+        raise AssertionError("SSE subscriber did not attach.")
+
+    app.state.event_bus.publish_nowait(
+        Event(
+            type="issues_updated",
+            data={"repo": "demo", "issue_number": 18},
+        )
+    )
+
+    first_chunk = await asyncio.wait_for(first_chunk_task, timeout=1.0)
+    assert first_chunk == {
+        "event": "issues_updated",
+        "data": json.dumps({"repo": "demo", "issue_number": 18}),
+    }
+
+
+@pytest.mark.asyncio
+async def test_sse_events_endpoint_fans_out_to_multiple_subscribers() -> None:
+    app = create_dashboard_app(config=build_config())
+    endpoint = next(route.endpoint for route in app.routes if getattr(route, "path", None) == "/api/events")
+
+    response_one = await endpoint(repo="demo")
+    response_two = await endpoint(repo="demo")
+
+    first_chunk_one = asyncio.create_task(response_one.body_iterator.__anext__())
+    first_chunk_two = asyncio.create_task(response_two.body_iterator.__anext__())
+
+    for _ in range(100):
+        if len(app.state.event_bus._subscribers) == 2:
+            break
+        await asyncio.sleep(0)
+    else:
+        raise AssertionError("SSE subscribers did not attach.")
+
+    app.state.event_bus.publish_nowait(
+        Event(
+            type="runs_updated",
+            data={"repo": "demo", "issue_number": 18},
+        )
+    )
+
+    expected = {
+        "event": "runs_updated",
+        "data": json.dumps({"repo": "demo", "issue_number": 18}),
+    }
+    assert await asyncio.wait_for(first_chunk_one, timeout=1.0) == expected
+    assert await asyncio.wait_for(first_chunk_two, timeout=1.0) == expected
+
+
+@pytest.mark.asyncio
+async def test_sse_events_endpoint_disconnect_removes_subscriber() -> None:
+    app = create_dashboard_app(config=build_config())
+    endpoint = next(route.endpoint for route in app.routes if getattr(route, "path", None) == "/api/events")
+
+    response = await endpoint(repo="demo")
+    iterator = response.body_iterator
+    first_chunk_task = asyncio.create_task(iterator.__anext__())
+
+    for _ in range(100):
+        if len(app.state.event_bus._subscribers) == 1:
+            break
+        await asyncio.sleep(0)
+    else:
+        raise AssertionError("SSE subscriber did not attach.")
+
+    app.state.event_bus.publish_nowait(
+        Event(
+            type="issues_updated",
+            data={"repo": "demo", "issue_number": 18},
+        )
+    )
+    await asyncio.wait_for(first_chunk_task, timeout=1.0)
+
+    await iterator.aclose()
+
+    for _ in range(100):
+        if not app.state.event_bus._subscribers:
+            break
+        await asyncio.sleep(0)
+    else:
+        raise AssertionError("SSE subscriber did not detach.")

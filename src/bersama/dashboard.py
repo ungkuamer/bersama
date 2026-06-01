@@ -2,14 +2,19 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from datetime import datetime, timezone
+from contextlib import asynccontextmanager
 from pathlib import Path
+import json
 
 from fastapi import BackgroundTasks, FastAPI, HTTPException
 from pydantic import BaseModel
+from sse_starlette import EventSourceResponse
 
 from bersama.claiming import ClaimWorkspaceGateway, ImplementationClaimService
 from bersama.config import AppConfig, ConfigError, RepoConfig
 from bersama.execution import HarnessExecutionService
+from bersama.event_bus import EventBus
+from bersama.file_watcher import FileWatcherService
 from bersama.github_issues import GitHubIssueGateway, create_bounded_issue_gateway
 from bersama.integration import IntegrationService, IntegrationWorkspaceGateway
 from bersama.issues import GitHubIssue, ImplementationIssue, parse_issue
@@ -26,6 +31,7 @@ ExecutionServiceFactory = Callable[[RepoConfig], HarnessExecutionService]
 IntegrationServiceFactory = Callable[[RepoConfig], IntegrationService]
 IssueGatewayFactory = Callable[[], GitHubIssueGateway]
 BackgroundTaskScheduler = Callable[..., object]
+FileWatcherFactory = Callable[[EventBus, list[Path]], FileWatcherService]
 
 
 def _serialize_diagnostics(parsed_issue: object) -> list[dict[str, str]]:
@@ -66,8 +72,31 @@ def create_dashboard_app(
     issue_gateway_factory: IssueGatewayFactory | None = None,
     background_task_scheduler: BackgroundTaskScheduler | None = None,
     scheduling_readiness_provider: object | None = None,
+    file_watcher_factory: FileWatcherFactory | None = None,
 ) -> FastAPI:
-    app = FastAPI()
+    event_bus = EventBus()
+    watcher_factory = file_watcher_factory or (
+        lambda event_bus, worktree_roots: FileWatcherService(
+            event_bus=event_bus,
+            worktree_roots=worktree_roots,
+        )
+    )
+
+    @asynccontextmanager
+    async def lifespan(app: FastAPI):
+        app.state.event_bus = event_bus
+        app.state.file_watcher = watcher_factory(
+            app.state.event_bus,
+            [repo.worktree_root for repo in config.repos.values()],
+        )
+        app.state.file_watcher.start()
+        try:
+            yield
+        finally:
+            app.state.file_watcher.stop()
+
+    app = FastAPI(lifespan=lifespan)
+    app.state.event_bus = event_bus
 
     from fastapi.middleware.cors import CORSMiddleware
     app.add_middleware(
@@ -359,8 +388,6 @@ def create_dashboard_app(
             "prd_branch": result.prd_branch,
         }
 
-    import json
-
     @app.get("/api/repos")
     def get_repos() -> list[dict[str, object]]:
         return [
@@ -493,6 +520,25 @@ def create_dashboard_app(
             flat_results.append(item)
 
         return flat_results
+
+    @app.get("/api/events")
+    async def get_events(repo: str) -> EventSourceResponse:
+        try:
+            config.repo(repo)
+        except ConfigError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+        async def event_stream():
+            async with app.state.event_bus.subscribe() as subscriber:
+                async for event in subscriber:
+                    if event.data.get("repo") not in (None, repo):
+                        continue
+                    yield {
+                        "event": event.type,
+                        "data": json.dumps(event.data),
+                    }
+
+        return EventSourceResponse(event_stream())
 
     @app.get("/api/scheduling-readiness/{repo_name}")
     def get_scheduling_readiness_snapshot(repo_name: str) -> dict[str, object]:

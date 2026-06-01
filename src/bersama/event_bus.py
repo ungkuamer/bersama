@@ -38,6 +38,9 @@ class EventBus:
         self._subscribers: list[asyncio.Queue[Event]] = []
 
     async def publish(self, event: Event) -> None:
+        self.publish_nowait(event)
+
+    def publish_nowait(self, event: Event) -> None:
         for queue in list(self._subscribers):
             try:
                 queue.put_nowait(event)

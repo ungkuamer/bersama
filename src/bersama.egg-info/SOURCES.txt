@@ -7,6 +7,7 @@ src/bersama/cli.py
 src/bersama/command_executor.py
 src/bersama/config.py
 src/bersama/dashboard.py
+src/bersama/event_bus.py
 src/bersama/execution.py
 src/bersama/github_issues.py
 src/bersama/integration.py
@@ -16,6 +17,7 @@ src/bersama/planner.py
 src/bersama/prd_preparation.py
 src/bersama/reconciliation.py
 src/bersama/repo_lock.py
+src/bersama/scheduling_readiness.py
 src/bersama.egg-info/PKG-INFO
 src/bersama.egg-info/SOURCES.txt
 src/bersama.egg-info/dependency_links.txt
@@ -27,6 +29,7 @@ tests/test_cli.py
 tests/test_command_executor.py
 tests/test_config.py
 tests/test_dashboard.py
+tests/test_event_bus.py
 tests/test_execution.py
 tests/test_github_issues.py
 tests/test_integration.py
@@ -36,3 +39,4 @@ tests/test_planner.py
 tests/test_prd_preparation.py
 tests/test_reconciliation.py
 tests/test_repo_lock.py
+tests/test_scheduling_readiness.py
