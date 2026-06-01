@@ -20,9 +20,10 @@ import {
   ArrowDown,
   Download,
   Hand,
-  Send
+  Send,
+  Activity
 } from 'lucide-react'
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
+import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardAction } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Button } from '@/components/ui/button'
@@ -681,6 +682,11 @@ export default function App() {
   const getFailedRunsCount = () => runs.filter(r => r.status === 'failed').length;
   const getReadyIssuesCount = () => issues.filter(i => i.kind === 'implementation' && i.status === 'ready').length;
 
+  const currentRepo = repos.find(r => r.name === selectedRepo);
+  const capacity = currentRepo?.global_concurrency || 0;
+  const activeRunsCount = getActiveRunsCount();
+  const capacityUtilization = capacity > 0 ? Math.round((activeRunsCount / capacity) * 100) : 0;
+
   return (
     <div className="dashboard-shell relative min-h-screen text-foreground flex antialiased">
       {/* Premium Collapsible Left Sidebar */}
@@ -701,9 +707,6 @@ export default function App() {
           isCollapsed={isCollapsed}
           setIsCollapsed={setIsCollapsed}
           activeTab={activeTab}
-          activeRunsCount={getActiveRunsCount()}
-          readyIssuesCount={getReadyIssuesCount()}
-          failedRunsCount={getFailedRunsCount()}
           refreshing={refreshing}
           pollingActive={pollingActive}
           setPollingActive={setPollingActive}
@@ -711,6 +714,93 @@ export default function App() {
           error={error}
           onRetryConnection={() => { fetchRepos(); if(selectedRepo) fetchData(true); }}
         />
+
+        {/* Premium Grid of Stat Cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 px-6 pt-6 select-none animate-fade-in shrink-0">
+          {/* Card 1: Active Runs */}
+          <Card className="dashboard-glass-panel border border-zinc-800 bg-[#0d0d0f]/85 flex flex-col justify-between shadow-[0_4px_20px_rgba(0,0,0,0.4)]">
+            <CardHeader className="py-3 px-4 flex flex-row items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Activity className="size-4 text-amber-500 shrink-0" />
+                <CardTitle className="text-xs font-bold uppercase tracking-wider text-zinc-200">Active Runs</CardTitle>
+              </div>
+              <CardAction>
+                <Badge variant="outline" className="font-mono text-[9px] text-zinc-400 bg-zinc-950 border-zinc-800 px-1.5 py-0">
+                  {capacityUtilization}% util
+                </Badge>
+              </CardAction>
+            </CardHeader>
+            <CardContent className="px-4 pb-4.5 pt-1">
+              <div className="flex items-baseline gap-1.5">
+                <span className="text-3xl font-bold font-mono tracking-tight text-white">{activeRunsCount}</span>
+                <span className="text-xs font-mono text-zinc-500">/ {capacity} capacity</span>
+              </div>
+              <CardDescription className="text-[10px] text-zinc-500 mt-2 font-sans">
+                Active runner execution slots currently occupied
+              </CardDescription>
+            </CardContent>
+          </Card>
+
+          {/* Card 2: Ready Issues */}
+          <Card className="dashboard-glass-panel border border-zinc-800 bg-[#0d0d0f]/85 flex flex-col justify-between shadow-[0_4px_20px_rgba(0,0,0,0.4)]">
+            <CardHeader className="py-3 px-4 flex flex-row items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Layers className="size-4 text-blue-500 shrink-0" />
+                <CardTitle className="text-xs font-bold uppercase tracking-wider text-zinc-200">Ready Issues</CardTitle>
+              </div>
+            </CardHeader>
+            <CardContent className="px-4 pb-4.5 pt-1">
+              <div className="text-3xl font-bold font-mono tracking-tight text-white">
+                {getReadyIssuesCount()}
+              </div>
+              <CardDescription className="text-[10px] text-zinc-500 mt-2 font-sans">
+                Eligible ready implementation issues awaiting claims
+              </CardDescription>
+            </CardContent>
+          </Card>
+
+          {/* Card 3: Failed Runs */}
+          <Card className="dashboard-glass-panel border border-[#ff0000]/15 bg-[#0d0d0f]/85 flex flex-col justify-between shadow-[0_4px_20px_rgba(0,0,0,0.4)]">
+            <CardHeader className="py-3 px-4 flex flex-row items-center justify-between">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="size-4 text-red-500 shrink-0" />
+                <CardTitle className="text-xs font-bold uppercase tracking-wider text-zinc-200">Failed Runs</CardTitle>
+              </div>
+            </CardHeader>
+            <CardContent className="px-4 pb-4.5 pt-1">
+              <div className={`text-3xl font-bold font-mono tracking-tight ${getFailedRunsCount() > 0 ? 'text-red-500 animate-pulse' : 'text-white'}`}>
+                {getFailedRunsCount()}
+              </div>
+              <CardDescription className="text-[10px] text-zinc-500 mt-2 font-sans">
+                Failed agent runs requiring manual intervention
+              </CardDescription>
+            </CardContent>
+          </Card>
+
+          {/* Card 4: Registered Repos */}
+          <Card className="dashboard-glass-panel border border-zinc-800 bg-[#0d0d0f]/85 flex flex-col justify-between shadow-[0_4px_20px_rgba(0,0,0,0.4)]">
+            <CardHeader className="py-3 px-4 flex flex-row items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Database className="size-4 text-emerald-500 shrink-0" />
+                <CardTitle className="text-xs font-bold uppercase tracking-wider text-zinc-200">Registered Repos</CardTitle>
+              </div>
+              <CardAction>
+                <div className="flex items-center gap-1.5">
+                  <span className="size-1.5 rounded-full bg-emerald-500 animate-pulse shrink-0"></span>
+                  <span className="text-[9px] font-mono text-emerald-450 uppercase tracking-wider font-semibold">Active</span>
+                </div>
+              </CardAction>
+            </CardHeader>
+            <CardContent className="px-4 pb-4.5 pt-1">
+              <div className="text-3xl font-bold font-mono tracking-tight text-white">
+                {repos.length}
+              </div>
+              <CardDescription className="text-[10px] text-zinc-500 mt-2 font-sans">
+                Total connected codebases and workspaces
+              </CardDescription>
+            </CardContent>
+          </Card>
+        </div>
 
       {/* Main Content Layout */}
       {activeTab === 'readiness' ? (

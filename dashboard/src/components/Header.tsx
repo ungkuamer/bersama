@@ -6,9 +6,6 @@ interface HeaderProps {
   isCollapsed: boolean;
   setIsCollapsed: (collapsed: boolean) => void;
   activeTab: 'readiness' | 'operator';
-  activeRunsCount: number;
-  readyIssuesCount: number;
-  failedRunsCount: number;
   refreshing: boolean;
   pollingActive: boolean;
   setPollingActive: (active: boolean) => void;
@@ -21,9 +18,6 @@ export default function Header({
   isCollapsed,
   setIsCollapsed,
   activeTab,
-  activeRunsCount,
-  readyIssuesCount,
-  failedRunsCount,
   refreshing,
   pollingActive,
   setPollingActive,
@@ -57,25 +51,6 @@ export default function Header({
 
         {/* Global Statistics Panel */}
         <div className="flex flex-wrap items-center gap-4 text-xs">
-          {/* Quick Metrics */}
-          <div className="dashboard-glass-surface flex items-center gap-3 border rounded px-3 py-1 text-[11px]">
-            <div className="flex items-center gap-1.5 border-r border-border pr-3">
-              <span className="size-1.5 rounded-full bg-amber-500 animate-pulse"></span>
-              <span className="text-zinc-400">ACTIVE RUNS:</span>
-              <span className="text-foreground font-bold">{activeRunsCount}</span>
-            </div>
-            <div className="flex items-center gap-1.5 border-r border-border pr-3">
-              <span className="size-1.5 rounded-full bg-blue-500"></span>
-              <span className="text-zinc-400">READY ISSUES:</span>
-              <span className="text-foreground font-bold">{readyIssuesCount}</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span className="size-1.5 rounded-full bg-red-500"></span>
-              <span className="text-zinc-400">FAILED RUNS:</span>
-              <span className="text-foreground font-bold">{failedRunsCount}</span>
-            </div>
-          </div>
-
           {/* Refresh / Polling controls using clean neutral buttons */}
           <div className="flex items-center gap-2">
             <Button

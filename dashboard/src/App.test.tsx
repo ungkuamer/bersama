@@ -458,7 +458,7 @@ describe('Bersama Dashboard Frontend', () => {
     });
 
     // Check statistics numbers
-    expect(screen.getByText(/ACTIVE RUNS:/i)).toBeInTheDocument();
+    expect(screen.getByText(/Active Runs/i)).toBeInTheDocument();
   });
 
   it('displays PRDs and implementation issues correctly', async () => {
