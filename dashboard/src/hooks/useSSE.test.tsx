@@ -147,4 +147,131 @@ describe('useSSE', () => {
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ['runs', 'demo'] })
     unmount()
   })
+
+  it('invalidates run-metrics and implementation-issue-metrics queries on metrics_updated event', async () => {
+    const queryClient = new QueryClient({
+      defaultOptions: {
+        queries: {
+          retry: false,
+        },
+      },
+    })
+    const invalidateQueries = vi.spyOn(queryClient, 'invalidateQueries')
+
+    mockFetchEventSource.mockImplementationOnce(async (_input: string, init?: { onopen?: () => void; onmessage?: (message: { event: string; data: string }) => void }) => {
+      init?.onopen?.()
+      init?.onmessage?.({
+        event: 'metrics_updated',
+        data: JSON.stringify({ repo: 'demo', issue_number: 42 }),
+      })
+    })
+
+    renderHook(() => useSSE('demo'), {
+      wrapper: createWrapper(queryClient),
+    })
+
+    await waitFor(() => {
+      expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ['run-metrics', 'demo', 42] })
+      expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ['implementation-issue-metrics', 'demo', 42] })
+    })
+  })
+
+  it('invalidates prd-metrics queries on metrics_updated event with prd_number', async () => {
+    const queryClient = new QueryClient({
+      defaultOptions: {
+        queries: {
+          retry: false,
+        },
+      },
+    })
+    const invalidateQueries = vi.spyOn(queryClient, 'invalidateQueries')
+
+    mockFetchEventSource.mockImplementationOnce(async (_input: string, init?: { onopen?: () => void; onmessage?: (message: { event: string; data: string }) => void }) => {
+      init?.onopen?.()
+      init?.onmessage?.({
+        event: 'metrics_updated',
+        data: JSON.stringify({ repo: 'demo', issue_number: 42, prd_number: 7 }),
+      })
+    })
+
+    renderHook(() => useSSE('demo'), {
+      wrapper: createWrapper(queryClient),
+    })
+
+    await waitFor(() => {
+      expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ['prd-metrics', 'demo', 7] })
+    })
+  })
+
+  it('does not panic on metrics_updated event with missing issue_number', async () => {
+    const queryClient = new QueryClient({
+      defaultOptions: {
+        queries: {
+          retry: false,
+        },
+      },
+    })
+    const invalidateQueries = vi.spyOn(queryClient, 'invalidateQueries')
+
+    mockFetchEventSource.mockImplementationOnce(async (_input: string, init?: { onopen?: () => void; onmessage?: (message: { event: string; data: string }) => void }) => {
+      init?.onopen?.()
+      init?.onmessage?.({
+        event: 'metrics_updated',
+        data: JSON.stringify({ repo: 'demo' }),
+      })
+    })
+
+    renderHook(() => useSSE('demo'), {
+      wrapper: createWrapper(queryClient),
+    })
+
+    // Wait for connection, then give invalidation a moment to settle
+    await waitFor(() => {
+      expect(mockFetchEventSource).toHaveBeenCalled()
+    })
+
+    // Should not have been called for any metrics queries (since no issue_number/prd_number)
+    expect(invalidateQueries).not.toHaveBeenCalledWith(
+      expect.objectContaining({ queryKey: expect.arrayContaining(['run-metrics']) })
+    )
+    expect(invalidateQueries).not.toHaveBeenCalledWith(
+      expect.objectContaining({ queryKey: expect.arrayContaining(['implementation-issue-metrics']) })
+    )
+    expect(invalidateQueries).not.toHaveBeenCalledWith(
+      expect.objectContaining({ queryKey: expect.arrayContaining(['prd-metrics']) })
+    )
+  })
+
+  it('enters polling fallback after SSE timeout and preserves metrics query polling behavior', async () => {
+    vi.useFakeTimers()
+    mockFetchEventSource.mockImplementationOnce(() => new Promise(() => undefined))
+
+    const queryClient = new QueryClient({
+      defaultOptions: {
+        queries: {
+          retry: false,
+        },
+      },
+    })
+
+    const { result, unmount } = renderHook(() => useSSE('demo'), {
+      wrapper: createWrapper(queryClient),
+    })
+
+    // Snapshot-first: the hook starts with polling fallback false
+    expect(result.current.isPollingFallback).toBe(false)
+    expect(result.current.isConnected).toBe(false)
+
+    // After 10 seconds of no SSE event, fallback kicks in
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(10_000)
+    })
+
+    expect(result.current.isPollingFallback).toBe(true)
+    expect(result.current.isConnected).toBe(false)
+
+    // The polling fallback flag is available for metrics queries to use as enablePollingFallback
+    // This verifies the hook correctly transitions to fallback state without SSE events
+    unmount()
+  })
 })

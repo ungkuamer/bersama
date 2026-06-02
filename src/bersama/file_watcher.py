@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from pathlib import Path
 from typing import Iterable
 
 from watchfiles import awatch
 
-from bersama.event_bus import Event, EventBus, ISSUES_UPDATED, LOG_APPEND, RUNS_UPDATED
+from bersama.event_bus import Event, EventBus, ISSUES_UPDATED, LOG_APPEND, METRICS_UPDATED, RUNS_UPDATED
 
 
 class FileWatcherService:
@@ -43,6 +44,21 @@ class FileWatcherService:
                 payload = {"repo": repo_name, "issue_number": issue_number}
                 await self._event_bus.publish(Event(type=RUNS_UPDATED, data=payload))
                 await self._event_bus.publish(Event(type=ISSUES_UPDATED, data=payload))
+                # Resolve parent PRD number from the run-state for metric invalidation
+                metrics_payload = dict(payload)
+                try:
+                    run_state = json.loads(path.read_text(encoding="utf-8"))
+                    prd_branch = run_state.get("prd_branch", "")
+                    if prd_branch and prd_branch.startswith("prd/") and "/" in prd_branch:
+                        # prd_branch format: prd/<number>-<slug>
+                        prd_part = prd_branch[len("prd/"):].split("-")[0]
+                        try:
+                            metrics_payload["prd_number"] = int(prd_part)
+                        except ValueError:
+                            pass
+                except Exception:
+                    pass
+                await self._event_bus.publish(Event(type=METRICS_UPDATED, data=metrics_payload))
             elif path.name == "harness.log":
                 lines = self._read_appended_lines(path)
                 if lines:
