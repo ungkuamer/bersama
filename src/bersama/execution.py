@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import Protocol
 
 from bersama.config import AppConfig
+from bersama.discord_notifier import DiscordNotifier
 from bersama.github_issues import GitHubIssueRecord
 
 
@@ -52,8 +53,18 @@ def extract_last_agent_message(log_path: Path) -> str | None:
 
 
 class HarnessExecutionService:
-    def __init__(self, *, issues: IssueGateway) -> None:
+    def __init__(
+        self,
+        *,
+        issues: IssueGateway,
+        discord_notifier: DiscordNotifier | None = None,
+    ) -> None:
         self._issues = issues
+        self._discord_notifier = discord_notifier
+
+    def set_discord_notifier(self, notifier: DiscordNotifier | None) -> None:
+        """Set or clear the Discord notifier used for run status updates."""
+        self._discord_notifier = notifier
 
     def execute_run(
         self,
@@ -70,9 +81,14 @@ class HarnessExecutionService:
         from pathlib import Path
         from bersama.issues import parse_issue, GitHubIssue, ImplementationIssue, PrdIssue
 
+        # Track these for the outer exception handler
+        _issue_title: str | None = None
+        _agent_run_id: str | None = None
+
         try:
             # 1. Fetch and parse the Implementation Issue
             issue_record = self._issues.view_issue(issue_number)
+            _issue_title = issue_record.title
             parsed_issue = parse_issue(
                 GitHubIssue(
                     number=issue_record.number,
@@ -108,6 +124,7 @@ class HarnessExecutionService:
             # 3. Retrieve claim metadata
             orchestration = parsed_issue.orchestration
             agent_run_id = orchestration.agent_run_id
+            _agent_run_id = agent_run_id
             implementation_branch = orchestration.implementation_branch
             if not agent_run_id or not implementation_branch:
                 raise ValueError(f"Implementation Issue #{issue_number} is not claimed.")
@@ -195,6 +212,21 @@ class HarnessExecutionService:
 
             initial_commit = get_head_commit(worktree_path)
 
+            # 8a. Notify Discord: Run Started
+            if self._discord_notifier is not None:
+                try:
+                    self._discord_notifier.send(
+                        title="Run Started",
+                        description=(
+                            f"**Repo**: {repo_name}\n"
+                            f"**Issue**: #{issue_number} — {issue_record.title}\n"
+                            f"**Agent Run**: `{agent_run_id}`"
+                        ),
+                        color=0x1ABC9C,
+                    )
+                except Exception:
+                    pass  # best-effort; failure is already logged inside send()
+
             # 9. Run subprocess with process group and timeout, capturing stdout/stderr
             log_path = worktree_path / "harness.log"
             timeout_expired = False
@@ -233,6 +265,20 @@ class HarnessExecutionService:
             if exit_code == 0 and new_commits:
                 status = "succeeded"
                 failure_reason = None
+                # Notify Discord: Run Completed
+                if self._discord_notifier is not None:
+                    try:
+                        self._discord_notifier.send(
+                            title="Run Completed",
+                            description=(
+                                f"**Repo**: {repo_name}\n"
+                                f"**Issue**: #{issue_number} — {issue_record.title}\n"
+                                f"**Agent Run**: `{agent_run_id}`"
+                            ),
+                            color=0x57F287,
+                        )
+                    except Exception:
+                        pass
             else:
                 agent_msg = None
                 if exit_code == 0 and not new_commits:
@@ -247,6 +293,22 @@ class HarnessExecutionService:
                         f"🤖 **Agent Question / Clarification:**\n\n{agent_msg}\n\n"
                         f"*(Please reply with your answers/confirmations and mark this issue as `ready-for-agent` to resume the run.)*"
                     )
+                    # Notify Discord: Run Paused
+                    if self._discord_notifier is not None:
+                        try:
+                            self._discord_notifier.send(
+                                title="Run Failed / Needs Attention",
+                                description=(
+                                    f"**Repo**: {repo_name}\n"
+                                    f"**Issue**: #{issue_number} — {issue_record.title}\n"
+                                    f"**Agent Run**: `{agent_run_id}`\n"
+                                    f"**Status**: Paused — Agent needs clarification\n"
+                                    f"**Question**: {agent_msg[:500]}"
+                                ),
+                                color=0xFFA500,
+                            )
+                        except Exception:
+                            pass
                 else:
                     status = "failed"
                     if timeout_expired:
@@ -261,6 +323,22 @@ class HarnessExecutionService:
                         issue_number,
                         f"Harness execution failed.\n\n**Diagnostics:**\n{failure_reason}"
                     )
+                    # Notify Discord: Run Failed
+                    if self._discord_notifier is not None:
+                        try:
+                            self._discord_notifier.send(
+                                title="Run Failed / Needs Attention",
+                                description=(
+                                    f"**Repo**: {repo_name}\n"
+                                    f"**Issue**: #{issue_number} — {issue_record.title}\n"
+                                    f"**Agent Run**: `{agent_run_id}`\n"
+                                    f"**Status**: Failed\n"
+                                    f"**Reason**: {failure_reason}"
+                                ),
+                                color=0xED4245,
+                            )
+                        except Exception:
+                            pass
 
             # 12. Update final run-state
             run_state.update({
@@ -281,6 +359,24 @@ class HarnessExecutionService:
                 run_state_path=str(run_state_path),
             )
         except Exception as exc:
+            # Notify Discord: Setup/execution exception
+            if self._discord_notifier is not None:
+                try:
+                    title_text = _issue_title or f"#{issue_number}"
+                    run_id_str = f"`{_agent_run_id}`" if _agent_run_id else "N/A"
+                    self._discord_notifier.send(
+                        title="Run Failed / Needs Attention",
+                        description=(
+                            f"**Repo**: {repo_name}\n"
+                            f"**Issue**: #{issue_number} — {title_text}\n"
+                            f"**Agent Run**: {run_id_str}\n"
+                            f"**Status**: Failed\n"
+                            f"**Reason**: {exc}"
+                        ),
+                        color=0xED4245,
+                    )
+                except Exception:
+                    pass
             self._issues.add_labels(issue_number, "needs-triage")
             self._issues.add_comment(
                 issue_number,

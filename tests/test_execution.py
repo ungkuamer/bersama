@@ -4,6 +4,8 @@ import json
 from pathlib import Path
 import subprocess
 
+from unittest.mock import MagicMock
+
 from bersama.config import AppConfig, HarnessConfig, ObservabilityConfig, RepoConfig
 from bersama.execution import HarnessExecutionService
 from bersama.github_issues import GitHubIssueRecord
@@ -406,6 +408,125 @@ def test_observability_disabled_no_telemetry_metadata(tmp_path: Path) -> None:
     telemetry_file = worktree_path / "telemetry_status.txt"
     assert telemetry_file.exists()
     assert telemetry_file.read_text().strip() == "UNSET"
+
+
+class FakeDiscordNotifier:
+    """Records calls to send() for test verification."""
+    def __init__(self) -> None:
+        self.calls: list[dict] = []
+
+    def send(self, **kwargs: object) -> None:
+        self.calls.append(dict(kwargs))
+
+
+def test_discord_notification_run_failed(tmp_path: Path) -> None:
+    """When a run fails, the Discord notifier posts a 'Run Failed / Needs Attention' embed."""
+    repo_path, worktree_root, worktree_path = setup_test_git_repo(tmp_path)
+    issues = get_mock_issues()
+
+    harnesses = {
+        "local-agent": HarnessConfig(
+            name="local-agent",
+            command="bash",
+            args_template=("-c", "exit 42"),
+        )
+    }
+    repos = {
+        "demo": RepoConfig(
+            name="demo",
+            repo_path=repo_path,
+            main_branch="main",
+            worktree_root=worktree_root,
+            global_concurrency=2,
+            per_prd_concurrency=1,
+            default_harness="local-agent",
+        )
+    }
+    config = AppConfig(repos=repos, harnesses=harnesses)
+
+    fake_notifier = FakeDiscordNotifier()
+    service = HarnessExecutionService(issues=issues, discord_notifier=fake_notifier)
+    service.execute_run(
+        repo_name="demo",
+        issue_number=8,
+        config=config,
+    )
+
+    # Should have "started" notification
+    started_calls = [c for c in fake_notifier.calls if "Run Started" in str(c.get("title", ""))]
+    assert len(started_calls) >= 1
+
+    # Should have "Run Failed / Needs Attention" notification
+    failed_calls = [c for c in fake_notifier.calls if "Run Failed" in str(c.get("title", ""))]
+    assert len(failed_calls) >= 1, f"Expected a 'Run Failed' call, got: {fake_notifier.calls}"
+
+    failed = failed_calls[0]
+    assert failed["title"] == "Run Failed / Needs Attention"
+    assert "#8" in failed["description"]
+    assert "demo" in failed.get("description", "")
+    assert "run-123" in failed.get("description", "")
+    assert "non-zero exit code 42" in failed["description"]
+    # Red/orange color for failures
+    assert failed["color"] == 0xED4245
+
+
+def test_discord_notification_run_started(tmp_path: Path) -> None:
+    """When Discord is enabled, starting a run posts a 'Run Started' embed."""
+    repo_path, worktree_root, worktree_path = setup_test_git_repo(tmp_path)
+    issues = get_mock_issues()
+
+    harnesses = {
+        "local-agent": HarnessConfig(
+            name="local-agent",
+            command="bash",
+            args_template=("-c", "echo 'success' > result.txt && git add result.txt && git commit -m 'harness commit'"),
+        )
+    }
+    repos = {
+        "demo": RepoConfig(
+            name="demo",
+            repo_path=repo_path,
+            main_branch="main",
+            worktree_root=worktree_root,
+            global_concurrency=2,
+            per_prd_concurrency=1,
+            default_harness="local-agent",
+        )
+    }
+    config = AppConfig(repos=repos, harnesses=harnesses)
+
+    fake_notifier = FakeDiscordNotifier()
+    service = HarnessExecutionService(issues=issues, discord_notifier=fake_notifier)
+    service.execute_run(
+        repo_name="demo",
+        issue_number=8,
+        config=config,
+    )
+
+    # Should have at least the "started" call (and also "completed" since this run succeeds)
+    started_calls = [c for c in fake_notifier.calls if "Run Started" in str(c.get("title", ""))]
+    assert len(started_calls) >= 1, f"Expected a 'Run Started' call, got: {fake_notifier.calls}"
+
+    started = started_calls[0]
+    assert started["title"] == "Run Started"
+    assert "#8" in started["description"]
+    assert "Execute agent harness" in started["description"]
+    assert "demo" in started.get("description", "")
+    assert "run-123" in started.get("description", "")
+    # Greenish-blue color
+    assert started["color"] == 0x1ABC9C
+
+    # Verify "Run Completed" was also sent (the harness creates a commit so it succeeds)
+    completed_calls = [c for c in fake_notifier.calls if "Run Completed" in str(c.get("title", ""))]
+    assert len(completed_calls) >= 1, f"Expected a 'Run Completed' call, got: {fake_notifier.calls}"
+
+    completed = completed_calls[0]
+    assert completed["title"] == "Run Completed"
+    assert "#8" in completed["description"]
+    assert "demo" in completed.get("description", "")
+    assert "run-123" in completed.get("description", "")
+    # Green color
+    assert completed["color"] == 0x57F287
 
 
 def test_execution_env_context_delivery(tmp_path: Path) -> None:
