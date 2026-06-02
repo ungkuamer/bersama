@@ -127,7 +127,7 @@ repos:
 
 ---
 
-## 🖥️ Running the Dashboard
+## Running the Dashboard
 
 The dashboard provides a visual cockpit showing repositories, active issues, execution logs, and agent harnesses.
 
