@@ -183,9 +183,18 @@ def main() -> int:
         sys.stdout.flush()
         return 1
 
+    # Close stdin to signal EOF to the child process so it terminates naturally
+    if proc.stdin is not None:
+        try:
+            proc.stdin.close()
+        except Exception:
+            pass
+
     exit_code = proc.wait()
     print(f"Process exited with code {exit_code}")
     sys.stdout.flush()
+
+
 
     # Format the last assistant text in the codex/-------- block so that
     # Bersama's extract_last_agent_message naturally captures it for paused states.
