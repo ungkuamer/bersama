@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import yaml
@@ -30,9 +30,18 @@ class RepoConfig:
 
 
 @dataclass(frozen=True)
+class ObservabilityConfig:
+    enabled: bool = False
+    session_prefix: str = "bersama"
+    url: str | None = None
+    token: str | None = None
+
+
+@dataclass(frozen=True)
 class AppConfig:
     repos: dict[str, RepoConfig]
     harnesses: dict[str, HarnessConfig]
+    observability: ObservabilityConfig = field(default_factory=ObservabilityConfig)
 
     def repo(self, name: str) -> RepoConfig:
         try:
@@ -67,7 +76,8 @@ def load_config(path: str | Path) -> AppConfig:
 
     harnesses = _parse_harnesses(data.get("harnesses"))
     repos = _parse_repos(data.get("repos"), harnesses)
-    return AppConfig(repos=repos, harnesses=harnesses)
+    observability = _parse_observability(data.get("observability"))
+    return AppConfig(repos=repos, harnesses=harnesses, observability=observability)
 
 
 def _parse_harnesses(raw_harnesses: object) -> dict[str, HarnessConfig]:
@@ -149,6 +159,29 @@ def _parse_repos(
         )
 
     return repos
+
+
+def _parse_observability(raw: object) -> ObservabilityConfig:
+    if raw is None:
+        return ObservabilityConfig()
+    if not isinstance(raw, dict):
+        raise ConfigError("observability config must be a mapping.")
+    enabled = bool(raw.get("enabled", False))
+    session_prefix = raw.get("session_prefix")
+    if session_prefix is not None and not isinstance(session_prefix, str):
+        raise ConfigError("observability.session_prefix must be a string.")
+    url = raw.get("url")
+    if url is not None and not isinstance(url, str):
+        raise ConfigError("observability.url must be a string.")
+    token = raw.get("token")
+    if token is not None and not isinstance(token, str):
+        raise ConfigError("observability.token must be a string.")
+    return ObservabilityConfig(
+        enabled=enabled,
+        session_prefix=session_prefix or "bersama",
+        url=url,
+        token=token,
+    )
 
 
 def _require_string(data: dict[str, object], key: str, *, context: str) -> str:
