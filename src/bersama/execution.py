@@ -133,6 +133,17 @@ class HarnessExecutionService:
                 "implementation_branch": implementation_branch,
                 "started_at": started_at,
             }
+
+            # Telemetry association: explicit Run → Observability identity
+            if config.observability.enabled:
+                telemetry_association = {
+                    "repo": repo_name,
+                    "parent_prd": parent_prd_number,
+                    "issue": issue_number,
+                    "run_id": agent_run_id,
+                }
+                run_state["telemetry_association"] = telemetry_association
+
             run_state_path.write_text(json.dumps(run_state, indent=2), encoding="utf-8")
 
             # 6. Render harness command
@@ -161,6 +172,15 @@ class HarnessExecutionService:
                 "BERSAMA_IMPLEMENTATION_BRANCH": implementation_branch,
                 "BERSAMA_REPO_PATH": str(repo.repo_path),
             })
+
+            # Telemetry association: explicit Run → Observability identity
+            if config.observability.enabled:
+                env["BERSAMA_TELEMETRY_ASSOCIATION"] = json.dumps({
+                    "repo": repo_name,
+                    "parent_prd": parent_prd_number,
+                    "issue": issue_number,
+                    "run_id": agent_run_id,
+                })
 
             # 8. Record initial HEAD commit
             def get_head_commit(cwd: Path) -> str:
