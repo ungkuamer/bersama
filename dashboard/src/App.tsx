@@ -45,6 +45,7 @@ import { useLogStream } from '@/hooks/useLogStream'
 import { useRunMetricsQuery } from '@/hooks/useRunMetricsQuery'
 import { useImplementationIssueMetricsQuery } from '@/hooks/useImplementationIssueMetricsQuery'
 import { usePrdMetricsQuery } from '@/hooks/usePrdMetricsQuery'
+import { formatCompactTokens, formatCompactCost, formatCompactMs, formatCompactTokensPerSec } from '@/lib/metrics'
 
 interface ProcessGlobal {
   process?: {
@@ -617,23 +618,7 @@ export default function App() {
     }
   };
 
-  const formatCompactTokens = (tokens: number | null | undefined): string => {
-    if (tokens == null) return '—';
-    if (tokens >= 1_000_000) return `${(tokens / 1_000_000).toLocaleString(undefined, { maximumFractionDigits: 1 })}M`;
-    if (tokens >= 1_000) return `${(tokens / 1_000).toLocaleString(undefined, { maximumFractionDigits: 1 })}K`;
-    return String(tokens);
-  };
 
-  const formatCompactCost = (cost: number | null | undefined): string => {
-    if (cost == null) return '—';
-    return `$${cost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-  };
-
-  const formatCompactMs = (ms: number | null | undefined): string => {
-    if (ms == null) return '—';
-    if (ms >= 1000) return `${(ms / 1000).toLocaleString(undefined, { maximumFractionDigits: 1 })}s`;
-    return `${Math.round(ms)}ms`;
-  }
 
   const PrdMetricsRow = ({ prdNumber }: { prdNumber: number }) => {
     const { data, isPending } = usePrdMetricsQuery(effectiveSelectedRepo, prdNumber);
@@ -719,7 +704,7 @@ export default function App() {
             <span className="font-semibold text-foreground">{formatCompactMs(metrics.avg_latency_ms)}</span>
           </span>
           <span className="flex items-center gap-1">
-            <span className="font-semibold text-foreground">{metrics.avg_output_tokens_per_sec != null ? `${Math.round(metrics.avg_output_tokens_per_sec)} tok/s` : '—'}</span>
+            <span className="font-semibold text-foreground">{formatCompactTokensPerSec(metrics.avg_output_tokens_per_sec)}</span>
           </span>
 
           {/* Telemetry diagnostics */}
@@ -1626,7 +1611,11 @@ export default function App() {
         }}
         selectedRunIssue={selectedRunIssue}
         runMetrics={runMetricsQuery.data ?? null}
+        runMetricsLoading={drawerRunIssueNumber !== null && runMetricsQuery.isPending}
+        runMetricsError={runMetricsQuery.error ? String(runMetricsQuery.error) : null}
         implementationIssueMetrics={implIssueMetricsQuery.data ?? null}
+        implementationIssueMetricsLoading={drawerRunIssueNumber !== null && implIssueMetricsQuery.isPending}
+        implementationIssueMetricsError={implIssueMetricsQuery.error ? String(implIssueMetricsQuery.error) : null}
       />
 
       {/* Footer Info Box */}
