@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from bersama.config import ConfigError, load_config
+from bersama.config import ConfigError, DiscordConfig, load_config
 
 
 def write_config(tmp_path: Path, contents: str) -> Path:
@@ -264,3 +264,82 @@ observability:
 
     with pytest.raises(ConfigError, match="observability.token must be a string"):
         load_config(config_path)
+
+
+def test_discord_config_parses_from_yaml(tmp_path: Path) -> None:
+    """Discord block is parsed into DiscordConfig (enabled, webhook_url)."""
+    config_path = write_config(
+        tmp_path,
+        """
+harnesses:
+  local:
+    command: codex
+repos:
+  demo:
+    repo_path: /repos/demo
+    main_branch: main
+    worktree_root: /worktrees/demo
+    default_harness: local
+discord:
+  enabled: true
+  webhook_url: https://discord.com/api/webhooks/test
+""".strip(),
+    )
+
+    config = load_config(config_path)
+
+    assert isinstance(config.discord, DiscordConfig)
+    assert config.discord.enabled is True
+    assert config.discord.webhook_url == "https://discord.com/api/webhooks/test"
+
+
+def test_discord_webhook_url_env_override(tmp_path: Path, monkeypatch) -> None:
+    """DISCORD_WEBHOOK_URL env var overrides YAML webhook_url."""
+    monkeypatch.setenv("DISCORD_WEBHOOK_URL", "https://discord.com/api/webhooks/from-env")
+
+    config_path = write_config(
+        tmp_path,
+        """
+harnesses:
+  local:
+    command: codex
+repos:
+  demo:
+    repo_path: /repos/demo
+    main_branch: main
+    worktree_root: /worktrees/demo
+    default_harness: local
+discord:
+  enabled: true
+  webhook_url: https://discord.com/api/webhooks/from-yaml
+""".strip(),
+    )
+
+    config = load_config(config_path)
+
+    assert config.discord.enabled is True
+    assert config.discord.webhook_url == "https://discord.com/api/webhooks/from-env"
+
+
+def test_discord_env_only_no_yaml(tmp_path: Path, monkeypatch) -> None:
+    """DISCORD_WEBHOOK_URL env var sets webhook_url even without YAML discord block."""
+    monkeypatch.setenv("DISCORD_WEBHOOK_URL", "https://discord.com/api/webhooks/env-only")
+
+    config_path = write_config(
+        tmp_path,
+        """
+harnesses:
+  local:
+    command: codex
+repos:
+  demo:
+    repo_path: /repos/demo
+    main_branch: main
+    worktree_root: /worktrees/demo
+    default_harness: local
+""".strip(),
+    )
+
+    config = load_config(config_path)
+
+    assert config.discord.webhook_url == "https://discord.com/api/webhooks/env-only"
