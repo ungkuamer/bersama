@@ -119,6 +119,12 @@ class ImplementationIssueMetricsSnapshot:
     failure_count: int = 0
     latest_run_status: str | None = None
 
+    # End-to-end success: runs that produced an Integrated Implementation Issue.
+    # An implementation issue is "integrated" when its PR was merged and the
+    # issue was closed.  The count equals the total run_count when the issue
+    # is closed, and 0 otherwise.
+    integrated_run_count: int = 0
+
     @property
     def metrics_available(self) -> bool:
         return self.runs_with_telemetry > 0
@@ -156,6 +162,10 @@ class PrdMetricsSnapshot:
     successful_run_count: int = 0
     runs_with_telemetry: int = 0
     runs_without_telemetry: int = 0
+
+    # End-to-end success: runs across all child issues that produced Integrated
+    # Implementation Issues (i.e. issues whose code was actually merged).
+    integrated_run_count: int = 0
 
     @property
     def metrics_available(self) -> bool:
@@ -365,15 +375,21 @@ class TelemetryAdapter:
         issue_number: int,
         associations: list[dict[str, object]] | None = None,
         run_statuses: list[str] | None = None,
+        is_integrated: bool = False,
     ) -> ImplementationIssueMetricsSnapshot:
         """Return aggregated metrics for an Implementation Issue.
 
         Aggregates across all associated Agent Runs and reports diagnostics
         for runs that are missing telemetry.
+
+        When *is_integrated* is True the implementation issue's code has been
+        successfully merged into the PRD branch — all associated runs count
+        as integrated.
         """
         if not associations:
             if run_statuses:
                 # Runs exist but have no telemetry association
+                run_count = len(run_statuses)
                 return ImplementationIssueMetricsSnapshot(
                     issue_number=issue_number,
                     diagnostics=[
@@ -382,12 +398,13 @@ class TelemetryAdapter:
                             message=f"No Agent Run associations found for Implementation Issue #{issue_number}.",
                         )
                     ],
-                    run_count=len(run_statuses),
-                    runs_without_telemetry=len(run_statuses),
+                    run_count=run_count,
+                    runs_without_telemetry=run_count,
                     runs_with_telemetry=0,
                     successful_run_count=sum(1 for s in run_statuses if s == "succeeded"),
                     failure_count=sum(1 for s in run_statuses if s == "failed"),
                     latest_run_status=run_statuses[-1] if run_statuses else None,
+                    integrated_run_count=run_count if is_integrated else 0,
                 )
             return ImplementationIssueMetricsSnapshot(
                 issue_number=issue_number,
@@ -409,6 +426,7 @@ class TelemetryAdapter:
             issue_number=issue_number,
             run_snapshots=run_snapshots,
             run_statuses=run_statuses,
+            is_integrated=is_integrated,
         )
 
     def fetch_prd_metrics(
@@ -554,9 +572,14 @@ def _aggregate_implementation_issue_metrics(
     issue_number: int,
     run_snapshots: list[AgentRunMetricsSnapshot],
     run_statuses: list[str] | None = None,
+    is_integrated: bool = False,
 ) -> ImplementationIssueMetricsSnapshot:
     """Aggregate individual Agent Run snapshots into an Implementation Issue
     metrics view.
+
+    When *is_integrated* is True the implementation issue's code has been
+    successfully merged into the PRD branch — all associated runs count
+    as integrated.
     """
     diagnostics: list[TelemetryDiagnostic] = []
     runs_with_telemetry = 0
@@ -617,18 +640,22 @@ def _aggregate_implementation_issue_metrics(
             runs_without_telemetry += 1
             diagnostics.extend(snap.diagnostics)
 
+    run_count = len(run_snapshots)
+    integrated_run_count = run_count if is_integrated else 0
+
     if not has_any_metrics:
         # No telemetry data in any run — return diagnostics (may be empty for
         # empty run lists, which still means no metrics available)
         return ImplementationIssueMetricsSnapshot(
             issue_number=issue_number,
             diagnostics=diagnostics,
-            run_count=len(run_snapshots),
+            run_count=run_count,
             successful_run_count=successful_runs,
             runs_with_telemetry=runs_with_telemetry,
             runs_without_telemetry=runs_without_telemetry,
             failure_count=failure_count,
             latest_run_status=latest_run_status,
+            integrated_run_count=integrated_run_count,
         )
 
     return ImplementationIssueMetricsSnapshot(
@@ -645,12 +672,13 @@ def _aggregate_implementation_issue_metrics(
         avg_time_to_first_token_ms=_mean(avg_ttf_values),
         avg_latency_ms=_mean(avg_latency_values),
         avg_output_tokens_per_sec=_mean(avg_tps_values),
-        run_count=len(run_snapshots),
+        run_count=run_count,
         successful_run_count=successful_runs,
         runs_with_telemetry=runs_with_telemetry,
         runs_without_telemetry=runs_without_telemetry,
         failure_count=failure_count,
         latest_run_status=latest_run_status,
+        integrated_run_count=integrated_run_count,
     )
 
 
@@ -698,6 +726,7 @@ def _aggregate_prd_metrics(
 
     total_runs = 0
     total_successful_runs = 0
+    total_integrated_runs = 0
     total_runs_with_telemetry = 0
     total_runs_without_telemetry = 0
     has_any_metrics = False
@@ -731,6 +760,7 @@ def _aggregate_prd_metrics(
 
         total_runs += snap.run_count
         total_successful_runs += snap.successful_run_count
+        total_integrated_runs += snap.integrated_run_count
         total_runs_with_telemetry += snap.runs_with_telemetry
         total_runs_without_telemetry += snap.runs_without_telemetry
         diagnostics.extend(snap.diagnostics)
@@ -755,6 +785,7 @@ def _aggregate_prd_metrics(
         successful_run_count=total_successful_runs,
         runs_with_telemetry=total_runs_with_telemetry,
         runs_without_telemetry=total_runs_without_telemetry,
+        integrated_run_count=total_integrated_runs,
     )
 
 
@@ -807,6 +838,7 @@ def serialize_implementation_issue_metrics_snapshot(
         "metrics_available": snapshot.metrics_available,
         "run_count": snapshot.run_count,
         "successful_run_count": snapshot.successful_run_count,
+        "integrated_run_count": snapshot.integrated_run_count,
         "runs_with_telemetry": snapshot.runs_with_telemetry,
         "runs_without_telemetry": snapshot.runs_without_telemetry,
         "failure_count": snapshot.failure_count,
@@ -840,6 +872,7 @@ def serialize_prd_metrics_snapshot(
         "child_status_counts": snapshot.child_status_counts,
         "total_run_count": snapshot.total_run_count,
         "successful_run_count": snapshot.successful_run_count,
+        "integrated_run_count": snapshot.integrated_run_count,
         "runs_with_telemetry": snapshot.runs_with_telemetry,
         "runs_without_telemetry": snapshot.runs_without_telemetry,
     }

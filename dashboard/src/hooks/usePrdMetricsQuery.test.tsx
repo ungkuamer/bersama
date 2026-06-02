@@ -15,6 +15,7 @@ const mockPrdMetrics = {
   child_status_counts: { succeeded: 2, ready: 1 },
   total_run_count: 5,
   successful_run_count: 4,
+  integrated_run_count: 2,
   runs_with_telemetry: 4,
   runs_without_telemetry: 1,
   input_tokens: 15000,
@@ -44,6 +45,7 @@ const mockPrdMetricsUnavailable = {
   child_status_counts: { claimed: 1 },
   total_run_count: 1,
   successful_run_count: 0,
+  integrated_run_count: 0,
   runs_with_telemetry: 0,
   runs_without_telemetry: 1,
 }

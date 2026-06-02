@@ -1758,3 +1758,209 @@ def test_prd_metrics_snapshot_metrics_available() -> None:
         runs_with_telemetry=3,
     )
     assert snapshot_with_telemetry.metrics_available
+
+
+# ---- Integrated run count tests ----
+
+
+def test_aggregate_implementation_issue_metrics_integrated_when_closed() -> None:
+    """Acceptance criteria: Run Success Rate counts an Agent Run as successful
+    only when it produced an Integrated Implementation Issue.
+
+    When is_integrated=True the integrated_run_count equals run_count."""
+    run1 = AgentRunMetricsSnapshot(
+        run_id="run-1",
+        input_tokens=1000,
+        output_tokens=500,
+    )
+    run2 = AgentRunMetricsSnapshot(
+        run_id="run-2",
+        input_tokens=2000,
+        output_tokens=1000,
+    )
+
+    snapshot = _aggregate_implementation_issue_metrics(
+        issue_number=125,
+        run_snapshots=[run1, run2],
+        run_statuses=["succeeded", "succeeded"],
+        is_integrated=True,
+    )
+
+    assert snapshot.run_count == 2
+    assert snapshot.integrated_run_count == 2
+
+
+def test_aggregate_implementation_issue_metrics_not_integrated_when_open() -> None:
+    """Harness exit success without successful integration does not count as
+    success-rate success.
+
+    When is_integrated=False the integrated_run_count is 0 even when all
+    harness runs succeeded."""
+    run1 = AgentRunMetricsSnapshot(
+        run_id="run-1",
+        input_tokens=1000,
+        output_tokens=500,
+    )
+
+    snapshot = _aggregate_implementation_issue_metrics(
+        issue_number=125,
+        run_snapshots=[run1],
+        run_statuses=["succeeded"],
+        is_integrated=False,
+    )
+
+    assert snapshot.run_count == 1
+    assert snapshot.successful_run_count == 1  # harness-level success
+    assert snapshot.integrated_run_count == 0  # but not integrated
+
+
+def test_aggregate_implementation_issue_metrics_failed_execution_not_integrated() -> None:
+    """Acceptance criteria: failed execution cases produce integrated_run_count=0."""
+    run1 = AgentRunMetricsSnapshot(
+        run_id="run-1",
+        diagnostics=[
+            TelemetryDiagnostic(
+                code=TelemetryDiagnosticCode.MISSING_ASSOCIATION,
+                message="No association found.",
+            )
+        ],
+    )
+
+    snapshot = _aggregate_implementation_issue_metrics(
+        issue_number=125,
+        run_snapshots=[run1],
+        run_statuses=["failed"],
+        is_integrated=False,
+    )
+
+    assert snapshot.run_count == 1
+    assert snapshot.failure_count == 1
+    assert snapshot.integrated_run_count == 0
+
+
+def test_aggregate_implementation_issue_metrics_integrated_failed_run() -> None:
+    """A failed run on a closed (integrated) issue still counts as integrated
+    because the issue was ultimately integrated. The integrated_run_count
+    reflects end-to-end delivery, not per-run outcome."""
+    run1 = AgentRunMetricsSnapshot(
+        run_id="run-1",
+        diagnostics=[
+            TelemetryDiagnostic(
+                code=TelemetryDiagnosticCode.MISSING_ASSOCIATION,
+                message="No association found.",
+            )
+        ],
+    )
+
+    snapshot = _aggregate_implementation_issue_metrics(
+        issue_number=125,
+        run_snapshots=[run1],
+        run_statuses=["failed"],
+        is_integrated=True,
+    )
+
+    assert snapshot.run_count == 1
+    assert snapshot.failure_count == 1
+    assert snapshot.integrated_run_count == 1  # issue was ultimately integrated
+
+
+def test_serialize_implementation_issue_metrics_includes_integrated_run_count() -> None:
+    """Serialized output includes integrated_run_count."""
+    snapshot = ImplementationIssueMetricsSnapshot(
+        issue_number=125,
+        run_count=3,
+        successful_run_count=2,
+        integrated_run_count=1,
+        runs_with_telemetry=2,
+        runs_without_telemetry=1,
+        failure_count=1,
+        latest_run_status="succeeded",
+    )
+
+    result = serialize_implementation_issue_metrics_snapshot(snapshot)
+
+    assert result["integrated_run_count"] == 1
+    assert result["run_count"] == 3
+
+
+def test_serialize_prd_metrics_includes_integrated_run_count() -> None:
+    """Serialized PRD metrics output includes integrated_run_count."""
+    snapshot = PrdMetricsSnapshot(
+        issue_number=123,
+        total_run_count=5,
+        successful_run_count=3,
+        integrated_run_count=2,
+        runs_with_telemetry=4,
+        runs_without_telemetry=1,
+    )
+
+    result = serialize_prd_metrics_snapshot(snapshot)
+
+    assert result["integrated_run_count"] == 2
+    assert result["total_run_count"] == 5
+
+
+def test_aggregate_prd_metrics_sums_integrated_run_counts() -> None:
+    """PRD-level aggregation sums integrated_run_count across child snapshots."""
+    child1 = ImplementationIssueMetricsSnapshot(
+        issue_number=125,
+        run_count=2,
+        successful_run_count=2,
+        integrated_run_count=2,  # this issue was integrated
+        runs_with_telemetry=2,
+        runs_without_telemetry=0,
+        input_tokens=1000,
+    )
+    child2 = ImplementationIssueMetricsSnapshot(
+        issue_number=126,
+        run_count=1,
+        successful_run_count=1,
+        integrated_run_count=0,  # this issue was NOT integrated
+        runs_with_telemetry=1,
+        runs_without_telemetry=0,
+        input_tokens=2000,
+    )
+
+    snapshot = _aggregate_prd_metrics(
+        prd_number=123,
+        child_snapshots=[child1, child2],
+        child_total_count=2,
+    )
+
+    assert snapshot.total_run_count == 3
+    assert snapshot.integrated_run_count == 2  # only from child1
+
+
+def test_fetch_implementation_issue_metrics_passes_is_integrated() -> None:
+    """TelemetryAdapter.fetch_implementation_issue_metrics passes is_integrated
+    through to the aggregation function."""
+    config = ObservabilityConfig(enabled=False)
+    adapter = TelemetryAdapter(config=config)
+
+    # No associations, so no runs
+    snapshot = adapter.fetch_implementation_issue_metrics(
+        issue_number=125,
+        associations=None,
+        is_integrated=True,
+    )
+
+    assert snapshot.integrated_run_count == 0
+    assert snapshot.run_count == 0
+
+
+def test_fetch_implementation_issue_metrics_integrated_with_runs_no_association() -> None:
+    """When runs exist but lack telemetry associations, integrated_run_count
+    reflects is_integrated status."""
+    config = ObservabilityConfig(enabled=False)
+    adapter = TelemetryAdapter(config=config)
+
+    snapshot = adapter.fetch_implementation_issue_metrics(
+        issue_number=125,
+        associations=None,
+        run_statuses=["succeeded", "failed"],
+        is_integrated=True,
+    )
+
+    assert snapshot.run_count == 2
+    assert snapshot.integrated_run_count == 2  # is_integrated=True
+    assert snapshot.latest_run_status == "failed"
