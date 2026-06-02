@@ -6,6 +6,7 @@ from typing import AsyncIterator
 
 ISSUES_UPDATED = "issues_updated"
 RUNS_UPDATED = "runs_updated"
+METRICS_UPDATED = "metrics_updated"
 LOG_APPEND = "log_append"
 
 

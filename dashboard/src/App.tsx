@@ -22,7 +22,10 @@ import {
   Download,
   Hand,
   Send,
-  Activity
+  Activity,
+  BarChart3,
+  Zap,
+  Cpu
 } from 'lucide-react'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardAction } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -39,6 +42,10 @@ import { useIssuesQuery } from '@/hooks/useIssuesQuery'
 import { useRunsQuery } from '@/hooks/useRunsQuery'
 import { useSSE } from '@/hooks/useSSE'
 import { useLogStream } from '@/hooks/useLogStream'
+import { useRunMetricsQuery } from '@/hooks/useRunMetricsQuery'
+import { useImplementationIssueMetricsQuery } from '@/hooks/useImplementationIssueMetricsQuery'
+import { usePrdMetricsQuery } from '@/hooks/usePrdMetricsQuery'
+import { formatCompactTokens, formatCompactCost, formatCompactMs, formatCompactTokensPerSec } from '@/lib/metrics'
 
 interface ProcessGlobal {
   process?: {
@@ -62,6 +69,12 @@ interface Repo {
   default_harness: string;
 }
 
+interface TelemetryDiagnosticItem {
+  code: string;
+  severity: string;
+  message: string;
+}
+
 interface Issue {
   number: number;
   title: string;
@@ -80,6 +93,7 @@ interface Issue {
   failure_reason?: string | null;
   started_at?: string | null;
   finished_at?: string | null;
+  telemetry_diagnostics?: TelemetryDiagnosticItem[] | null;
 }
 
 interface RunState {
@@ -214,6 +228,15 @@ export default function App() {
     latestEvent: sseState.latestMessage,
     enablePollingFallback: sseState.isPollingFallback,
   });
+
+  // Fetch run metrics when viewing an implementation issue in the drawer
+  const drawerRunIssueNumber = (drawerOpen && drawerIssue?.kind === 'implementation')
+    ? drawerIssue.number
+    : null;
+  const runMetricsQuery = useRunMetricsQuery(effectiveSelectedRepo, drawerRunIssueNumber);
+
+  // Fetch implementation issue aggregated metrics when viewing an implementation issue in the drawer
+  const implIssueMetricsQuery = useImplementationIssueMetricsQuery(effectiveSelectedRepo, drawerRunIssueNumber);
 
   // Derive data from queries
   const issues: Issue[] = issuesQuery.data || [];
@@ -593,6 +616,121 @@ export default function App() {
     } catch {
       return dateStr;
     }
+  };
+
+
+
+  const PrdMetricsRow = ({ prdNumber }: { prdNumber: number }) => {
+    const { data, isPending } = usePrdMetricsQuery(effectiveSelectedRepo, prdNumber);
+
+    if (isPending) {
+      return (
+        <div className="px-4 py-2 border-b border-border">
+          <div className="flex items-center gap-2">
+            <Skeleton className="h-3 w-16 animate-shimmer" />
+            <Skeleton className="h-3 w-12 animate-shimmer" />
+          </div>
+        </div>
+      );
+    }
+
+    if (!data) return null;
+
+    const metrics = data;
+    const hasChildren = metrics.implementation_issue_count > 0;
+    if (!hasChildren && !metrics.metrics_available) {
+      return null;
+    }
+
+    return (
+      <div
+        className="px-4 py-2 border-b border-border bg-muted/10"
+        role="region"
+        aria-label={`PRD #${prdNumber} delivery metrics`}
+      >
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] font-mono text-muted-foreground">
+          {/* Child issue status counts */}
+          <span className="flex items-center gap-1">
+            <Layers className="size-3 shrink-0" />
+            <span className="font-semibold text-foreground">{metrics.implementation_issue_count}</span> children
+          </span>
+
+          {/* Run count */}
+          <span className="flex items-center gap-1">
+            <Activity className="size-3 shrink-0" />
+            <span className="font-semibold text-foreground">{metrics.total_run_count}</span> runs
+          </span>
+
+          {/* Success / failure */}
+          <span className="flex items-center gap-1">
+            <CheckCircle2 className="size-3 shrink-0 text-emerald-500" />
+            <span className="font-semibold text-emerald-600 dark:text-emerald-400">{metrics.successful_run_count}</span>
+          </span>
+          <span className="flex items-center gap-1">
+            <AlertCircle className="size-3 shrink-0 text-red-500" />
+            <span className={`font-semibold ${(metrics.total_run_count - metrics.successful_run_count) > 0 ? 'text-red-600 dark:text-red-400' : ''}`}>{metrics.total_run_count - metrics.successful_run_count}</span>
+          </span>
+
+          {/* Integrated (end-to-end) success rate */}
+          {metrics.total_run_count > 0 && (
+            <span className="flex items-center gap-1">
+              <GitMerge className="size-3 shrink-0 text-purple-500" />
+              <span className={`font-semibold ${metrics.integrated_run_count > 0 ? 'text-purple-600 dark:text-purple-400' : 'text-muted-foreground'}`}>
+                {((metrics.integrated_run_count / metrics.total_run_count) * 100).toFixed(0)}% e2e
+              </span>
+            </span>
+          )}
+
+          <span className="text-border select-none">|</span>
+
+          {/* Model usage */}
+          <span className="flex items-center gap-1">
+            <Cpu className="size-3 shrink-0" />
+            <span className="font-semibold text-foreground">{formatCompactTokens(metrics.total_tokens)}</span> tokens
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="font-semibold text-foreground">{formatCompactCost(metrics.model_cost)}</span>
+          </span>
+
+          <span className="text-border select-none">|</span>
+
+          {/* Responsiveness */}
+          <span className="flex items-center gap-1">
+            <Zap className="size-3 shrink-0" />
+            TTF <span className="font-semibold text-foreground">{formatCompactMs(metrics.avg_time_to_first_token_ms)}</span>
+          </span>
+          <span className="flex items-center gap-1">
+            <Clock className="size-3 shrink-0" />
+            <span className="font-semibold text-foreground">{formatCompactMs(metrics.avg_latency_ms)}</span>
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="font-semibold text-foreground">{formatCompactTokensPerSec(metrics.avg_output_tokens_per_sec)}</span>
+          </span>
+
+          {/* Telemetry diagnostics */}
+          {(metrics.runs_without_telemetry > 0 || (metrics.diagnostics && metrics.diagnostics.length > 0)) && (
+            <>
+              <span className="text-border select-none">|</span>
+              <span
+                className="flex items-center gap-1 text-amber-600 dark:text-amber-400"
+                aria-label={`${metrics.runs_without_telemetry} runs missing telemetry`}
+              >
+                <BarChart3 className="size-3 shrink-0" />
+                <span className="font-semibold">{metrics.runs_without_telemetry}</span> missing telemetry
+                {metrics.diagnostics && metrics.diagnostics.length > 0 && (
+                  <span
+                    className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-1 py-0 text-[8px] dark:border-amber-500/30 dark:bg-amber-500/10"
+                    title={metrics.diagnostics.map((d: { message: string }) => d.message).join('; ')}
+                  >
+                    {metrics.diagnostics.length} diag
+                  </span>
+                )}
+              </span>
+            </>
+          )}
+        </div>
+      </div>
+    );
   };
 
   // Filter issues based on UI controls
@@ -1153,6 +1291,9 @@ export default function App() {
                             </div>
                           )}
 
+                          {/* Compact PRD Metrics */}
+                          <PrdMetricsRow prdNumber={prd.number} />
+
                           {/* Dependency Pipeline Map */}
                           {isExpanded && children.length > 0 && (
                             <DependencyPipeline children={children} />
@@ -1469,6 +1610,12 @@ export default function App() {
           }
         }}
         selectedRunIssue={selectedRunIssue}
+        runMetrics={runMetricsQuery.data ?? null}
+        runMetricsLoading={drawerRunIssueNumber !== null && runMetricsQuery.isPending}
+        runMetricsError={runMetricsQuery.error ? String(runMetricsQuery.error) : null}
+        implementationIssueMetrics={implIssueMetricsQuery.data ?? null}
+        implementationIssueMetricsLoading={drawerRunIssueNumber !== null && implIssueMetricsQuery.isPending}
+        implementationIssueMetricsError={implIssueMetricsQuery.error ? String(implIssueMetricsQuery.error) : null}
       />
 
       {/* Footer Info Box */}

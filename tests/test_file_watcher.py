@@ -5,28 +5,31 @@ from pathlib import Path
 
 import pytest
 
-from bersama.event_bus import EventBus, ISSUES_UPDATED, LOG_APPEND, RUNS_UPDATED
+from bersama.event_bus import EventBus, ISSUES_UPDATED, LOG_APPEND, METRICS_UPDATED, RUNS_UPDATED
 from bersama.file_watcher import FileWatcherService
 
 
 @pytest.mark.asyncio
-async def test_run_state_change_emits_runs_and_issues_events(tmp_path: Path) -> None:
+async def test_run_state_change_emits_runs_issues_and_metrics_events(tmp_path: Path) -> None:
     bus = EventBus()
     watcher = FileWatcherService(event_bus=bus, worktree_roots=[tmp_path])
     run_state_path = tmp_path / "issue-18" / "run-state.json"
     run_state_path.parent.mkdir(parents=True)
-    run_state_path.write_text('{"status":"running"}', encoding="utf-8")
+    run_state_path.write_text('{"status":"running", "prd_branch": "prd/7-some-prd"}', encoding="utf-8")
 
     async with bus.subscribe() as subscriber:
         await watcher.handle_changes({(None, str(run_state_path))})
 
         first = await asyncio.wait_for(subscriber.__anext__(), timeout=1.0)
         second = await asyncio.wait_for(subscriber.__anext__(), timeout=1.0)
+        third = await asyncio.wait_for(subscriber.__anext__(), timeout=1.0)
 
     assert first.type == RUNS_UPDATED
     assert first.data == {"repo": tmp_path.name, "issue_number": 18}
     assert second.type == ISSUES_UPDATED
     assert second.data == {"repo": tmp_path.name, "issue_number": 18}
+    assert third.type == METRICS_UPDATED
+    assert third.data == {"repo": tmp_path.name, "issue_number": 18, "prd_number": 7}
 
 
 @pytest.mark.asyncio
@@ -90,6 +93,27 @@ async def test_watcher_ignores_paths_without_issue_number(tmp_path: Path) -> Non
 
         with pytest.raises(asyncio.TimeoutError):
             await asyncio.wait_for(subscriber.__anext__(), timeout=0.05)
+
+
+@pytest.mark.asyncio
+async def test_run_state_without_prd_branch_emits_metrics_without_prd_number(tmp_path: Path) -> None:
+    bus = EventBus()
+    watcher = FileWatcherService(event_bus=bus, worktree_roots=[tmp_path])
+    run_state_path = tmp_path / "issue-42" / "run-state.json"
+    run_state_path.parent.mkdir(parents=True)
+    run_state_path.write_text('{"status":"running"}', encoding="utf-8")
+
+    async with bus.subscribe() as subscriber:
+        await watcher.handle_changes({(None, str(run_state_path))})
+
+        # consume RUNS_UPDATED and ISSUES_UPDATED
+        await asyncio.wait_for(subscriber.__anext__(), timeout=1.0)
+        await asyncio.wait_for(subscriber.__anext__(), timeout=1.0)
+        third = await asyncio.wait_for(subscriber.__anext__(), timeout=1.0)
+
+    assert third.type == METRICS_UPDATED
+    assert third.data == {"repo": tmp_path.name, "issue_number": 42}
+    assert "prd_number" not in third.data
 
 
 @pytest.mark.asyncio
