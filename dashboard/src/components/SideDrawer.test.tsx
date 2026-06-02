@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import SideDrawer, { type Issue, type RunMetrics } from './SideDrawer';
+import SideDrawer, { type Issue, type RunMetrics, type ImplementationIssueMetrics } from './SideDrawer';
 
 // Mock UI elements or setup when needed
 const mockIssue: Issue = {
@@ -335,7 +335,7 @@ describe('SideDrawer Run Metrics Rendering', () => {
     // Model Usage section
     expect(screen.getByText('Model Usage')).toBeInTheDocument();
     expect(screen.getByText('Input Tokens')).toBeInTheDocument();
-    expect(screen.getByText('1,500')).toBeInTheDocument();
+    expect(screen.getByText('1.5K')).toBeInTheDocument();
     expect(screen.getByText('Output Tokens')).toBeInTheDocument();
     expect(screen.getByText('800')).toBeInTheDocument();
     expect(screen.getByText('Cache Read')).toBeInTheDocument();
@@ -343,9 +343,9 @@ describe('SideDrawer Run Metrics Rendering', () => {
     expect(screen.getByText('Cache Write')).toBeInTheDocument();
     expect(screen.getByText('100')).toBeInTheDocument();
     expect(screen.getByText('Total Tokens')).toBeInTheDocument();
-    expect(screen.getByText('2,600')).toBeInTheDocument();
+    expect(screen.getByText('2.6K')).toBeInTheDocument();
     expect(screen.getByText('Model Cost')).toBeInTheDocument();
-    expect(screen.getByText('$0.0150')).toBeInTheDocument();
+    expect(screen.getByText('$0.015')).toBeInTheDocument();
   });
 
   it('renders tool activity metrics when metrics are available', () => {
@@ -404,19 +404,19 @@ describe('SideDrawer Run Metrics Rendering', () => {
 
     // Average values (primary)
     expect(screen.getByText('Avg TTFT')).toBeInTheDocument();
-    expect(screen.getByText('450.0 ms')).toBeInTheDocument();
+    expect(screen.getByText('450ms')).toBeInTheDocument();
     expect(screen.getByText('Avg Latency')).toBeInTheDocument();
-    expect(screen.getByText('1,200.0 ms')).toBeInTheDocument();
+    expect(screen.getByText('1.2s')).toBeInTheDocument();
     expect(screen.getByText('Avg Tokens/s')).toBeInTheDocument();
-    expect(screen.getByText('85.5')).toBeInTheDocument();
+    expect(screen.getByText('86 tok/s')).toBeInTheDocument();
 
     // Latest values (secondary)
     expect(screen.getByText('Latest TTFT')).toBeInTheDocument();
-    expect(screen.getByText('320.0 ms')).toBeInTheDocument();
+    expect(screen.getByText('320ms')).toBeInTheDocument();
     expect(screen.getByText('Latest Latency')).toBeInTheDocument();
-    expect(screen.getByText('980.0 ms')).toBeInTheDocument();
+    expect(screen.getByText('980ms')).toBeInTheDocument();
     expect(screen.getByText('Latest Tokens/s')).toBeInTheDocument();
-    expect(screen.getByText('92.0')).toBeInTheDocument();
+    expect(screen.getByText('92 tok/s')).toBeInTheDocument();
   });
 
   it('does not render metrics section when runMetrics is null', () => {
@@ -523,12 +523,13 @@ describe('SideDrawer Implementation Issue Metrics', () => {
     telemetry_diagnostics: null,
   };
 
-  const aggregatedMetrics = {
+  const aggregatedMetrics: ImplementationIssueMetrics = {
     issue_number: 127,
     diagnostics: [],
     metrics_available: true,
     run_count: 3,
     successful_run_count: 2,
+    integrated_run_count: 1,
     runs_with_telemetry: 2,
     runs_without_telemetry: 1,
     failure_count: 1,
@@ -581,6 +582,7 @@ describe('SideDrawer Implementation Issue Metrics', () => {
     metrics_available: false,
     run_count: 0,
     successful_run_count: 0,
+    integrated_run_count: 0,
     runs_with_telemetry: 0,
     runs_without_telemetry: 0,
     failure_count: 0,
@@ -641,9 +643,9 @@ describe('SideDrawer Implementation Issue Metrics', () => {
 
     expect(screen.getByText('Aggregated Usage')).toBeInTheDocument();
     expect(screen.getByText('Total Tokens')).toBeInTheDocument();
-    expect(screen.getByText('8,400')).toBeInTheDocument();
+    expect(screen.getByText('8.4K')).toBeInTheDocument();
     expect(screen.getByText('Model Cost')).toBeInTheDocument();
-    expect(screen.getByText('$0.0450')).toBeInTheDocument();
+    expect(screen.getByText('$0.045')).toBeInTheDocument();
     expect(screen.getByText('Tool Calls')).toBeInTheDocument();
     expect(screen.getByText('36')).toBeInTheDocument();
     expect(screen.getByText('Tool Errors')).toBeInTheDocument();
@@ -664,10 +666,11 @@ describe('SideDrawer Implementation Issue Metrics', () => {
 
     expect(screen.getByText('Avg. Responsiveness')).toBeInTheDocument();
     expect(screen.getByText('Avg TTFT')).toBeInTheDocument();
-    expect(screen.getByText('500.0 ms')).toBeInTheDocument();
+    expect(screen.getByText('500ms')).toBeInTheDocument();
     expect(screen.getByText('Avg Latency')).toBeInTheDocument();
+    expect(screen.getByText('1.3s')).toBeInTheDocument();
     expect(screen.getByText('Avg Tokens/s')).toBeInTheDocument();
-    expect(screen.getByText('82.5')).toBeInTheDocument();
+    expect(screen.getByText('83 tok/s')).toBeInTheDocument();
   });
 
   it('renders attempt history with status badges and telemetry indicators', () => {
@@ -765,7 +768,7 @@ describe('SideDrawer Implementation Issue Metrics', () => {
           has_telemetry_association: false,
         },
       ],
-    };
+    } satisfies ImplementationIssueMetrics;
 
     render(
       <SideDrawer
@@ -783,11 +786,12 @@ describe('SideDrawer Implementation Issue Metrics', () => {
   });
 
   it('shows attempt history with telemetry indicator icons', () => {
-    const metricsWithMixedTelemetry = {
+    const metricsWithMixedTelemetry: ImplementationIssueMetrics = {
       ...aggregatedMetrics,
       run_count: 2,
       runs_with_telemetry: 1,
       runs_without_telemetry: 1,
+      integrated_run_count: 1,
       failure_count: 0,
       latest_run_status: 'succeeded',
       runs: [
@@ -820,6 +824,330 @@ describe('SideDrawer Implementation Issue Metrics', () => {
     // Both runs should be visible
     expect(screen.getByText('run-t')).toBeInTheDocument();
     expect(screen.getByText('run-nt')).toBeInTheDocument();
+  });
+});
+
+describe('SideDrawer Metrics Loading States', () => {
+  const runningIssue: Issue = {
+    number: 130,
+    title: 'Stream live metric updates',
+    labels: ['implementation'],
+    state: 'open',
+    kind: 'implementation',
+    status: 'running',
+    parent_prd_number: 123,
+    agent_run_id: 'run-130',
+    started_at: '2026-06-02T17:00:00Z',
+    implementation_branch: 'impl/123/130',
+    blocked_by: [],
+    active_blockers: [],
+    telemetry_diagnostics: null,
+  };
+
+  it('renders loading skeleton for Run Metrics when runMetricsLoading is true', () => {
+    render(
+      <SideDrawer
+        issue={runningIssue}
+        open={true}
+        onOpenChange={() => {}}
+        runMetricsLoading={true}
+      />
+    );
+
+    fireEvent.click(screen.getByText('Operations'));
+
+    // Should show Run Metrics header (both the basic info section and loading skeleton may render)
+    const runMetricsHeaders = screen.getAllByText('Run Metrics');
+    expect(runMetricsHeaders.length).toBeGreaterThanOrEqual(1);
+
+    // Should NOT show Model Usage or other metric sections
+    expect(screen.queryByText('Model Usage')).not.toBeInTheDocument();
+    expect(screen.queryByText('Tool Activity')).not.toBeInTheDocument();
+  });
+
+  it('renders error state for Run Metrics when runMetricsError is provided', () => {
+    render(
+      <SideDrawer
+        issue={runningIssue}
+        open={true}
+        onOpenChange={() => {}}
+        runMetricsError="Failed to fetch telemetry data"
+      />
+    );
+
+    fireEvent.click(screen.getByText('Operations'));
+
+    // Should show error message
+    expect(screen.getByText('Failed to fetch telemetry data')).toBeInTheDocument();
+    expect(screen.getByText(/Telemetry data could not be loaded/)).toBeInTheDocument();
+
+    // Should NOT show metric sections
+    expect(screen.queryByText('Model Usage')).not.toBeInTheDocument();
+  });
+
+  it('renders loading skeleton for Implementation Issue Metrics when loading', () => {
+    render(
+      <SideDrawer
+        issue={runningIssue}
+        open={true}
+        onOpenChange={() => {}}
+        implementationIssueMetricsLoading={true}
+      />
+    );
+
+    fireEvent.click(screen.getByText('Operations'));
+
+    // Should show Implementation Issue Metrics header
+    expect(screen.getByText('Implementation Issue Metrics')).toBeInTheDocument();
+
+    // Should NOT show aggregated data sections
+    expect(screen.queryByText('Attempts')).not.toBeInTheDocument();
+    expect(screen.queryByText('Aggregated Usage')).not.toBeInTheDocument();
+    expect(screen.queryByText('Attempt History')).not.toBeInTheDocument();
+  });
+
+  it('renders error state for Implementation Issue Metrics when error is provided', () => {
+    render(
+      <SideDrawer
+        issue={runningIssue}
+        open={true}
+        onOpenChange={() => {}}
+        implementationIssueMetricsError="Network error occurred"
+      />
+    );
+
+    fireEvent.click(screen.getByText('Operations'));
+
+    // Should show error message
+    expect(screen.getByText('Network error occurred')).toBeInTheDocument();
+
+    // Should NOT show metric data
+    expect(screen.queryByText('Aggregated Usage')).not.toBeInTheDocument();
+  });
+
+  it('renders both Run Metrics and Implementation Issue Metrics loading states simultaneously', () => {
+    render(
+      <SideDrawer
+        issue={runningIssue}
+        open={true}
+        onOpenChange={() => {}}
+        runMetricsLoading={true}
+        implementationIssueMetricsLoading={true}
+      />
+    );
+
+    fireEvent.click(screen.getByText('Operations'));
+
+    // Both headers should be present (Run Metrics may appear twice due to basic info section)
+    const runHeaders = screen.getAllByText('Run Metrics');
+    expect(runHeaders.length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText('Implementation Issue Metrics')).toBeInTheDocument();
+
+    // No data should be present
+    expect(screen.queryByText('Model Usage')).not.toBeInTheDocument();
+    expect(screen.queryByText('Attempts')).not.toBeInTheDocument();
+  });
+
+  it('shows Run Metrics skeleton even when a previous runMetrics value was set', () => {
+    const previousMetrics: RunMetrics = {
+      run_id: 'run-130',
+      diagnostics: [],
+      metrics_available: true,
+      input_tokens: 100,
+      total_tokens: 200,
+    };
+
+    render(
+      <SideDrawer
+        issue={runningIssue}
+        open={true}
+        onOpenChange={() => {}}
+        runMetrics={previousMetrics}
+        runMetricsLoading={true}
+      />
+    );
+
+    fireEvent.click(screen.getByText('Operations'));
+
+    // The loading skeleton should take precedence over stale data
+    expect(screen.queryByText('Model Usage')).not.toBeInTheDocument();
+  });
+
+  it('does not render loading skeleton for Run Metrics when drawer is not showing an implementation issue', () => {
+    const prdIssue: Issue = {
+      number: 123,
+      title: 'PRD Issue',
+      labels: ['prd'],
+      state: 'open',
+      kind: 'prd',
+      children: [],
+    };
+
+    render(
+      <SideDrawer
+        issue={prdIssue}
+        open={true}
+        onOpenChange={() => {}}
+        runMetricsLoading={true}
+      />
+    );
+
+    // Operations tab for PRD shows different content
+    expect(screen.queryByText('Run Metrics')).not.toBeInTheDocument();
+  });
+});
+
+describe('SideDrawer Metrics Empty States', () => {
+  const implementationIssue: Issue = {
+    number: 131,
+    title: 'Polish metrics layout and empty states',
+    labels: ['implementation'],
+    state: 'open',
+    kind: 'implementation',
+    status: 'ready',
+    parent_prd_number: 123,
+    blocked_by: [],
+    active_blockers: [],
+  };
+
+  it('remains stable when runMetrics is undefined and issue has no telemetry_diagnostics', () => {
+    render(
+      <SideDrawer
+        issue={implementationIssue}
+        open={true}
+        onOpenChange={() => {}}
+      />
+    );
+
+    fireEvent.click(screen.getByText('Operations'));
+
+    // For a ready issue (not running/succeeded/failed), no telemetry section should render
+    expect(screen.queryByText('Run Telemetry')).not.toBeInTheDocument();
+  });
+
+  it('shows Implementation Issue Metrics section with zero counts cleanly', () => {
+    const zeroMetrics: ImplementationIssueMetrics = {
+      issue_number: 131,
+      diagnostics: [],
+      metrics_available: false,
+      run_count: 0,
+      successful_run_count: 0,
+      integrated_run_count: 0,
+      runs_with_telemetry: 0,
+      runs_without_telemetry: 0,
+      failure_count: 0,
+      latest_run_status: null,
+      runs: [],
+    };
+
+    render(
+      <SideDrawer
+        issue={{ ...implementationIssue, status: 'running', agent_run_id: 'run-131' }}
+        open={true}
+        onOpenChange={() => {}}
+        implementationIssueMetrics={zeroMetrics}
+      />
+    );
+
+    fireEvent.click(screen.getByText('Operations'));
+
+    // Header should still render
+    expect(screen.getByText('Implementation Issue Metrics')).toBeInTheDocument();
+
+    // Summary card should show zero values
+    expect(screen.getByText('Attempts')).toBeInTheDocument();
+    // Multiple '0' elements exist; check specific metric values by container
+    const zeroCounts = screen.getAllByText('0');
+    expect(zeroCounts.length).toBeGreaterThanOrEqual(1); // run_count, failure_count, etc.
+    expect(screen.getByText('N/A')).toBeInTheDocument(); // latest_run_status
+    expect(screen.getByText('0 / 0')).toBeInTheDocument(); // with telemetry / run_count
+
+    // Should display end-to-end success rate as dash when run_count = 0
+    expect(screen.getByText(/—/)).toBeInTheDocument();
+  });
+
+  it('does not render aggregated usage section when metrics_available is false in Implementation Issue Metrics', () => {
+    const metricsNoTelemetry: ImplementationIssueMetrics = {
+      issue_number: 131,
+      diagnostics: [],
+      metrics_available: false,
+      run_count: 1,
+      successful_run_count: 0,
+      integrated_run_count: 0,
+      runs_with_telemetry: 0,
+      runs_without_telemetry: 1,
+      failure_count: 1,
+      latest_run_status: 'failed',
+      runs: [
+        {
+          run_id: 'run-131',
+          status: 'failed',
+          started_at: '2026-06-02T17:00:00Z',
+          has_telemetry_association: false,
+        },
+      ],
+    };
+
+    render(
+      <SideDrawer
+        issue={{ ...implementationIssue, status: 'failed', agent_run_id: 'run-131' }}
+        open={true}
+        onOpenChange={() => {}}
+        implementationIssueMetrics={metricsNoTelemetry}
+      />
+    );
+
+    fireEvent.click(screen.getByText('Operations'));
+
+    // Aggregated Usage section should not render when metrics_available is false and no token data
+    expect(screen.queryByText('Aggregated Usage')).not.toBeInTheDocument();
+
+    // Attempt History should still show
+    expect(screen.getByText('Attempt History')).toBeInTheDocument();
+    expect(screen.getByText('run-131')).toBeInTheDocument();
+  });
+
+  it('preserves lifecycle actions when metrics are loading or in error state', () => {
+    const { rerender } = render(
+      <SideDrawer
+        issue={implementationIssue}
+        open={true}
+        onOpenChange={() => {}}
+      />
+    );
+
+    fireEvent.click(screen.getByText('Operations'));
+
+    // Action Controls section must be present regardless of metrics state
+    expect(screen.getByText('Action Controls')).toBeInTheDocument();
+
+    // Rerender with loading state
+    rerender(
+      <SideDrawer
+        issue={implementationIssue}
+        open={true}
+        onOpenChange={() => {}}
+        runMetricsLoading={true}
+        implementationIssueMetricsLoading={true}
+      />
+    );
+
+    // Action Controls must still be present
+    expect(screen.getByText('Action Controls')).toBeInTheDocument();
+
+    // Rerender with error state
+    rerender(
+      <SideDrawer
+        issue={implementationIssue}
+        open={true}
+        onOpenChange={() => {}}
+        runMetricsError="Timeout"
+        implementationIssueMetricsError="Server error"
+      />
+    );
+
+    // Action Controls must still be present
+    expect(screen.getByText('Action Controls')).toBeInTheDocument();
   });
 });
 

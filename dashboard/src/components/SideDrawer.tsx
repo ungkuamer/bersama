@@ -29,7 +29,9 @@ import {
   Clock,
   BarChart3,
   Layers,
+  WifiOff,
 } from 'lucide-react'
+import { formatCompactTokens, formatCompactCost, formatCompactMs, formatCompactTokensPerSec } from '@/lib/metrics'
 
 export interface TelemetryDiagnosticItem {
   code: string;
@@ -136,8 +138,12 @@ export interface SideDrawerProps {
   selectedRunIssue?: number | null;
   // Run metrics from telemetry
   runMetrics?: RunMetrics | null;
+  runMetricsLoading?: boolean;
+  runMetricsError?: string | null;
   // Implementation Issue aggregated metrics
   implementationIssueMetrics?: ImplementationIssueMetrics | null;
+  implementationIssueMetricsLoading?: boolean;
+  implementationIssueMetricsError?: string | null;
 }
 
 type TabId = 'overview' | 'timeline' | 'operations';
@@ -245,7 +251,11 @@ export default function SideDrawer({
   onClaimAgentRunIdChange,
   selectedRunIssue,
   runMetrics,
+  runMetricsLoading = false,
+  runMetricsError = null,
   implementationIssueMetrics,
+  implementationIssueMetricsLoading = false,
+  implementationIssueMetricsError = null,
 }: SideDrawerProps) {
   const [selectedTab, setSelectedTab] = useState<TabId>(() => readOnly ? 'overview' : 'operations');
   const [claimFormOpen, setClaimFormOpen] = useState(false);
@@ -747,7 +757,38 @@ export default function SideDrawer({
               ) : null}
 
               {/* Telemetry Metrics */}
-              {isImplementation && runMetrics ? (
+              {isImplementation && runMetricsLoading ? (
+                <>
+                  <section>
+                    <h4 className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-2 flex items-center gap-1.5">
+                      <BarChart3 className="size-3" />
+                      Run Metrics
+                    </h4>
+                    <div className="flex flex-col gap-2 p-3 border border-border rounded-md">
+                      <Skeleton className="h-3 w-1/3" />
+                      <Skeleton className="h-3 w-full" />
+                      <Skeleton className="h-3 w-5/6" />
+                    </div>
+                  </section>
+                  <Separator className="bg-border" />
+                </>
+              ) : isImplementation && runMetricsError ? (
+                <>
+                  <section>
+                    <h4 className="text-[10px] font-bold uppercase tracking-wider text-destructive mb-2 flex items-center gap-1.5">
+                      <WifiOff className="size-3" />
+                      Run Metrics
+                    </h4>
+                    <div className="border border-destructive/20 bg-destructive/5 rounded-md p-3">
+                      <p className="text-[9.5px] text-destructive font-mono">{runMetricsError}</p>
+                      <p className="text-[9px] text-muted-foreground italic mt-1">
+                        Telemetry data could not be loaded. Agent Run lifecycle is unaffected.
+                      </p>
+                    </div>
+                  </section>
+                  <Separator className="bg-border" />
+                </>
+              ) : isImplementation && runMetrics ? (
                 runMetrics.metrics_available ? (
                   <>
                     {/* Model Usage Metrics */}
@@ -761,43 +802,43 @@ export default function SideDrawer({
                           {runMetrics.input_tokens != null && (
                             <TableRow className="border-b border-border hover:bg-transparent">
                               <TableCell className="text-muted-foreground text-[10px] font-medium py-2">Input Tokens</TableCell>
-                              <TableCell className="text-foreground text-[10px] font-mono text-right py-2">{runMetrics.input_tokens?.toLocaleString()}</TableCell>
+                              <TableCell className="text-foreground text-[10px] font-mono text-right py-2">{formatCompactTokens(runMetrics.input_tokens)}</TableCell>
                             </TableRow>
                           )}
                           {runMetrics.output_tokens != null && (
                             <TableRow className="border-b border-border hover:bg-transparent">
                               <TableCell className="text-muted-foreground text-[10px] font-medium py-2">Output Tokens</TableCell>
-                              <TableCell className="text-foreground text-[10px] font-mono text-right py-2">{runMetrics.output_tokens?.toLocaleString()}</TableCell>
+                              <TableCell className="text-foreground text-[10px] font-mono text-right py-2">{formatCompactTokens(runMetrics.output_tokens)}</TableCell>
                             </TableRow>
                           )}
                           {runMetrics.cache_read_tokens != null && (
                             <TableRow className="border-b border-border hover:bg-transparent">
                               <TableCell className="text-muted-foreground text-[10px] font-medium py-2">Cache Read</TableCell>
-                              <TableCell className="text-foreground text-[10px] font-mono text-right py-2">{runMetrics.cache_read_tokens?.toLocaleString()}</TableCell>
+                              <TableCell className="text-foreground text-[10px] font-mono text-right py-2">{formatCompactTokens(runMetrics.cache_read_tokens)}</TableCell>
                             </TableRow>
                           )}
                           {runMetrics.cache_write_tokens != null && (
                             <TableRow className="border-b border-border hover:bg-transparent">
                               <TableCell className="text-muted-foreground text-[10px] font-medium py-2">Cache Write</TableCell>
-                              <TableCell className="text-foreground text-[10px] font-mono text-right py-2">{runMetrics.cache_write_tokens?.toLocaleString()}</TableCell>
+                              <TableCell className="text-foreground text-[10px] font-mono text-right py-2">{formatCompactTokens(runMetrics.cache_write_tokens)}</TableCell>
                             </TableRow>
                           )}
                           {runMetrics.total_tokens != null && (
                             <TableRow className="border-b border-border hover:bg-transparent">
                               <TableCell className="text-muted-foreground text-[10px] font-medium py-2">Total Tokens</TableCell>
-                              <TableCell className="text-foreground text-[10px] font-mono text-right py-2">{runMetrics.total_tokens?.toLocaleString()}</TableCell>
+                              <TableCell className="text-foreground text-[10px] font-mono text-right py-2">{formatCompactTokens(runMetrics.total_tokens)}</TableCell>
                             </TableRow>
                           )}
                           {runMetrics.model_cost != null && (
                             <TableRow className="border-b border-border hover:bg-transparent">
                               <TableCell className="text-muted-foreground text-[10px] font-medium py-2">Model Cost</TableCell>
-                              <TableCell className="text-foreground text-[10px] font-mono text-right py-2">${runMetrics.model_cost?.toFixed(4)}</TableCell>
+                              <TableCell className="text-foreground text-[10px] font-mono text-right py-2">{formatCompactCost(runMetrics.model_cost)}</TableCell>
                             </TableRow>
                           )}
                           {runMetrics.error_count != null && (
                             <TableRow className="border-0 hover:bg-transparent">
                               <TableCell className="text-muted-foreground text-[10px] font-medium py-2">Errors</TableCell>
-                              <TableCell className="text-foreground text-[10px] font-mono text-right py-2">{runMetrics.error_count?.toLocaleString()}</TableCell>
+                              <TableCell className="text-foreground text-[10px] font-mono text-right py-2">{formatCompactTokens(runMetrics.error_count)}</TableCell>
                             </TableRow>
                           )}
                         </TableBody>
@@ -813,13 +854,13 @@ export default function SideDrawer({
                           {runMetrics.tool_call_count != null && (
                             <TableRow className="border-b border-border hover:bg-transparent">
                               <TableCell className="text-muted-foreground text-[10px] font-medium py-2">Tool Calls</TableCell>
-                              <TableCell className="text-foreground text-[10px] font-mono text-right py-2">{runMetrics.tool_call_count?.toLocaleString()}</TableCell>
+                              <TableCell className="text-foreground text-[10px] font-mono text-right py-2">{formatCompactTokens(runMetrics.tool_call_count)}</TableCell>
                             </TableRow>
                           )}
                           {runMetrics.tool_error_count != null && (
                             <TableRow className="border-0 hover:bg-transparent">
                               <TableCell className="text-muted-foreground text-[10px] font-medium py-2">Tool Errors</TableCell>
-                              <TableCell className="text-destructive text-[10px] font-mono text-right py-2">{runMetrics.tool_error_count?.toLocaleString()}</TableCell>
+                              <TableCell className="text-destructive text-[10px] font-mono text-right py-2">{formatCompactTokens(runMetrics.tool_error_count)}</TableCell>
                             </TableRow>
                           )}
                         </TableBody>
@@ -868,37 +909,37 @@ export default function SideDrawer({
                               {runMetrics.avg_time_to_first_token_ms != null && (
                                 <TableRow className="border-b border-border hover:bg-transparent">
                                   <TableCell className="text-muted-foreground text-[10px] font-medium py-2">Avg TTFT</TableCell>
-                                  <TableCell className="text-foreground text-[10px] font-mono text-right py-2">{runMetrics.avg_time_to_first_token_ms?.toFixed(1)} ms</TableCell>
+                                  <TableCell className="text-foreground text-[10px] font-mono text-right py-2">{formatCompactMs(runMetrics.avg_time_to_first_token_ms)}</TableCell>
                                 </TableRow>
                               )}
                               {runMetrics.avg_latency_ms != null && (
                                 <TableRow className="border-b border-border hover:bg-transparent">
                                   <TableCell className="text-muted-foreground text-[10px] font-medium py-2">Avg Latency</TableCell>
-                                  <TableCell className="text-foreground text-[10px] font-mono text-right py-2">{runMetrics.avg_latency_ms?.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })} ms</TableCell>
+                                  <TableCell className="text-foreground text-[10px] font-mono text-right py-2">{formatCompactMs(runMetrics.avg_latency_ms)}</TableCell>
                                 </TableRow>
                               )}
                               {runMetrics.avg_output_tokens_per_sec != null && (
                                 <TableRow className="border-b border-border hover:bg-transparent">
                                   <TableCell className="text-muted-foreground text-[10px] font-medium py-2">Avg Tokens/s</TableCell>
-                                  <TableCell className="text-foreground text-[10px] font-mono text-right py-2">{runMetrics.avg_output_tokens_per_sec?.toFixed(1)}</TableCell>
+                                  <TableCell className="text-foreground text-[10px] font-mono text-right py-2">{formatCompactTokensPerSec(runMetrics.avg_output_tokens_per_sec)}</TableCell>
                                 </TableRow>
                               )}
                               {runMetrics.latest_time_to_first_token_ms != null && (
                                 <TableRow className="border-b border-border hover:bg-transparent">
                                   <TableCell className="text-muted-foreground text-[10px] font-medium py-2">Latest TTFT</TableCell>
-                                  <TableCell className="text-muted-foreground text-[10px] font-mono text-right py-2">{runMetrics.latest_time_to_first_token_ms?.toFixed(1)} ms</TableCell>
+                                  <TableCell className="text-muted-foreground text-[10px] font-mono text-right py-2">{formatCompactMs(runMetrics.latest_time_to_first_token_ms)}</TableCell>
                                 </TableRow>
                               )}
                               {runMetrics.latest_latency_ms != null && (
                                 <TableRow className="border-b border-border hover:bg-transparent">
                                   <TableCell className="text-muted-foreground text-[10px] font-medium py-2">Latest Latency</TableCell>
-                                  <TableCell className="text-muted-foreground text-[10px] font-mono text-right py-2">{runMetrics.latest_latency_ms?.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })} ms</TableCell>
+                                  <TableCell className="text-muted-foreground text-[10px] font-mono text-right py-2">{formatCompactMs(runMetrics.latest_latency_ms)}</TableCell>
                                 </TableRow>
                               )}
                               {runMetrics.latest_output_tokens_per_sec != null && (
                                 <TableRow className="border-0 hover:bg-transparent">
                                   <TableCell className="text-muted-foreground text-[10px] font-medium py-2">Latest Tokens/s</TableCell>
-                                  <TableCell className="text-muted-foreground text-[10px] font-mono text-right py-2">{runMetrics.latest_output_tokens_per_sec?.toFixed(1)}</TableCell>
+                                  <TableCell className="text-muted-foreground text-[10px] font-mono text-right py-2">{formatCompactTokensPerSec(runMetrics.latest_output_tokens_per_sec)}</TableCell>
                                 </TableRow>
                               )}
                             </TableBody>
@@ -1016,7 +1057,35 @@ export default function SideDrawer({
               )}
 
               {/* Implementation Issue Metrics (aggregated across attempts) */}
-              {isImplementation && implementationIssueMetrics && (
+              {isImplementation && implementationIssueMetricsLoading ? (
+                <>
+                  <section>
+                    <h4 className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-2 flex items-center gap-1.5">
+                      <Layers className="size-3" />
+                      Implementation Issue Metrics
+                    </h4>
+                    <div className="flex flex-col gap-2 p-3 border border-border rounded-md">
+                      <Skeleton className="h-3 w-1/3" />
+                      <Skeleton className="h-3 w-full" />
+                      <Skeleton className="h-3 w-5/6" />
+                    </div>
+                  </section>
+                  <Separator className="bg-border" />
+                </>
+              ) : isImplementation && implementationIssueMetricsError ? (
+                <>
+                  <section>
+                    <h4 className="text-[10px] font-bold uppercase tracking-wider text-destructive mb-2 flex items-center gap-1.5">
+                      <WifiOff className="size-3" />
+                      Implementation Issue Metrics
+                    </h4>
+                    <div className="border border-destructive/20 bg-destructive/5 rounded-md p-3">
+                      <p className="text-[9.5px] text-destructive font-mono">{implementationIssueMetricsError}</p>
+                    </div>
+                  </section>
+                  <Separator className="bg-border" />
+                </>
+              ) : isImplementation && implementationIssueMetrics && (
                 <>
                   <section>
                     <h4 className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-2 flex items-center gap-1.5">
@@ -1063,37 +1132,37 @@ export default function SideDrawer({
                             {implementationIssueMetrics.input_tokens != null && (
                               <TableRow className="border-b border-border hover:bg-transparent">
                                 <TableCell className="text-muted-foreground text-[10px] font-medium py-1.5">Input Tokens</TableCell>
-                                <TableCell className="text-foreground text-[10px] font-mono text-right py-1.5">{implementationIssueMetrics.input_tokens?.toLocaleString()}</TableCell>
+                                <TableCell className="text-foreground text-[10px] font-mono text-right py-1.5">{formatCompactTokens(implementationIssueMetrics.input_tokens)}</TableCell>
                               </TableRow>
                             )}
                             {implementationIssueMetrics.output_tokens != null && (
                               <TableRow className="border-b border-border hover:bg-transparent">
                                 <TableCell className="text-muted-foreground text-[10px] font-medium py-1.5">Output Tokens</TableCell>
-                                <TableCell className="text-foreground text-[10px] font-mono text-right py-1.5">{implementationIssueMetrics.output_tokens?.toLocaleString()}</TableCell>
+                                <TableCell className="text-foreground text-[10px] font-mono text-right py-1.5">{formatCompactTokens(implementationIssueMetrics.output_tokens)}</TableCell>
                               </TableRow>
                             )}
                             {implementationIssueMetrics.total_tokens != null && (
                               <TableRow className="border-b border-border hover:bg-transparent">
                                 <TableCell className="text-muted-foreground text-[10px] font-medium py-1.5">Total Tokens</TableCell>
-                                <TableCell className="text-foreground text-[10px] font-mono text-right py-1.5">{implementationIssueMetrics.total_tokens?.toLocaleString()}</TableCell>
+                                <TableCell className="text-foreground text-[10px] font-mono text-right py-1.5">{formatCompactTokens(implementationIssueMetrics.total_tokens)}</TableCell>
                               </TableRow>
                             )}
                             {implementationIssueMetrics.model_cost != null && (
                               <TableRow className="border-b border-border hover:bg-transparent">
                                 <TableCell className="text-muted-foreground text-[10px] font-medium py-1.5">Model Cost</TableCell>
-                                <TableCell className="text-foreground text-[10px] font-mono text-right py-1.5">${implementationIssueMetrics.model_cost?.toFixed(4)}</TableCell>
+                                <TableCell className="text-foreground text-[10px] font-mono text-right py-1.5">{formatCompactCost(implementationIssueMetrics.model_cost)}</TableCell>
                               </TableRow>
                             )}
                             {implementationIssueMetrics.tool_call_count != null && (
                               <TableRow className="border-b border-border hover:bg-transparent">
                                 <TableCell className="text-muted-foreground text-[10px] font-medium py-1.5">Tool Calls</TableCell>
-                                <TableCell className="text-foreground text-[10px] font-mono text-right py-1.5">{implementationIssueMetrics.tool_call_count?.toLocaleString()}</TableCell>
+                                <TableCell className="text-foreground text-[10px] font-mono text-right py-1.5">{formatCompactTokens(implementationIssueMetrics.tool_call_count)}</TableCell>
                               </TableRow>
                             )}
                             {implementationIssueMetrics.tool_error_count != null && (
                               <TableRow className="border-0 hover:bg-transparent">
                                 <TableCell className="text-muted-foreground text-[10px] font-medium py-1.5">Tool Errors</TableCell>
-                                <TableCell className="text-destructive text-[10px] font-mono text-right py-1.5">{implementationIssueMetrics.tool_error_count?.toLocaleString()}</TableCell>
+                                <TableCell className="text-destructive text-[10px] font-mono text-right py-1.5">{formatCompactTokens(implementationIssueMetrics.tool_error_count)}</TableCell>
                               </TableRow>
                             )}
                           </TableBody>
@@ -1113,19 +1182,19 @@ export default function SideDrawer({
                               {implementationIssueMetrics.avg_time_to_first_token_ms != null && (
                                 <TableRow className="border-b border-border hover:bg-transparent">
                                   <TableCell className="text-muted-foreground text-[10px] font-medium py-1.5">Avg TTFT</TableCell>
-                                  <TableCell className="text-foreground text-[10px] font-mono text-right py-1.5">{implementationIssueMetrics.avg_time_to_first_token_ms?.toFixed(1)} ms</TableCell>
+                                  <TableCell className="text-foreground text-[10px] font-mono text-right py-1.5">{formatCompactMs(implementationIssueMetrics.avg_time_to_first_token_ms)}</TableCell>
                                 </TableRow>
                               )}
                               {implementationIssueMetrics.avg_latency_ms != null && (
                                 <TableRow className="border-b border-border hover:bg-transparent">
                                   <TableCell className="text-muted-foreground text-[10px] font-medium py-1.5">Avg Latency</TableCell>
-                                  <TableCell className="text-foreground text-[10px] font-mono text-right py-1.5">{implementationIssueMetrics.avg_latency_ms?.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })} ms</TableCell>
+                                  <TableCell className="text-foreground text-[10px] font-mono text-right py-1.5">{formatCompactMs(implementationIssueMetrics.avg_latency_ms)}</TableCell>
                                 </TableRow>
                               )}
                               {implementationIssueMetrics.avg_output_tokens_per_sec != null && (
                                 <TableRow className="border-0 hover:bg-transparent">
                                   <TableCell className="text-muted-foreground text-[10px] font-medium py-1.5">Avg Tokens/s</TableCell>
-                                  <TableCell className="text-foreground text-[10px] font-mono text-right py-1.5">{implementationIssueMetrics.avg_output_tokens_per_sec?.toFixed(1)}</TableCell>
+                                  <TableCell className="text-foreground text-[10px] font-mono text-right py-1.5">{formatCompactTokensPerSec(implementationIssueMetrics.avg_output_tokens_per_sec)}</TableCell>
                                 </TableRow>
                               )}
                             </TableBody>
