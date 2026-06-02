@@ -116,6 +116,8 @@ class ImplementationIssueMetricsSnapshot:
     successful_run_count: int = 0
     runs_with_telemetry: int = 0
     runs_without_telemetry: int = 0
+    failure_count: int = 0
+    latest_run_status: str | None = None
 
     @property
     def metrics_available(self) -> bool:
@@ -357,7 +359,11 @@ class TelemetryAdapter:
         return _normalise_agent_run_metrics(run_id=run_id, raw=data)
 
     def fetch_implementation_issue_metrics(
-        self, *, issue_number: int, associations: list[dict[str, object]] | None = None
+        self,
+        *,
+        issue_number: int,
+        associations: list[dict[str, object]] | None = None,
+        run_statuses: list[str] | None = None,
     ) -> ImplementationIssueMetricsSnapshot:
         """Return aggregated metrics for an Implementation Issue.
 
@@ -384,6 +390,7 @@ class TelemetryAdapter:
         return _aggregate_implementation_issue_metrics(
             issue_number=issue_number,
             run_snapshots=run_snapshots,
+            run_statuses=run_statuses,
         )
 
 
@@ -496,7 +503,10 @@ def _normalise_agent_run_metrics(
 
 
 def _aggregate_implementation_issue_metrics(
-    *, issue_number: int, run_snapshots: list[AgentRunMetricsSnapshot]
+    *,
+    issue_number: int,
+    run_snapshots: list[AgentRunMetricsSnapshot],
+    run_statuses: list[str] | None = None,
 ) -> ImplementationIssueMetricsSnapshot:
     """Aggregate individual Agent Run snapshots into an Implementation Issue
     metrics view.
@@ -505,6 +515,8 @@ def _aggregate_implementation_issue_metrics(
     runs_with_telemetry = 0
     runs_without_telemetry = 0
     successful_runs = 0
+    failure_count = 0
+    latest_run_status: str | None = None
 
     # Collectors for numeric aggregation
     input_tokens_total = 0
@@ -520,7 +532,14 @@ def _aggregate_implementation_issue_metrics(
     avg_tps_values: list[float] = []
     has_any_metrics = False
 
-    for snap in run_snapshots:
+    for i, snap in enumerate(run_snapshots):
+        if run_statuses is not None and i < len(run_statuses):
+            status = run_statuses[i]
+            if status:
+                latest_run_status = status
+                if status == "failed":
+                    failure_count += 1
+
         if snap.metrics_available:
             runs_with_telemetry += 1
             has_any_metrics = True
@@ -561,6 +580,8 @@ def _aggregate_implementation_issue_metrics(
             successful_run_count=successful_runs,
             runs_with_telemetry=runs_with_telemetry,
             runs_without_telemetry=runs_without_telemetry,
+            failure_count=failure_count,
+            latest_run_status=latest_run_status,
         )
 
     return ImplementationIssueMetricsSnapshot(
@@ -581,6 +602,8 @@ def _aggregate_implementation_issue_metrics(
         successful_run_count=successful_runs,
         runs_with_telemetry=runs_with_telemetry,
         runs_without_telemetry=runs_without_telemetry,
+        failure_count=failure_count,
+        latest_run_status=latest_run_status,
     )
 
 
@@ -655,6 +678,8 @@ def serialize_implementation_issue_metrics_snapshot(
         "successful_run_count": snapshot.successful_run_count,
         "runs_with_telemetry": snapshot.runs_with_telemetry,
         "runs_without_telemetry": snapshot.runs_without_telemetry,
+        "failure_count": snapshot.failure_count,
+        "latest_run_status": snapshot.latest_run_status,
     }
     if snapshot.metrics_available or snapshot.run_count > 0:
         result.update({

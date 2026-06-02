@@ -504,3 +504,322 @@ describe('SideDrawer Run Metrics Rendering', () => {
     expect(screen.getByText('2')).toBeInTheDocument();
   });
 });
+
+describe('SideDrawer Implementation Issue Metrics', () => {
+  const implementationIssue: Issue = {
+    number: 127,
+    title: 'Aggregate Implementation Issue Metrics across attempts',
+    labels: ['implementation'],
+    state: 'open',
+    kind: 'implementation',
+    status: 'failed',
+    parent_prd_number: 123,
+    agent_run_id: 'run-127',
+    started_at: '2026-06-02T16:30:00Z',
+    finished_at: '2026-06-02T16:35:00Z',
+    implementation_branch: 'impl/123/127-aggregate',
+    blocked_by: [],
+    active_blockers: [],
+    telemetry_diagnostics: null,
+  };
+
+  const aggregatedMetrics = {
+    issue_number: 127,
+    diagnostics: [],
+    metrics_available: true,
+    run_count: 3,
+    successful_run_count: 2,
+    runs_with_telemetry: 2,
+    runs_without_telemetry: 1,
+    failure_count: 1,
+    latest_run_status: 'failed',
+    input_tokens: 5000,
+    output_tokens: 2500,
+    cache_read_tokens: 600,
+    cache_write_tokens: 300,
+    total_tokens: 8400,
+    model_cost: 0.045,
+    tool_call_count: 36,
+    tool_error_count: 2,
+    avg_time_to_first_token_ms: 500.0,
+    avg_latency_ms: 1250.0,
+    avg_output_tokens_per_sec: 82.5,
+    runs: [
+      {
+        run_id: 'run-127a',
+        status: 'succeeded',
+        started_at: '2026-06-02T16:15:00Z',
+        finished_at: '2026-06-02T16:20:00Z',
+        has_telemetry_association: true,
+      },
+      {
+        run_id: 'run-127b',
+        status: 'failed',
+        started_at: '2026-06-02T16:25:00Z',
+        finished_at: '2026-06-02T16:30:00Z',
+        has_telemetry_association: true,
+      },
+      {
+        run_id: 'run-127c',
+        status: 'failed',
+        started_at: '2026-06-02T16:30:00Z',
+        finished_at: '2026-06-02T16:35:00Z',
+        has_telemetry_association: false,
+      },
+    ],
+  };
+
+  const aggregatedMetricsNoTelemetry = {
+    issue_number: 126,
+    diagnostics: [
+      {
+        code: 'missing_association',
+        severity: 'warning',
+        message: 'No Agent Run associations found.',
+      },
+    ],
+    metrics_available: false,
+    run_count: 0,
+    successful_run_count: 0,
+    runs_with_telemetry: 0,
+    runs_without_telemetry: 0,
+    failure_count: 0,
+    latest_run_status: null,
+    runs: [],
+  };
+
+  it('renders Implementation Issue Metrics section header', () => {
+    render(
+      <SideDrawer
+        issue={implementationIssue}
+        open={true}
+        onOpenChange={() => {}}
+        implementationIssueMetrics={aggregatedMetrics}
+      />
+    );
+
+    fireEvent.click(screen.getByText('Operations'));
+
+    expect(screen.getByText('Implementation Issue Metrics')).toBeInTheDocument();
+  });
+
+  it('renders summary with attempt count, latest status, failures, and telemetry coverage', () => {
+    render(
+      <SideDrawer
+        issue={implementationIssue}
+        open={true}
+        onOpenChange={() => {}}
+        implementationIssueMetrics={aggregatedMetrics}
+      />
+    );
+
+    fireEvent.click(screen.getByText('Operations'));
+
+    expect(screen.getByText('Attempts')).toBeInTheDocument();
+    expect(screen.getByText('3')).toBeInTheDocument(); // run_count = 3
+    expect(screen.getByText('Latest Status')).toBeInTheDocument();
+    // 'failed' appears in both the summary card and the attempt history badges
+    const failedElements = screen.getAllByText('failed');
+    expect(failedElements.length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText('Failures')).toBeInTheDocument();
+    expect(screen.getByText('1')).toBeInTheDocument(); // failure_count = 1
+    expect(screen.getByText('With Telemetry')).toBeInTheDocument();
+    expect(screen.getByText('2 / 3')).toBeInTheDocument(); // runs_with_telemetry / run_count
+  });
+
+  it('renders aggregated model usage metrics', () => {
+    render(
+      <SideDrawer
+        issue={implementationIssue}
+        open={true}
+        onOpenChange={() => {}}
+        implementationIssueMetrics={aggregatedMetrics}
+      />
+    );
+
+    fireEvent.click(screen.getByText('Operations'));
+
+    expect(screen.getByText('Aggregated Usage')).toBeInTheDocument();
+    expect(screen.getByText('Total Tokens')).toBeInTheDocument();
+    expect(screen.getByText('8,400')).toBeInTheDocument();
+    expect(screen.getByText('Model Cost')).toBeInTheDocument();
+    expect(screen.getByText('$0.0450')).toBeInTheDocument();
+    expect(screen.getByText('Tool Calls')).toBeInTheDocument();
+    expect(screen.getByText('36')).toBeInTheDocument();
+    expect(screen.getByText('Tool Errors')).toBeInTheDocument();
+    expect(screen.getByText('2')).toBeInTheDocument();
+  });
+
+  it('renders averaged responsiveness metrics', () => {
+    render(
+      <SideDrawer
+        issue={implementationIssue}
+        open={true}
+        onOpenChange={() => {}}
+        implementationIssueMetrics={aggregatedMetrics}
+      />
+    );
+
+    fireEvent.click(screen.getByText('Operations'));
+
+    expect(screen.getByText('Avg. Responsiveness')).toBeInTheDocument();
+    expect(screen.getByText('Avg TTFT')).toBeInTheDocument();
+    expect(screen.getByText('500.0 ms')).toBeInTheDocument();
+    expect(screen.getByText('Avg Latency')).toBeInTheDocument();
+    expect(screen.getByText('Avg Tokens/s')).toBeInTheDocument();
+    expect(screen.getByText('82.5')).toBeInTheDocument();
+  });
+
+  it('renders attempt history with status badges and telemetry indicators', () => {
+    render(
+      <SideDrawer
+        issue={implementationIssue}
+        open={true}
+        onOpenChange={() => {}}
+        implementationIssueMetrics={aggregatedMetrics}
+      />
+    );
+
+    fireEvent.click(screen.getByText('Operations'));
+
+    expect(screen.getByText('Attempt History')).toBeInTheDocument();
+
+    // Check run IDs are shown
+    expect(screen.getByText('run-127a')).toBeInTheDocument();
+    expect(screen.getByText('run-127b')).toBeInTheDocument();
+    expect(screen.getByText('run-127c')).toBeInTheDocument();
+
+    // Check status badges
+    const succeededBadges = screen.getAllByText('succeeded');
+    const failedBadges = screen.getAllByText('failed');
+    expect(succeededBadges.length).toBeGreaterThanOrEqual(1);
+    expect(failedBadges.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('does not render implementation issue metrics when prop is not provided', () => {
+    render(
+      <SideDrawer
+        issue={implementationIssue}
+        open={true}
+        onOpenChange={() => {}}
+      />
+    );
+
+    fireEvent.click(screen.getByText('Operations'));
+
+    expect(screen.queryByText('Implementation Issue Metrics')).not.toBeInTheDocument();
+    expect(screen.queryByText('Attempt History')).not.toBeInTheDocument();
+  });
+
+  it('does not render implementation issue metrics for non-implementation issues', () => {
+    const prdIssue: Issue = {
+      number: 123,
+      title: 'PRD Issue',
+      labels: ['prd'],
+      state: 'open',
+      kind: 'prd',
+      children: [],
+    };
+
+    render(
+      <SideDrawer
+        issue={prdIssue}
+        open={true}
+        onOpenChange={() => {}}
+        implementationIssueMetrics={aggregatedMetrics}
+      />
+    );
+
+    fireEvent.click(screen.getByText('Operations'));
+
+    expect(screen.queryByText('Implementation Issue Metrics')).not.toBeInTheDocument();
+  });
+
+  it('renders telemetry diagnostics from aggregated metrics when diagnostics are present', () => {
+    render(
+      <SideDrawer
+        issue={implementationIssue}
+        open={true}
+        onOpenChange={() => {}}
+        implementationIssueMetrics={aggregatedMetricsNoTelemetry}
+      />
+    );
+
+    fireEvent.click(screen.getByText('Operations'));
+
+    expect(screen.getByText('Telemetry Diagnostics')).toBeInTheDocument();
+    expect(screen.getByText(/missing association/i)).toBeInTheDocument();
+    expect(screen.getByText(/No Agent Run associations found/i)).toBeInTheDocument();
+  });
+
+  it('displays N/A for latest_run_status when null', () => {
+    const metricsWithNullStatus = {
+      ...aggregatedMetricsNoTelemetry,
+      run_count: 2,
+      runs: [
+        {
+          run_id: 'run-a',
+          status: '',
+          started_at: null,
+          finished_at: null,
+          has_telemetry_association: false,
+        },
+      ],
+    };
+
+    render(
+      <SideDrawer
+        issue={implementationIssue}
+        open={true}
+        onOpenChange={() => {}}
+        implementationIssueMetrics={metricsWithNullStatus}
+      />
+    );
+
+    fireEvent.click(screen.getByText('Operations'));
+
+    expect(screen.getByText('Implementation Issue Metrics')).toBeInTheDocument();
+    expect(screen.getByText('N/A')).toBeInTheDocument();
+  });
+
+  it('shows attempt history with telemetry indicator icons', () => {
+    const metricsWithMixedTelemetry = {
+      ...aggregatedMetrics,
+      run_count: 2,
+      runs_with_telemetry: 1,
+      runs_without_telemetry: 1,
+      failure_count: 0,
+      latest_run_status: 'succeeded',
+      runs: [
+        {
+          run_id: 'run-t',
+          status: 'succeeded',
+          started_at: '2026-06-02T16:15:00Z',
+          has_telemetry_association: true,
+        },
+        {
+          run_id: 'run-nt',
+          status: 'succeeded',
+          started_at: '2026-06-02T16:20:00Z',
+          has_telemetry_association: false,
+        },
+      ],
+    };
+
+    render(
+      <SideDrawer
+        issue={implementationIssue}
+        open={true}
+        onOpenChange={() => {}}
+        implementationIssueMetrics={metricsWithMixedTelemetry}
+      />
+    );
+
+    fireEvent.click(screen.getByText('Operations'));
+
+    // Both runs should be visible
+    expect(screen.getByText('run-t')).toBeInTheDocument();
+    expect(screen.getByText('run-nt')).toBeInTheDocument();
+  });
+});
+
