@@ -33,6 +33,8 @@ class RepoConfig:
 class ObservabilityConfig:
     enabled: bool = False
     session_prefix: str = "bersama"
+    url: str | None = None
+    token: str | None = None
 
 
 @dataclass(frozen=True)
@@ -168,9 +170,17 @@ def _parse_observability(raw: object) -> ObservabilityConfig:
     session_prefix = raw.get("session_prefix")
     if session_prefix is not None and not isinstance(session_prefix, str):
         raise ConfigError("observability.session_prefix must be a string.")
+    url = raw.get("url")
+    if url is not None and not isinstance(url, str):
+        raise ConfigError("observability.url must be a string.")
+    token = raw.get("token")
+    if token is not None and not isinstance(token, str):
+        raise ConfigError("observability.token must be a string.")
     return ObservabilityConfig(
         enabled=enabled,
         session_prefix=session_prefix or "bersama",
+        url=url,
+        token=token,
     )
 
 
