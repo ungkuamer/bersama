@@ -4,6 +4,7 @@ __all__ = [
     "cli",
     "config",
     "dashboard",
+    "discord_notifier",
     "github_issues",
     "issues",
     "orchestrator",

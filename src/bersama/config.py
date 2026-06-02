@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import os
 from pathlib import Path
 
 import yaml
@@ -30,6 +31,12 @@ class RepoConfig:
 
 
 @dataclass(frozen=True)
+class DiscordConfig:
+    enabled: bool = False
+    webhook_url: str | None = None
+
+
+@dataclass(frozen=True)
 class ObservabilityConfig:
     enabled: bool = False
     session_prefix: str = "bersama"
@@ -41,6 +48,7 @@ class ObservabilityConfig:
 class AppConfig:
     repos: dict[str, RepoConfig]
     harnesses: dict[str, HarnessConfig]
+    discord: DiscordConfig = field(default_factory=DiscordConfig)
     observability: ObservabilityConfig = field(default_factory=ObservabilityConfig)
 
     def repo(self, name: str) -> RepoConfig:
@@ -76,8 +84,9 @@ def load_config(path: str | Path) -> AppConfig:
 
     harnesses = _parse_harnesses(data.get("harnesses"))
     repos = _parse_repos(data.get("repos"), harnesses)
+    discord = _parse_discord(data.get("discord"))
     observability = _parse_observability(data.get("observability"))
-    return AppConfig(repos=repos, harnesses=harnesses, observability=observability)
+    return AppConfig(repos=repos, harnesses=harnesses, discord=discord, observability=observability)
 
 
 def _parse_harnesses(raw_harnesses: object) -> dict[str, HarnessConfig]:
@@ -182,6 +191,25 @@ def _parse_observability(raw: object) -> ObservabilityConfig:
         url=url,
         token=token,
     )
+
+
+def _parse_discord(raw: object) -> DiscordConfig:
+    env_webhook_url = os.environ.get("DISCORD_WEBHOOK_URL")
+    if raw is None:
+        if env_webhook_url:
+            return DiscordConfig(enabled=True, webhook_url=env_webhook_url)
+        return DiscordConfig()
+    if not isinstance(raw, dict):
+        raise ConfigError("discord config must be a mapping.")
+    enabled = bool(raw.get("enabled", False))
+    webhook_url = raw.get("webhook_url")
+    if webhook_url is not None and not isinstance(webhook_url, str):
+        raise ConfigError("discord.webhook_url must be a string.")
+    # Environment variable takes precedence over YAML
+    if env_webhook_url:
+        webhook_url = env_webhook_url
+        enabled = True
+    return DiscordConfig(enabled=enabled, webhook_url=webhook_url)
 
 
 def _require_string(data: dict[str, object], key: str, *, context: str) -> str:
