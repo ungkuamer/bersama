@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
-from typing import Protocol
+from typing import Protocol, TYPE_CHECKING
 
 from bersama.github_issues import GitHubIssueRecord
 from bersama.issues import (
@@ -14,6 +14,10 @@ from bersama.issues import (
     parse_claim_status,
     parse_issue,
 )
+
+if TYPE_CHECKING:
+    from bersama.discord_notifier import DiscordNotifier
+    from bersama.telemetry import TelemetryAdapter
 
 
 class IssueGateway(Protocol):
@@ -43,10 +47,22 @@ class ReconciliationService:
         issues: IssueGateway,
         stale_claim_timeout: timedelta = timedelta(hours=2),
         now_provider: callable | None = None,
+        discord_notifier: DiscordNotifier | None = None,
+        telemetry: TelemetryAdapter | None = None,
     ) -> None:
         self._issues = issues
         self._stale_claim_timeout = stale_claim_timeout
         self._now_provider = now_provider or _utc_now
+        self._discord_notifier = discord_notifier
+        self._telemetry = telemetry
+
+    def set_discord_notifier(self, notifier: DiscordNotifier) -> None:
+        """Wire a Discord notifier for PRD completion notifications."""
+        self._discord_notifier = notifier
+
+    def set_telemetry(self, telemetry: TelemetryAdapter) -> None:
+        """Wire a telemetry adapter for PRD completion metrics."""
+        self._telemetry = telemetry
 
     def reconcile(self) -> None:
         # 1. Fetch issues filtered to prd + implementation labels,
@@ -243,3 +259,120 @@ class ReconciliationService:
                 if child_records and all(rec.state == "closed" for rec in child_records):
                     if "ready-for-human" not in record.labels:
                         self._issues.add_labels(record.number, "ready-for-human")
+                        # Send Discord notification with telemetry metrics if configured
+                        self._send_prd_completion_notification(
+                            record, child_records, parsed_by_number
+                        )
+
+    def _send_prd_completion_notification(
+        self,
+        prd_record: GitHubIssueRecord,
+        child_records: list[GitHubIssueRecord],
+        parsed_by_number: dict[int, object],
+    ) -> None:
+        """Send a Discord notification when all child issues of a PRD are completed.
+
+        Fetches PRD-level execution metrics via the telemetry adapter if available.
+        Falls back gracefully when telemetry is disabled or unavailable.
+        """
+        if self._discord_notifier is None:
+            return
+
+        # Build metrics fields from telemetry
+        fields = self._build_prd_metrics_fields(child_records, parsed_by_number)
+
+        # Build description
+        child_numbers = sorted(rec.number for rec in child_records)
+        child_list = ", ".join(f"#{n}" for n in child_numbers)
+        description = (
+            f"PRD #{prd_record.number} has all child issues completed "
+            f"and is ready for human review.\n\n"
+            f"**Completed Issues:** {child_list}"
+        )
+
+        self._discord_notifier.send(
+            title="All Issues Completed",
+            description=description,
+            color=0x00FF00,  # Green
+            fields=fields,
+        )
+
+    def _build_prd_metrics_fields(
+        self,
+        child_records: list[GitHubIssueRecord],
+        parsed_by_number: dict[int, object],
+    ) -> list[dict[str, object]]:
+        """Build Discord embed fields with PRD-level execution metrics.
+
+        Fetches telemetry for each child implementation issue that has an
+        Agent Run ID.  Returns a list of Discord embed field dicts.
+        """
+        fields: list[dict[str, object]] = []
+
+        if self._telemetry is None:
+            return fields
+
+        # Collect metrics from child runs
+        total_runs = 0
+        total_tokens = 0
+        total_cost = 0.0
+        latencies: list[float] = []
+        runs_with_telemetry = 0
+        runs_without_telemetry = 0
+
+        for child_record in child_records:
+            parsed = parsed_by_number.get(child_record.number)
+            if not isinstance(parsed, ImplementationIssue):
+                continue
+
+            agent_run_id = parsed.orchestration.agent_run_id
+            if not agent_run_id:
+                continue
+
+            total_runs += 1
+            snapshot = self._telemetry.fetch_agent_run_metrics(run_id=agent_run_id)
+
+            if snapshot.metrics_available:
+                runs_with_telemetry += 1
+                if snapshot.total_tokens is not None:
+                    total_tokens += snapshot.total_tokens
+                if snapshot.model_cost is not None:
+                    total_cost += snapshot.model_cost
+                if snapshot.avg_latency_ms is not None:
+                    latencies.append(snapshot.avg_latency_ms)
+            else:
+                runs_without_telemetry += 1
+
+        # Build fields based on what we have
+        fields.append({
+            "name": "Total Runs",
+            "value": str(total_runs),
+            "inline": True,
+        })
+
+        if runs_with_telemetry > 0:
+            fields.append({
+                "name": "Total Tokens",
+                "value": f"{total_tokens:,}",
+                "inline": True,
+            })
+            fields.append({
+                "name": "Total Cost",
+                "value": f"${total_cost:.4f}",
+                "inline": True,
+            })
+            if latencies:
+                avg_latency = sum(latencies) / len(latencies)
+                fields.append({
+                    "name": "Avg Latency",
+                    "value": f"{avg_latency:.0f} ms",
+                    "inline": True,
+                })
+        else:
+            fields.append({
+                "name": "Telemetry",
+                "value": "Unavailable — no telemetry data found for any run.",
+                "inline": False,
+            })
+
+        return fields

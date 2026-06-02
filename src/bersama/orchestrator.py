@@ -541,6 +541,20 @@ class Orchestrator:
     def run(self, repo_name: str, config: AppConfig, continuous: bool = False) -> None:
         repo_config = config.repo(repo_name)
         self._bind_repo_lock(str(repo_config.repo_path))
+
+        # Wire Discord notifier if configured
+        if config.discord.enabled and config.discord.webhook_url:
+            from bersama.discord_notifier import DiscordNotifier
+            notifier = DiscordNotifier(config.discord.webhook_url)
+            self.execution_service.set_discord_notifier(notifier)
+            self.reconciliation_service.set_discord_notifier(notifier)
+
+        # Wire telemetry adapter if configured
+        if config.observability.enabled:
+            from bersama.telemetry import TelemetryAdapter
+            telemetry = TelemetryAdapter(config=config.observability)
+            self.reconciliation_service.set_telemetry(telemetry)
+
         if continuous:
             self._run_continuous(repo_name, config)
         else:
