@@ -541,6 +541,14 @@ class Orchestrator:
     def run(self, repo_name: str, config: AppConfig, continuous: bool = False) -> None:
         repo_config = config.repo(repo_name)
         self._bind_repo_lock(str(repo_config.repo_path))
+
+        # Wire Discord notifier if configured
+        if config.discord.enabled and config.discord.webhook_url:
+            from bersama.discord_notifier import DiscordNotifier
+            self.execution_service.set_discord_notifier(
+                DiscordNotifier(config.discord.webhook_url)
+            )
+
         if continuous:
             self._run_continuous(repo_name, config)
         else:
