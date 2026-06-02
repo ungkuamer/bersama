@@ -62,6 +62,12 @@ interface Repo {
   default_harness: string;
 }
 
+interface TelemetryDiagnosticItem {
+  code: string;
+  severity: string;
+  message: string;
+}
+
 interface Issue {
   number: number;
   title: string;
@@ -80,6 +86,7 @@ interface Issue {
   failure_reason?: string | null;
   started_at?: string | null;
   finished_at?: string | null;
+  telemetry_diagnostics?: TelemetryDiagnosticItem[] | null;
 }
 
 interface RunState {

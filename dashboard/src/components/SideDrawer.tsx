@@ -20,13 +20,21 @@ import {
   Info,
   Play,
   AlertCircle,
+  AlertTriangle,
   CheckCircle2,
   GitMerge,
   Hand,
   Send,
   Eye,
   Clock,
+  BarChart3,
 } from 'lucide-react'
+
+export interface TelemetryDiagnosticItem {
+  code: string;
+  severity: string;
+  message: string;
+}
 
 export interface Issue {
   number: number;
@@ -46,6 +54,7 @@ export interface Issue {
   failure_reason?: string | null;
   started_at?: string | null;
   finished_at?: string | null;
+  telemetry_diagnostics?: TelemetryDiagnosticItem[] | null;
 }
 
 export interface SideDrawerProps {
@@ -672,6 +681,57 @@ export default function SideDrawer({
                   <Separator className="bg-border" />
                 </>
               ) : null}
+
+              {/* Run Telemetry Diagnostics */}
+              {isImplementation && issue.telemetry_diagnostics && issue.telemetry_diagnostics.length > 0 && (
+                <>
+                  <section>
+                    <h4 className="text-[10px] font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400 mb-2 flex items-center gap-1.5">
+                      <AlertTriangle className="size-3" />
+                      Run Telemetry
+                    </h4>
+                    <div className="flex flex-col gap-2">
+                      {issue.telemetry_diagnostics.map((diag, idx) => (
+                        <div
+                          key={idx}
+                          className="border border-amber-200 bg-amber-50 dark:border-amber-500/35 dark:bg-amber-500/10 rounded-md p-3"
+                        >
+                          <div className="flex items-start gap-2">
+                            <BarChart3 className="size-3 text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
+                            <div className="flex-1 min-w-0">
+                              <span className="text-[9px] font-mono font-bold uppercase tracking-wider text-amber-800 dark:text-amber-200">
+                                {diag.code.replace(/_/g, ' ')}
+                              </span>
+                              <p className="text-[9.5px] text-amber-700 dark:text-amber-300 mt-1 leading-relaxed">
+                                {diag.message}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    <p className="text-[9px] text-muted-foreground italic mt-2">
+                      Metrics are unavailable. This does not affect Agent Run lifecycle status.
+                    </p>
+                  </section>
+                  <Separator className="bg-border" />
+                </>
+              )}
+
+              {isImplementation && !issue.telemetry_diagnostics && (issue.status === 'running' || issue.status === 'succeeded' || issue.status === 'failed') && (
+                <>
+                  <section>
+                    <h4 className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-2 flex items-center gap-1.5">
+                      <BarChart3 className="size-3" />
+                      Run Telemetry
+                    </h4>
+                    <p className="text-[9.5px] text-muted-foreground italic">
+                      Telemetry is available for this Agent Run. Detailed metrics can be viewed in the full metrics panel.
+                    </p>
+                  </section>
+                  <Separator className="bg-border" />
+                </>
+              )}
 
               {/* Action Controls */}
               {isImplementation && (

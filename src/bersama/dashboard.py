@@ -23,6 +23,11 @@ from bersama.reconciliation import ReconciliationService
 from bersama.repo_lock import RepoLock
 from bersama.scheduling_readiness import SchedulingReadinessProvider
 from bersama.command_executor import CommandExecutor
+from bersama.telemetry import (
+    TelemetryAdapter,
+    serialize_agent_run_metrics_snapshot,
+    serialize_implementation_issue_metrics_snapshot,
+)
 
 ReconciliationServiceFactory = Callable[[RepoConfig], ReconciliationService]
 PrdPreparationServiceFactory = Callable[[RepoConfig], PrdPreparationService]
@@ -473,14 +478,14 @@ def create_dashboard_app(
                 started_at = None
                 finished_at = None
                 failure_reason = None
+                worktree_path = Path(repo_cfg.worktree_root) / f"issue-{record.number}"
+                run_state_path = worktree_path / "run-state.json"
 
                 if diagnostics:
                     pass
                 elif record.state == "closed":
                     status = "succeeded"
                 else:
-                    worktree_path = Path(repo_cfg.worktree_root) / f"issue-{record.number}"
-                    run_state_path = worktree_path / "run-state.json"
                     if run_state_path.exists():
                         try:
                             run_state_data = json.loads(run_state_path.read_text(encoding="utf-8"))
@@ -500,6 +505,34 @@ def create_dashboard_app(
                                 status = "ready"
                         else:
                             status = "unready"
+
+                # Telemetry diagnostics: check if telemetry is available or unavailable
+                telemetry_diagnostics = None
+                if config.observability.enabled:
+                    if run_state_path.exists():
+                        try:
+                            run_state_data = json.loads(run_state_path.read_text(encoding="utf-8"))
+                            telemetry_assoc = run_state_data.get("telemetry_association")
+                            if not isinstance(telemetry_assoc, dict):
+                                telemetry_diagnostics = [
+                                    {
+                                        "code": "missing_association",
+                                        "severity": "warning",
+                                        "message": "No Run Telemetry Association found. The Agent Run did not declare observability identity at startup.",
+                                    }
+                                ]
+                        except Exception:
+                            pass
+                    elif parsed.orchestration.agent_run_id:
+                        # Agent run exists but no run-state.json found
+                        telemetry_diagnostics = [
+                            {
+                                "code": "missing_association",
+                                "severity": "warning",
+                                "message": "No Run Telemetry Association found. The Agent Run did not declare observability identity at startup.",
+                            }
+                        ]
+                res["telemetry_diagnostics"] = telemetry_diagnostics
 
                 res["status"] = status
                 res["started_at"] = started_at
@@ -601,6 +634,87 @@ def create_dashboard_app(
 
         runs_list.sort(key=lambda r: r.get("issue_number", 0))
         return runs_list
+
+    @app.get("/api/metrics/{repo}/runs/{run_issue_number}")
+    def get_run_metrics(repo: str, run_issue_number: int) -> dict[str, object]:
+        try:
+            repo_cfg = config.repo(repo)
+        except ConfigError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+        adapter = TelemetryAdapter(config=config.observability)
+
+        # Look up the telemetry association from the worktree run-state
+        worktree_path = Path(repo_cfg.worktree_root) / f"issue-{run_issue_number}"
+        run_state_path = worktree_path / "run-state.json"
+
+        association = None
+        if run_state_path.exists():
+            try:
+                run_state_data = json.loads(run_state_path.read_text(encoding="utf-8"))
+                association = run_state_data.get("telemetry_association")
+            except Exception:
+                pass
+
+        run_id = None
+        if isinstance(association, dict):
+            run_id = str(association.get("run_id", ""))
+        else:
+            # Fallback: check the issues endpoint data for agent_run_id
+            issue_record = issues_factory().view_issue(run_issue_number)
+            parsed_issue = parse_issue(
+                GitHubIssue(
+                    number=issue_record.number,
+                    title=issue_record.title,
+                    body=issue_record.body,
+                    labels=issue_record.labels,
+                )
+            )
+            if isinstance(parsed_issue, ImplementationIssue):
+                run_id = parsed_issue.orchestration.agent_run_id or ""
+
+        snapshot = adapter.fetch_agent_run_metrics(
+            run_id=run_id or f"issue-{run_issue_number}",
+            association=association,
+        )
+        return serialize_agent_run_metrics_snapshot(snapshot)
+
+    @app.get("/api/metrics/{repo}/implementation-issues/{issue_number}")
+    def get_implementation_issue_metrics(repo: str, issue_number: int) -> dict[str, object]:
+        try:
+            repo_cfg = config.repo(repo)
+        except ConfigError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+        adapter = TelemetryAdapter(config=config.observability)
+
+        # Collect all runs associated with this implementation issue via worktrees
+        associations: list[dict[str, object]] = []
+        worktree_root = Path(repo_cfg.worktree_root)
+        if worktree_root.exists() and worktree_root.is_dir():
+            for child in worktree_root.iterdir():
+                if not (child.is_dir() and child.name.startswith("issue-")):
+                    continue
+                try:
+                    child_issue_num = int(child.name[len("issue-"):])
+                except ValueError:
+                    continue
+                run_state_path = child / "run-state.json"
+                if run_state_path.exists():
+                    try:
+                        run_state_data = json.loads(run_state_path.read_text(encoding="utf-8"))
+                        if run_state_data.get("issue_number") == issue_number:
+                            assoc = run_state_data.get("telemetry_association")
+                            if isinstance(assoc, dict):
+                                associations.append(assoc)
+                    except Exception:
+                        pass
+
+        snapshot = adapter.fetch_implementation_issue_metrics(
+            issue_number=issue_number,
+            associations=associations,
+        )
+        return serialize_implementation_issue_metrics_snapshot(snapshot)
 
     @app.get("/api/runs/{issue_number}/log")
     def get_run_log(issue_number: int, repo: str, limit: int = 100) -> dict[str, object]:
