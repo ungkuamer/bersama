@@ -75,6 +75,7 @@ export interface ImplementationIssueMetrics {
   metrics_available: boolean;
   run_count: number;
   successful_run_count: number;
+  integrated_run_count: number;
   runs_with_telemetry: number;
   runs_without_telemetry: number;
   failure_count: number;
@@ -1041,6 +1042,14 @@ export default function SideDrawer({
                         <div className="flex flex-col">
                           <span className="text-[9px] text-muted-foreground uppercase tracking-wider">With Telemetry</span>
                           <span className="text-sm font-mono font-bold text-foreground">{implementationIssueMetrics.runs_with_telemetry} / {implementationIssueMetrics.run_count}</span>
+                        </div>
+                        <div className="flex flex-col col-span-2">
+                          <span className="text-[9px] text-muted-foreground uppercase tracking-wider">End-to-End Success Rate</span>
+                          <span className={`text-sm font-mono font-bold ${implementationIssueMetrics.integrated_run_count > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground'}`}>
+                            {implementationIssueMetrics.run_count > 0
+                              ? `${((implementationIssueMetrics.integrated_run_count / implementationIssueMetrics.run_count) * 100).toFixed(0)}% (${implementationIssueMetrics.integrated_run_count} / ${implementationIssueMetrics.run_count} integrated)`
+                              : '—'}
+                          </span>
                         </div>
                       </div>
                     </div>

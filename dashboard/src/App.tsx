@@ -686,6 +686,16 @@ export default function App() {
             <span className={`font-semibold ${(metrics.total_run_count - metrics.successful_run_count) > 0 ? 'text-red-600 dark:text-red-400' : ''}`}>{metrics.total_run_count - metrics.successful_run_count}</span>
           </span>
 
+          {/* Integrated (end-to-end) success rate */}
+          {metrics.total_run_count > 0 && (
+            <span className="flex items-center gap-1">
+              <GitMerge className="size-3 shrink-0 text-purple-500" />
+              <span className={`font-semibold ${metrics.integrated_run_count > 0 ? 'text-purple-600 dark:text-purple-400' : 'text-muted-foreground'}`}>
+                {((metrics.integrated_run_count / metrics.total_run_count) * 100).toFixed(0)}% e2e
+              </span>
+            </span>
+          )}
+
           <span className="text-border select-none">|</span>
 
           {/* Model usage */}

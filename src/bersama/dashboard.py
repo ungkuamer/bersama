@@ -731,10 +731,19 @@ def create_dashboard_app(
                     except Exception:
                         pass
 
+        # Check if the implementation issue has been integrated (closed).
+        is_integrated = False
+        try:
+            issue_record = issues_factory().view_issue(issue_number)
+            is_integrated = issue_record.state == "closed"
+        except Exception:
+            pass
+
         snapshot = adapter.fetch_implementation_issue_metrics(
             issue_number=issue_number,
             associations=associations,
             run_statuses=run_statuses if run_statuses else None,
+            is_integrated=is_integrated,
         )
         result = serialize_implementation_issue_metrics_snapshot(snapshot)
         result["runs"] = per_run_attempts
@@ -847,6 +856,7 @@ def create_dashboard_app(
                 issue_number=record.number,
                 associations=associations,
                 run_statuses=run_statuses if run_statuses else None,
+                is_integrated=(record.state == "closed"),
             )
             child_snapshots.append(child_snapshot)
 
