@@ -45,3 +45,4 @@ tests/test_prd_preparation.py
 tests/test_reconciliation.py
 tests/test_repo_lock.py
 tests/test_scheduling_readiness.py
+tests/test_telemetry.py

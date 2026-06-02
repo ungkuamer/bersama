@@ -11,13 +11,16 @@ from fastapi.testclient import TestClient
 from bersama.telemetry import (
     AgentRunMetricsSnapshot,
     ImplementationIssueMetricsSnapshot,
+    PrdMetricsSnapshot,
     TelemetryAdapter,
     TelemetryDiagnostic,
     TelemetryDiagnosticCode,
-    _normalise_agent_run_metrics,
     _aggregate_implementation_issue_metrics,
+    _aggregate_prd_metrics,
+    _normalise_agent_run_metrics,
     serialize_agent_run_metrics_snapshot,
     serialize_implementation_issue_metrics_snapshot,
+    serialize_prd_metrics_snapshot,
 )
 
 
@@ -1121,3 +1124,637 @@ def test_observability_credentials_not_exposed_in_serialized_output() -> None:
     assert "url" not in result
     assert "observability" not in result
     assert "auth" not in result
+
+
+# ---- PRD Metrics aggregation tests ----
+
+
+def test_aggregate_prd_metrics_empty_children() -> None:
+    snapshot = _aggregate_prd_metrics(
+        prd_number=123,
+        child_snapshots=[],
+    )
+
+    assert not snapshot.metrics_available
+    assert snapshot.implementation_issue_count == 0
+    assert snapshot.total_run_count == 0
+    assert snapshot.successful_run_count == 0
+    assert snapshot.runs_with_telemetry == 0
+    assert snapshot.runs_without_telemetry == 0
+
+
+def test_aggregate_prd_metrics_with_children() -> None:
+    child1 = ImplementationIssueMetricsSnapshot(
+        issue_number=125,
+        input_tokens=1000,
+        output_tokens=500,
+        total_tokens=1500,
+        model_cost=0.01,
+        run_count=2,
+        successful_run_count=1,
+        runs_with_telemetry=1,
+        runs_without_telemetry=1,
+        avg_time_to_first_token_ms=400.0,
+        avg_latency_ms=1000.0,
+        avg_output_tokens_per_sec=85.0,
+    )
+    child2 = ImplementationIssueMetricsSnapshot(
+        issue_number=126,
+        input_tokens=2000,
+        output_tokens=1000,
+        total_tokens=3000,
+        model_cost=0.02,
+        run_count=1,
+        successful_run_count=1,
+        runs_with_telemetry=1,
+        runs_without_telemetry=0,
+        avg_time_to_first_token_ms=600.0,
+        avg_latency_ms=1500.0,
+        avg_output_tokens_per_sec=92.0,
+    )
+
+    snapshot = _aggregate_prd_metrics(
+        prd_number=123,
+        child_snapshots=[child1, child2],
+        child_total_count=2,
+        child_status_counts={"succeeded": 1, "ready": 1},
+    )
+
+    assert snapshot.metrics_available
+    assert snapshot.issue_number == 123
+    assert snapshot.implementation_issue_count == 2
+    assert snapshot.total_run_count == 3
+    assert snapshot.successful_run_count == 2
+    assert snapshot.runs_with_telemetry == 2
+    assert snapshot.runs_without_telemetry == 1
+    assert snapshot.input_tokens == 3000
+    assert snapshot.output_tokens == 1500
+    assert snapshot.total_tokens == 4500
+    assert snapshot.model_cost == 0.03
+    assert snapshot.avg_time_to_first_token_ms == 500.0
+    assert snapshot.avg_latency_ms == 1250.0
+    assert snapshot.avg_output_tokens_per_sec == 88.5
+    assert snapshot.child_status_counts == {"succeeded": 1, "ready": 1}
+
+
+def test_aggregate_prd_metrics_mixed_telemetry() -> None:
+    child_with = ImplementationIssueMetricsSnapshot(
+        issue_number=125,
+        input_tokens=1000,
+        output_tokens=500,
+        run_count=1,
+        successful_run_count=1,
+        runs_with_telemetry=1,
+        runs_without_telemetry=0,
+    )
+    child_without = ImplementationIssueMetricsSnapshot(
+        issue_number=126,
+        run_count=1,
+        successful_run_count=0,
+        runs_with_telemetry=0,
+        runs_without_telemetry=1,
+        diagnostics=[
+            TelemetryDiagnostic(
+                code=TelemetryDiagnosticCode.MISSING_ASSOCIATION,
+                message="No association found.",
+            )
+        ],
+    )
+
+    snapshot = _aggregate_prd_metrics(
+        prd_number=123,
+        child_snapshots=[child_with, child_without],
+        child_total_count=2,
+    )
+
+    assert snapshot.metrics_available
+    assert snapshot.implementation_issue_count == 2
+    assert snapshot.total_run_count == 2
+    assert snapshot.runs_with_telemetry == 1
+    assert snapshot.runs_without_telemetry == 1
+    assert snapshot.input_tokens == 1000
+    assert snapshot.output_tokens == 500
+    assert len(snapshot.diagnostics) == 1
+    assert snapshot.diagnostics[0].code == TelemetryDiagnosticCode.MISSING_ASSOCIATION
+
+
+def test_aggregate_prd_metrics_all_without_telemetry() -> None:
+    child1 = ImplementationIssueMetricsSnapshot(
+        issue_number=125,
+        run_count=1,
+        successful_run_count=0,
+        runs_with_telemetry=0,
+        runs_without_telemetry=1,
+        diagnostics=[
+            TelemetryDiagnostic(
+                code=TelemetryDiagnosticCode.UNCONFIGURED_OBSERVABILITY,
+                message="Observability not configured.",
+            )
+        ],
+    )
+    child2 = ImplementationIssueMetricsSnapshot(
+        issue_number=126,
+        run_count=1,
+        successful_run_count=0,
+        runs_with_telemetry=0,
+        runs_without_telemetry=1,
+        diagnostics=[
+            TelemetryDiagnostic(
+                code=TelemetryDiagnosticCode.MISSING_ASSOCIATION,
+                message="No association found.",
+            )
+        ],
+    )
+
+    snapshot = _aggregate_prd_metrics(
+        prd_number=123,
+        child_snapshots=[child1, child2],
+        child_total_count=2,
+    )
+
+    assert not snapshot.metrics_available
+    assert snapshot.total_run_count == 2
+    assert snapshot.runs_with_telemetry == 0
+    assert snapshot.runs_without_telemetry == 2
+    assert snapshot.input_tokens is None
+    assert snapshot.total_tokens is None
+    assert len(snapshot.diagnostics) == 2
+
+
+def test_aggregate_prd_metrics_preserves_child_status_counts() -> None:
+    child = ImplementationIssueMetricsSnapshot(
+        issue_number=125,
+        input_tokens=1000,
+        run_count=1,
+        successful_run_count=1,
+        runs_with_telemetry=1,
+        runs_without_telemetry=0,
+    )
+
+    snapshot = _aggregate_prd_metrics(
+        prd_number=123,
+        child_snapshots=[child],
+        child_total_count=1,
+        child_status_counts={"succeeded": 1},
+    )
+
+    assert snapshot.child_status_counts == {"succeeded": 1}
+
+
+# ---- PRD Metrics serialization tests ----
+
+
+def test_serialize_prd_metrics_snapshot_with_metrics() -> None:
+    snapshot = PrdMetricsSnapshot(
+        issue_number=123,
+        input_tokens=5000,
+        output_tokens=2500,
+        total_tokens=7500,
+        model_cost=0.05,
+        avg_time_to_first_token_ms=500.0,
+        avg_latency_ms=1250.0,
+        avg_output_tokens_per_sec=88.5,
+        implementation_issue_count=3,
+        child_status_counts={"succeeded": 2, "ready": 1},
+        total_run_count=5,
+        successful_run_count=4,
+        runs_with_telemetry=4,
+        runs_without_telemetry=1,
+    )
+
+    result = serialize_prd_metrics_snapshot(snapshot)
+
+    assert result["issue_number"] == 123
+    assert result["metrics_available"] is True
+    assert result["implementation_issue_count"] == 3
+    assert result["child_status_counts"] == {"succeeded": 2, "ready": 1}
+    assert result["total_run_count"] == 5
+    assert result["successful_run_count"] == 4
+    assert result["runs_with_telemetry"] == 4
+    assert result["runs_without_telemetry"] == 1
+    assert result["input_tokens"] == 5000
+    assert result["output_tokens"] == 2500
+    assert result["total_tokens"] == 7500
+    assert result["model_cost"] == 0.05
+    assert result["avg_time_to_first_token_ms"] == 500.0
+    assert result["avg_latency_ms"] == 1250.0
+    assert result["avg_output_tokens_per_sec"] == 88.5
+    # No credentials exposed
+    assert "token" not in result
+    assert "url" not in result
+
+
+def test_serialize_prd_metrics_snapshot_with_diagnostics() -> None:
+    snapshot = PrdMetricsSnapshot(
+        issue_number=123,
+        diagnostics=[
+            TelemetryDiagnostic(
+                code=TelemetryDiagnosticCode.MISSING_ASSOCIATION,
+                message="No association found.",
+            )
+        ],
+    )
+
+    result = serialize_prd_metrics_snapshot(snapshot)
+
+    assert result["metrics_available"] is False
+    assert result["implementation_issue_count"] == 0
+    assert len(result["diagnostics"]) == 1
+    assert result["diagnostics"][0]["code"] == "missing_association"
+    assert result["diagnostics"][0]["severity"] == "warning"
+
+
+# ---- PRD Metrics dashboard endpoint tests ----
+
+
+def _build_impl_issue_for_prd(
+    number: int,
+    parent_prd_number: int,
+    labels: tuple[str, ...] = ("implementation",),
+    state: str = "open",
+) -> GitHubIssueRecord:
+    return GitHubIssueRecord(
+        number=number,
+        title=f"Implementation issue #{number}",
+        body=(
+            f"## Parent PRD\n"
+            f"#{parent_prd_number}\n\n"
+            "## What to Build\n"
+            "Build it.\n\n"
+            "## Acceptance Criteria\n"
+            "- [ ] Done.\n\n"
+            "## Blocked By\n"
+            "None\n\n"
+            "## Orchestration\n"
+            "- Agent Run: run-{number}\n"
+            "- Claimed At: 2026-06-02T16:14:30Z\n"
+            "- Implementation Branch: impl/{parent_prd_number}/{number}-feature\n"
+        ).replace("{number}", str(number)).replace("{parent_prd_number}", str(parent_prd_number)),
+        labels=labels,
+        state=state,
+    )
+
+
+def test_get_prd_metrics_endpoint_returns_empty_for_no_children(
+    tmp_path: Path,
+) -> None:
+    worktree_root = tmp_path / "worktrees" / "demo"
+    worktree_root.mkdir(parents=True)
+
+    config = AppConfig(
+        repos={
+            "demo": RepoConfig(
+                name="demo",
+                repo_path=Path("/repos/demo"),
+                main_branch="main",
+                worktree_root=worktree_root,
+                global_concurrency=1,
+                per_prd_concurrency=1,
+                default_harness="local",
+            )
+        },
+        harnesses={
+            "local": HarnessConfig(
+                name="local",
+                command="codex",
+                args_template=(),
+            )
+        },
+        observability=ObservabilityConfig(
+            enabled=True,
+            url="http://localhost:8080",
+            token="test-token",
+        ),
+    )
+
+    class FakeGateway(CustomFakeIssueGateway):
+        def list_issues(self, **kwargs) -> list[GitHubIssueRecord]:
+            return []
+
+    app = create_dashboard_app(
+        config=config,
+        issue_gateway_factory=lambda: FakeGateway(),
+    )
+
+    response = TestClient(app).get("/api/metrics/demo/prd/123")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["issue_number"] == 123
+    assert data["implementation_issue_count"] == 0
+    assert data["total_run_count"] == 0
+    assert data["child_status_counts"] == {}
+
+
+def test_get_prd_metrics_endpoint_returns_aggregated_metrics_for_children(
+    tmp_path: Path,
+) -> None:
+    worktree_root = tmp_path / "worktrees" / "demo"
+    issue_worktree = worktree_root / "issue-125"
+    issue_worktree.mkdir(parents=True)
+
+    run_state = {
+        "status": "succeeded",
+        "issue_number": 125,
+        "prd_branch": "prd/123",
+        "implementation_branch": "impl/123/125",
+        "started_at": "2026-06-02T16:14:45Z",
+        "telemetry_association": {
+            "repo": "demo",
+            "parent_prd": 123,
+            "issue": 125,
+            "run_id": "run-125",
+        },
+    }
+    (issue_worktree / "run-state.json").write_text(json.dumps(run_state))
+
+    config = AppConfig(
+        repos={
+            "demo": RepoConfig(
+                name="demo",
+                repo_path=Path("/repos/demo"),
+                main_branch="main",
+                worktree_root=worktree_root,
+                global_concurrency=1,
+                per_prd_concurrency=1,
+                default_harness="local",
+            )
+        },
+        harnesses={
+            "local": HarnessConfig(
+                name="local",
+                command="codex",
+                args_template=(),
+            )
+        },
+        observability=ObservabilityConfig(
+            enabled=True,
+            url="http://localhost:8080",
+            token="test-token",
+        ),
+    )
+
+    issue_gateway = CustomFakeIssueGateway(
+        _build_impl_issue_for_prd(125, parent_prd_number=123),
+    )
+    app = create_dashboard_app(
+        config=config,
+        issue_gateway_factory=lambda: issue_gateway,
+    )
+
+    response = TestClient(app).get("/api/metrics/demo/prd/123")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["issue_number"] == 123
+    assert data["implementation_issue_count"] == 1
+    # Status counts from run-state.json
+    assert data["child_status_counts"] == {"succeeded": 1}
+
+
+def test_get_prd_metrics_endpoint_returns_child_status_counts_from_issue_state(
+    tmp_path: Path,
+) -> None:
+    worktree_root = tmp_path / "worktrees" / "demo"
+    worktree_root.mkdir(parents=True)
+
+    config = AppConfig(
+        repos={
+            "demo": RepoConfig(
+                name="demo",
+                repo_path=Path("/repos/demo"),
+                main_branch="main",
+                worktree_root=worktree_root,
+                global_concurrency=1,
+                per_prd_concurrency=1,
+                default_harness="local",
+            )
+        },
+        harnesses={
+            "local": HarnessConfig(
+                name="local",
+                command="codex",
+                args_template=(),
+            )
+        },
+        observability=ObservabilityConfig(
+            enabled=True,
+            url="http://localhost:8080",
+            token="test-token",
+        ),
+    )
+
+    ready_issue = GitHubIssueRecord(
+        number=125,
+        title="Ready child",
+        body=(
+            "## Parent PRD\n"
+            "#123\n\n"
+            "## What to Build\n"
+            "Build it.\n\n"
+            "## Acceptance Criteria\n"
+            "- [ ] Done.\n\n"
+            "## Blocked By\n"
+            "None\n"
+        ),
+        labels=("implementation", "ready-for-agent"),
+        state="open",
+    )
+
+    closed_issue = GitHubIssueRecord(
+        number=126,
+        title="Closed child",
+        body=(
+            "## Parent PRD\n"
+            "#123\n\n"
+            "## What to Build\n"
+            "Build it.\n\n"
+            "## Acceptance Criteria\n"
+            "- [ ] Done.\n\n"
+            "## Blocked By\n"
+            "None\n"
+        ),
+        labels=("implementation",),
+        state="closed",
+    )
+
+    issue_gateway = CustomFakeIssueGateway(ready_issue, closed_issue)
+    app = create_dashboard_app(
+        config=config,
+        issue_gateway_factory=lambda: issue_gateway,
+    )
+
+    response = TestClient(app).get("/api/metrics/demo/prd/123")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["implementation_issue_count"] == 2
+    # One from issue labels/state: ready, one closed (succeeded)
+    assert data["child_status_counts"] == {"ready": 1, "succeeded": 1}
+
+
+def test_get_prd_metrics_endpoint_returns_not_found_for_unknown_repo() -> None:
+    app = create_dashboard_app(config=build_config(observability_enabled=True))
+
+    response = TestClient(app).get("/api/metrics/missing/prd/1")
+
+    assert response.status_code == 404
+    assert "missing" in response.json()["detail"]
+
+
+def test_get_prd_metrics_endpoint_excludes_planning_telemetry_by_construction() -> None:
+    """Acceptance criteria: PRD Metrics exclude planning telemetry.
+
+    The endpoint only aggregates Implementation Issues. PRD planning sessions
+    are never Implementation Issues, so they are excluded by construction.
+    """
+    worktree_root = Path("/tmp")
+    config = AppConfig(
+        repos={
+            "demo": RepoConfig(
+                name="demo",
+                repo_path=Path("/repos/demo"),
+                main_branch="main",
+                worktree_root=worktree_root,
+                global_concurrency=1,
+                per_prd_concurrency=1,
+                default_harness="local",
+            )
+        },
+        harnesses={
+            "local": HarnessConfig(
+                name="local",
+                command="codex",
+                args_template=(),
+            )
+        },
+        observability=ObservabilityConfig(
+            enabled=True,
+            url="http://localhost:8080",
+            token="test-token",
+        ),
+    )
+
+    # PRD issue should not appear as a child
+    prd_issue = GitHubIssueRecord(
+        number=123,
+        title="PRD Title",
+        body="Some PRD.",
+        labels=("prd",),
+        state="open",
+    )
+
+    class FakeGateway(CustomFakeIssueGateway):
+        def list_issues(self, **kwargs) -> list[GitHubIssueRecord]:
+            # Only the PRD issue exists (no implementation children)
+            return [prd_issue]
+
+    app = create_dashboard_app(
+        config=config,
+        issue_gateway_factory=lambda: FakeGateway(prd_issue),
+    )
+
+    response = TestClient(app).get("/api/metrics/demo/prd/123")
+
+    assert response.status_code == 200
+    data = response.json()
+    # PRD issue is not an implementation issue, so no children
+    assert data["implementation_issue_count"] == 0
+    assert data["total_run_count"] == 0
+
+
+def test_get_prd_metrics_endpoint_missing_telemetry_count_as_diagnostics(
+    tmp_path: Path,
+) -> None:
+    """Acceptance criteria: PRD aggregates surface missing telemetry counts as
+    diagnostics rather than lifecycle failures."""
+    worktree_root = tmp_path / "worktrees" / "demo"
+    issue_worktree = worktree_root / "issue-125"
+    issue_worktree.mkdir(parents=True)
+
+    # Run-state exists but without telemetry_association
+    run_state = {
+        "status": "succeeded",
+        "issue_number": 125,
+        "prd_branch": "prd/123",
+        "implementation_branch": "impl/123/125",
+        "started_at": "2026-06-02T16:14:45Z",
+        # No telemetry_association
+    }
+    (issue_worktree / "run-state.json").write_text(json.dumps(run_state))
+
+    config = AppConfig(
+        repos={
+            "demo": RepoConfig(
+                name="demo",
+                repo_path=Path("/repos/demo"),
+                main_branch="main",
+                worktree_root=worktree_root,
+                global_concurrency=1,
+                per_prd_concurrency=1,
+                default_harness="local",
+            )
+        },
+        harnesses={
+            "local": HarnessConfig(
+                name="local",
+                command="codex",
+                args_template=(),
+            )
+        },
+        observability=ObservabilityConfig(
+            enabled=True,
+            url="http://localhost:8080",
+            token="test-token",
+        ),
+    )
+
+    impl_issue = _build_impl_issue_for_prd(125, parent_prd_number=123)
+
+    class FakeGateway(CustomFakeIssueGateway):
+        def list_issues(self, **kwargs) -> list[GitHubIssueRecord]:
+            return [impl_issue]
+
+    app = create_dashboard_app(
+        config=config,
+        issue_gateway_factory=lambda: FakeGateway(impl_issue),
+    )
+
+    response = TestClient(app).get("/api/metrics/demo/prd/123")
+
+    assert response.status_code == 200
+    data = response.json()
+    # Missing telemetry should be reported as runs_without_telemetry
+    # The run exists but has no telemetry_association
+    assert data["runs_without_telemetry"] == 1
+    assert data["runs_with_telemetry"] == 0
+    # It is not a lifecycle failure - child_status_counts shows "succeeded"
+    # based on run-state.json
+    assert data["child_status_counts"] == {"succeeded": 1}
+
+
+def test_prd_metrics_snapshot_metrics_available() -> None:
+    """metrics_available for PRD is True only when runs_with_telemetry > 0."""
+    snapshot_no_telemetry = PrdMetricsSnapshot(
+        issue_number=123,
+        diagnostics=[
+            TelemetryDiagnostic(
+                code=TelemetryDiagnosticCode.MISSING_ASSOCIATION,
+                message="No association found.",
+            )
+        ],
+        runs_with_telemetry=0,
+    )
+    assert not snapshot_no_telemetry.metrics_available
+
+    snapshot_no_runs = PrdMetricsSnapshot(
+        issue_number=123,
+        runs_with_telemetry=0,
+    )
+    assert not snapshot_no_runs.metrics_available
+
+    snapshot_with_telemetry = PrdMetricsSnapshot(
+        issue_number=123,
+        runs_with_telemetry=3,
+    )
+    assert snapshot_with_telemetry.metrics_available

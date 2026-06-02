@@ -151,6 +151,7 @@ class PrdMetricsSnapshot:
 
     # Summary
     implementation_issue_count: int = 0
+    child_status_counts: dict[str, int] = dataclasses.field(default_factory=dict)
     total_run_count: int = 0
     successful_run_count: int = 0
     runs_with_telemetry: int = 0
@@ -158,7 +159,7 @@ class PrdMetricsSnapshot:
 
     @property
     def metrics_available(self) -> bool:
-        return not self.diagnostics
+        return self.runs_with_telemetry > 0
 
 
 class _Fetcher(Protocol):
@@ -371,6 +372,23 @@ class TelemetryAdapter:
         for runs that are missing telemetry.
         """
         if not associations:
+            if run_statuses:
+                # Runs exist but have no telemetry association
+                return ImplementationIssueMetricsSnapshot(
+                    issue_number=issue_number,
+                    diagnostics=[
+                        TelemetryDiagnostic(
+                            code=TelemetryDiagnosticCode.MISSING_ASSOCIATION,
+                            message=f"No Agent Run associations found for Implementation Issue #{issue_number}.",
+                        )
+                    ],
+                    run_count=len(run_statuses),
+                    runs_without_telemetry=len(run_statuses),
+                    runs_with_telemetry=0,
+                    successful_run_count=sum(1 for s in run_statuses if s == "succeeded"),
+                    failure_count=sum(1 for s in run_statuses if s == "failed"),
+                    latest_run_status=run_statuses[-1] if run_statuses else None,
+                )
             return ImplementationIssueMetricsSnapshot(
                 issue_number=issue_number,
                 diagnostics=[
@@ -391,6 +409,35 @@ class TelemetryAdapter:
             issue_number=issue_number,
             run_snapshots=run_snapshots,
             run_statuses=run_statuses,
+        )
+
+    def fetch_prd_metrics(
+        self,
+        *,
+        prd_number: int,
+        child_snapshots: list[ImplementationIssueMetricsSnapshot],
+        child_status_counts: dict[str, int] | None = None,
+    ) -> PrdMetricsSnapshot:
+        """Return aggregated PRD metrics from child Implementation Issue
+        metrics snapshots.
+
+        PRD Metrics exclude planning telemetry from PRD creation or issue
+        decomposition sessions. Since child snapshots are already scoped to
+        Implementation Issues, planning sessions are excluded by construction.
+        """
+        if not child_snapshots:
+            return PrdMetricsSnapshot(
+                issue_number=prd_number,
+                implementation_issue_count=0,
+                child_status_counts=child_status_counts or {},
+                diagnostics=[],
+            )
+
+        return _aggregate_prd_metrics(
+            prd_number=prd_number,
+            child_snapshots=child_snapshots,
+            child_total_count=len(child_snapshots),
+            child_status_counts=child_status_counts,
         )
 
 
@@ -627,6 +674,90 @@ def _mean(values: list[float]) -> float | None:
     return sum(values) / len(values)
 
 
+def _aggregate_prd_metrics(
+    *,
+    prd_number: int,
+    child_snapshots: list[ImplementationIssueMetricsSnapshot],
+    child_status_counts: dict[str, int] | None = None,
+    child_total_count: int = 0,
+) -> PrdMetricsSnapshot:
+    """Aggregate Implementation Issue metrics into a PRD-level metrics view."""
+    diagnostics: list[TelemetryDiagnostic] = []
+
+    total_input_tokens = 0
+    total_output_tokens = 0
+    total_cache_read_tokens = 0
+    total_cache_write_tokens = 0
+    total_total_tokens = 0
+    total_model_cost = 0.0
+    total_tool_call_count = 0
+    total_tool_error_count = 0
+    avg_ttf_values: list[float] = []
+    avg_latency_values: list[float] = []
+    avg_tps_values: list[float] = []
+
+    total_runs = 0
+    total_successful_runs = 0
+    total_runs_with_telemetry = 0
+    total_runs_without_telemetry = 0
+    has_any_metrics = False
+
+    for snap in child_snapshots:
+        if snap.metrics_available:
+            has_any_metrics = True
+            if snap.input_tokens is not None:
+                total_input_tokens += snap.input_tokens
+            if snap.output_tokens is not None:
+                total_output_tokens += snap.output_tokens
+            if snap.cache_read_tokens is not None:
+                total_cache_read_tokens += snap.cache_read_tokens
+            if snap.cache_write_tokens is not None:
+                total_cache_write_tokens += snap.cache_write_tokens
+            if snap.total_tokens is not None:
+                total_total_tokens += snap.total_tokens
+            if snap.model_cost is not None:
+                total_model_cost += snap.model_cost
+            if snap.tool_call_count is not None:
+                total_tool_call_count += snap.tool_call_count
+            if snap.tool_error_count is not None:
+                total_tool_error_count += snap.tool_error_count
+
+        if snap.avg_time_to_first_token_ms is not None:
+            avg_ttf_values.append(snap.avg_time_to_first_token_ms)
+        if snap.avg_latency_ms is not None:
+            avg_latency_values.append(snap.avg_latency_ms)
+        if snap.avg_output_tokens_per_sec is not None:
+            avg_tps_values.append(snap.avg_output_tokens_per_sec)
+
+        total_runs += snap.run_count
+        total_successful_runs += snap.successful_run_count
+        total_runs_with_telemetry += snap.runs_with_telemetry
+        total_runs_without_telemetry += snap.runs_without_telemetry
+        diagnostics.extend(snap.diagnostics)
+
+    return PrdMetricsSnapshot(
+        issue_number=prd_number,
+        diagnostics=diagnostics,
+        input_tokens=total_input_tokens if has_any_metrics else None,
+        output_tokens=total_output_tokens if has_any_metrics else None,
+        cache_read_tokens=total_cache_read_tokens if has_any_metrics else None,
+        cache_write_tokens=total_cache_write_tokens if has_any_metrics else None,
+        total_tokens=total_total_tokens if has_any_metrics else None,
+        model_cost=total_model_cost if has_any_metrics else None,
+        tool_call_count=total_tool_call_count if has_any_metrics else None,
+        tool_error_count=total_tool_error_count if has_any_metrics else None,
+        avg_time_to_first_token_ms=_mean(avg_ttf_values),
+        avg_latency_ms=_mean(avg_latency_values),
+        avg_output_tokens_per_sec=_mean(avg_tps_values),
+        implementation_issue_count=child_total_count,
+        child_status_counts=child_status_counts or {},
+        total_run_count=total_runs,
+        successful_run_count=total_successful_runs,
+        runs_with_telemetry=total_runs_with_telemetry,
+        runs_without_telemetry=total_runs_without_telemetry,
+    )
+
+
 def _serialize_diagnostic(diag: TelemetryDiagnostic) -> dict[str, str]:
     return {
         "code": diag.code.value,
@@ -682,6 +813,37 @@ def serialize_implementation_issue_metrics_snapshot(
         "latest_run_status": snapshot.latest_run_status,
     }
     if snapshot.metrics_available or snapshot.run_count > 0:
+        result.update({
+            "input_tokens": snapshot.input_tokens,
+            "output_tokens": snapshot.output_tokens,
+            "cache_read_tokens": snapshot.cache_read_tokens,
+            "cache_write_tokens": snapshot.cache_write_tokens,
+            "total_tokens": snapshot.total_tokens,
+            "model_cost": snapshot.model_cost,
+            "tool_call_count": snapshot.tool_call_count,
+            "tool_error_count": snapshot.tool_error_count,
+            "avg_time_to_first_token_ms": snapshot.avg_time_to_first_token_ms,
+            "avg_latency_ms": snapshot.avg_latency_ms,
+            "avg_output_tokens_per_sec": snapshot.avg_output_tokens_per_sec,
+        })
+    return result
+
+
+def serialize_prd_metrics_snapshot(
+    snapshot: PrdMetricsSnapshot,
+) -> dict[str, object]:
+    result: dict[str, object] = {
+        "issue_number": snapshot.issue_number,
+        "diagnostics": [_serialize_diagnostic(d) for d in snapshot.diagnostics],
+        "metrics_available": snapshot.metrics_available,
+        "implementation_issue_count": snapshot.implementation_issue_count,
+        "child_status_counts": snapshot.child_status_counts,
+        "total_run_count": snapshot.total_run_count,
+        "successful_run_count": snapshot.successful_run_count,
+        "runs_with_telemetry": snapshot.runs_with_telemetry,
+        "runs_without_telemetry": snapshot.runs_without_telemetry,
+    }
+    if snapshot.metrics_available or snapshot.total_run_count > 0:
         result.update({
             "input_tokens": snapshot.input_tokens,
             "output_tokens": snapshot.output_tokens,
