@@ -22,7 +22,10 @@ import {
   Download,
   Hand,
   Send,
-  Activity
+  Activity,
+  BarChart3,
+  Zap,
+  Cpu
 } from 'lucide-react'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardAction } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -41,6 +44,7 @@ import { useSSE } from '@/hooks/useSSE'
 import { useLogStream } from '@/hooks/useLogStream'
 import { useRunMetricsQuery } from '@/hooks/useRunMetricsQuery'
 import { useImplementationIssueMetricsQuery } from '@/hooks/useImplementationIssueMetricsQuery'
+import { usePrdMetricsQuery } from '@/hooks/usePrdMetricsQuery'
 
 interface ProcessGlobal {
   process?: {
@@ -613,6 +617,127 @@ export default function App() {
     }
   };
 
+  const formatCompactTokens = (tokens: number | null | undefined): string => {
+    if (tokens == null) return '—';
+    if (tokens >= 1_000_000) return `${(tokens / 1_000_000).toLocaleString(undefined, { maximumFractionDigits: 1 })}M`;
+    if (tokens >= 1_000) return `${(tokens / 1_000).toLocaleString(undefined, { maximumFractionDigits: 1 })}K`;
+    return String(tokens);
+  };
+
+  const formatCompactCost = (cost: number | null | undefined): string => {
+    if (cost == null) return '—';
+    return `$${cost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  };
+
+  const formatCompactMs = (ms: number | null | undefined): string => {
+    if (ms == null) return '—';
+    if (ms >= 1000) return `${(ms / 1000).toLocaleString(undefined, { maximumFractionDigits: 1 })}s`;
+    return `${Math.round(ms)}ms`;
+  }
+
+  const PrdMetricsRow = ({ prdNumber }: { prdNumber: number }) => {
+    const { data, isPending } = usePrdMetricsQuery(effectiveSelectedRepo, prdNumber);
+
+    if (isPending) {
+      return (
+        <div className="px-4 py-2 border-b border-border">
+          <div className="flex items-center gap-2">
+            <Skeleton className="h-3 w-16 animate-shimmer" />
+            <Skeleton className="h-3 w-12 animate-shimmer" />
+          </div>
+        </div>
+      );
+    }
+
+    if (!data) return null;
+
+    const metrics = data;
+    const hasChildren = metrics.implementation_issue_count > 0;
+    if (!hasChildren && !metrics.metrics_available) {
+      return null;
+    }
+
+    return (
+      <div
+        className="px-4 py-2 border-b border-border bg-muted/10"
+        role="region"
+        aria-label={`PRD #${prdNumber} delivery metrics`}
+      >
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] font-mono text-muted-foreground">
+          {/* Child issue status counts */}
+          <span className="flex items-center gap-1">
+            <Layers className="size-3 shrink-0" />
+            <span className="font-semibold text-foreground">{metrics.implementation_issue_count}</span> children
+          </span>
+
+          {/* Run count */}
+          <span className="flex items-center gap-1">
+            <Activity className="size-3 shrink-0" />
+            <span className="font-semibold text-foreground">{metrics.total_run_count}</span> runs
+          </span>
+
+          {/* Success / failure */}
+          <span className="flex items-center gap-1">
+            <CheckCircle2 className="size-3 shrink-0 text-emerald-500" />
+            <span className="font-semibold text-emerald-600 dark:text-emerald-400">{metrics.successful_run_count}</span>
+          </span>
+          <span className="flex items-center gap-1">
+            <AlertCircle className="size-3 shrink-0 text-red-500" />
+            <span className={`font-semibold ${(metrics.total_run_count - metrics.successful_run_count) > 0 ? 'text-red-600 dark:text-red-400' : ''}`}>{metrics.total_run_count - metrics.successful_run_count}</span>
+          </span>
+
+          <span className="text-border select-none">|</span>
+
+          {/* Model usage */}
+          <span className="flex items-center gap-1">
+            <Cpu className="size-3 shrink-0" />
+            <span className="font-semibold text-foreground">{formatCompactTokens(metrics.total_tokens)}</span> tokens
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="font-semibold text-foreground">{formatCompactCost(metrics.model_cost)}</span>
+          </span>
+
+          <span className="text-border select-none">|</span>
+
+          {/* Responsiveness */}
+          <span className="flex items-center gap-1">
+            <Zap className="size-3 shrink-0" />
+            TTF <span className="font-semibold text-foreground">{formatCompactMs(metrics.avg_time_to_first_token_ms)}</span>
+          </span>
+          <span className="flex items-center gap-1">
+            <Clock className="size-3 shrink-0" />
+            <span className="font-semibold text-foreground">{formatCompactMs(metrics.avg_latency_ms)}</span>
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="font-semibold text-foreground">{metrics.avg_output_tokens_per_sec != null ? `${Math.round(metrics.avg_output_tokens_per_sec)} tok/s` : '—'}</span>
+          </span>
+
+          {/* Telemetry diagnostics */}
+          {(metrics.runs_without_telemetry > 0 || (metrics.diagnostics && metrics.diagnostics.length > 0)) && (
+            <>
+              <span className="text-border select-none">|</span>
+              <span
+                className="flex items-center gap-1 text-amber-600 dark:text-amber-400"
+                aria-label={`${metrics.runs_without_telemetry} runs missing telemetry`}
+              >
+                <BarChart3 className="size-3 shrink-0" />
+                <span className="font-semibold">{metrics.runs_without_telemetry}</span> missing telemetry
+                {metrics.diagnostics && metrics.diagnostics.length > 0 && (
+                  <span
+                    className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-1 py-0 text-[8px] dark:border-amber-500/30 dark:bg-amber-500/10"
+                    title={metrics.diagnostics.map((d: { message: string }) => d.message).join('; ')}
+                  >
+                    {metrics.diagnostics.length} diag
+                  </span>
+                )}
+              </span>
+            </>
+          )}
+        </div>
+      </div>
+    );
+  };
+
   // Filter issues based on UI controls
   const prdIssues = issues.filter(i => i.kind === 'prd');
   const defaultExpandedPrds = prdIssues.reduce<Record<number, boolean>>((acc, prd) => {
@@ -1170,6 +1295,9 @@ export default function App() {
                               {prepareState.message}
                             </div>
                           )}
+
+                          {/* Compact PRD Metrics */}
+                          <PrdMetricsRow prdNumber={prd.number} />
 
                           {/* Dependency Pipeline Map */}
                           {isExpanded && children.length > 0 && (
