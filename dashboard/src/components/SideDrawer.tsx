@@ -28,6 +28,7 @@ import {
   Eye,
   Clock,
   BarChart3,
+  Layers,
 } from 'lucide-react'
 
 export interface TelemetryDiagnosticItem {
@@ -58,6 +59,38 @@ export interface RunMetrics {
   latest_latency_ms?: number | null;
   latest_output_tokens_per_sec?: number | null;
   latest_telemetry_at?: string | null;
+}
+
+export interface RunAttempt {
+  run_id: string;
+  status: string;
+  started_at?: string | null;
+  finished_at?: string | null;
+  has_telemetry_association: boolean;
+}
+
+export interface ImplementationIssueMetrics {
+  issue_number: number;
+  diagnostics: TelemetryDiagnosticItem[];
+  metrics_available: boolean;
+  run_count: number;
+  successful_run_count: number;
+  runs_with_telemetry: number;
+  runs_without_telemetry: number;
+  failure_count: number;
+  latest_run_status: string | null;
+  input_tokens?: number | null;
+  output_tokens?: number | null;
+  cache_read_tokens?: number | null;
+  cache_write_tokens?: number | null;
+  total_tokens?: number | null;
+  model_cost?: number | null;
+  tool_call_count?: number | null;
+  tool_error_count?: number | null;
+  avg_time_to_first_token_ms?: number | null;
+  avg_latency_ms?: number | null;
+  avg_output_tokens_per_sec?: number | null;
+  runs?: RunAttempt[];
 }
 
 export interface Issue {
@@ -102,6 +135,8 @@ export interface SideDrawerProps {
   selectedRunIssue?: number | null;
   // Run metrics from telemetry
   runMetrics?: RunMetrics | null;
+  // Implementation Issue aggregated metrics
+  implementationIssueMetrics?: ImplementationIssueMetrics | null;
 }
 
 type TabId = 'overview' | 'timeline' | 'operations';
@@ -209,6 +244,7 @@ export default function SideDrawer({
   onClaimAgentRunIdChange,
   selectedRunIssue,
   runMetrics,
+  implementationIssueMetrics,
 }: SideDrawerProps) {
   const [selectedTab, setSelectedTab] = useState<TabId>(() => readOnly ? 'overview' : 'operations');
   const [claimFormOpen, setClaimFormOpen] = useState(false);
@@ -975,6 +1011,174 @@ export default function SideDrawer({
                       <Separator className="bg-border" />
                     </>
                   )}
+                </>
+              )}
+
+              {/* Implementation Issue Metrics (aggregated across attempts) */}
+              {isImplementation && implementationIssueMetrics && (
+                <>
+                  <section>
+                    <h4 className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-2 flex items-center gap-1.5">
+                      <Layers className="size-3" />
+                      Implementation Issue Metrics
+                    </h4>
+
+                    {/* Summary Card */}
+                    <div className="border border-border rounded-md p-3 mb-3 bg-muted/20">
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="flex flex-col">
+                          <span className="text-[9px] text-muted-foreground uppercase tracking-wider">Attempts</span>
+                          <span className="text-sm font-mono font-bold text-foreground">{implementationIssueMetrics.run_count}</span>
+                        </div>
+                        <div className="flex flex-col">
+                          <span className="text-[9px] text-muted-foreground uppercase tracking-wider">Latest Status</span>
+                          <span className="text-sm font-mono font-bold capitalize text-foreground">{implementationIssueMetrics.latest_run_status || 'N/A'}</span>
+                        </div>
+                        <div className="flex flex-col">
+                          <span className="text-[9px] text-muted-foreground uppercase tracking-wider">Failures</span>
+                          <span className={`text-sm font-mono font-bold ${implementationIssueMetrics.failure_count > 0 ? 'text-destructive' : 'text-foreground'}`}>{implementationIssueMetrics.failure_count}</span>
+                        </div>
+                        <div className="flex flex-col">
+                          <span className="text-[9px] text-muted-foreground uppercase tracking-wider">With Telemetry</span>
+                          <span className="text-sm font-mono font-bold text-foreground">{implementationIssueMetrics.runs_with_telemetry} / {implementationIssueMetrics.run_count}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Aggregated Model Usage */}
+                    {implementationIssueMetrics.metrics_available && (implementationIssueMetrics.input_tokens != null || implementationIssueMetrics.total_tokens != null) && (
+                      <div className="mb-3">
+                        <h5 className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground mb-1.5">Aggregated Usage</h5>
+                        <Table className="border rounded-md border-border">
+                          <TableBody>
+                            {implementationIssueMetrics.input_tokens != null && (
+                              <TableRow className="border-b border-border hover:bg-transparent">
+                                <TableCell className="text-muted-foreground text-[10px] font-medium py-1.5">Input Tokens</TableCell>
+                                <TableCell className="text-foreground text-[10px] font-mono text-right py-1.5">{implementationIssueMetrics.input_tokens?.toLocaleString()}</TableCell>
+                              </TableRow>
+                            )}
+                            {implementationIssueMetrics.output_tokens != null && (
+                              <TableRow className="border-b border-border hover:bg-transparent">
+                                <TableCell className="text-muted-foreground text-[10px] font-medium py-1.5">Output Tokens</TableCell>
+                                <TableCell className="text-foreground text-[10px] font-mono text-right py-1.5">{implementationIssueMetrics.output_tokens?.toLocaleString()}</TableCell>
+                              </TableRow>
+                            )}
+                            {implementationIssueMetrics.total_tokens != null && (
+                              <TableRow className="border-b border-border hover:bg-transparent">
+                                <TableCell className="text-muted-foreground text-[10px] font-medium py-1.5">Total Tokens</TableCell>
+                                <TableCell className="text-foreground text-[10px] font-mono text-right py-1.5">{implementationIssueMetrics.total_tokens?.toLocaleString()}</TableCell>
+                              </TableRow>
+                            )}
+                            {implementationIssueMetrics.model_cost != null && (
+                              <TableRow className="border-b border-border hover:bg-transparent">
+                                <TableCell className="text-muted-foreground text-[10px] font-medium py-1.5">Model Cost</TableCell>
+                                <TableCell className="text-foreground text-[10px] font-mono text-right py-1.5">${implementationIssueMetrics.model_cost?.toFixed(4)}</TableCell>
+                              </TableRow>
+                            )}
+                            {implementationIssueMetrics.tool_call_count != null && (
+                              <TableRow className="border-b border-border hover:bg-transparent">
+                                <TableCell className="text-muted-foreground text-[10px] font-medium py-1.5">Tool Calls</TableCell>
+                                <TableCell className="text-foreground text-[10px] font-mono text-right py-1.5">{implementationIssueMetrics.tool_call_count?.toLocaleString()}</TableCell>
+                              </TableRow>
+                            )}
+                            {implementationIssueMetrics.tool_error_count != null && (
+                              <TableRow className="border-0 hover:bg-transparent">
+                                <TableCell className="text-muted-foreground text-[10px] font-medium py-1.5">Tool Errors</TableCell>
+                                <TableCell className="text-destructive text-[10px] font-mono text-right py-1.5">{implementationIssueMetrics.tool_error_count?.toLocaleString()}</TableCell>
+                              </TableRow>
+                            )}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    )}
+
+                    {/* Aggregated Responsiveness */}
+                    {implementationIssueMetrics.metrics_available && (
+                      (implementationIssueMetrics.avg_time_to_first_token_ms != null ||
+                       implementationIssueMetrics.avg_latency_ms != null ||
+                       implementationIssueMetrics.avg_output_tokens_per_sec != null) && (
+                        <div className="mb-3">
+                          <h5 className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground mb-1.5">Avg. Responsiveness</h5>
+                          <Table className="border rounded-md border-border">
+                            <TableBody>
+                              {implementationIssueMetrics.avg_time_to_first_token_ms != null && (
+                                <TableRow className="border-b border-border hover:bg-transparent">
+                                  <TableCell className="text-muted-foreground text-[10px] font-medium py-1.5">Avg TTFT</TableCell>
+                                  <TableCell className="text-foreground text-[10px] font-mono text-right py-1.5">{implementationIssueMetrics.avg_time_to_first_token_ms?.toFixed(1)} ms</TableCell>
+                                </TableRow>
+                              )}
+                              {implementationIssueMetrics.avg_latency_ms != null && (
+                                <TableRow className="border-b border-border hover:bg-transparent">
+                                  <TableCell className="text-muted-foreground text-[10px] font-medium py-1.5">Avg Latency</TableCell>
+                                  <TableCell className="text-foreground text-[10px] font-mono text-right py-1.5">{implementationIssueMetrics.avg_latency_ms?.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })} ms</TableCell>
+                                </TableRow>
+                              )}
+                              {implementationIssueMetrics.avg_output_tokens_per_sec != null && (
+                                <TableRow className="border-0 hover:bg-transparent">
+                                  <TableCell className="text-muted-foreground text-[10px] font-medium py-1.5">Avg Tokens/s</TableCell>
+                                  <TableCell className="text-foreground text-[10px] font-mono text-right py-1.5">{implementationIssueMetrics.avg_output_tokens_per_sec?.toFixed(1)}</TableCell>
+                                </TableRow>
+                              )}
+                            </TableBody>
+                          </Table>
+                        </div>
+                      )
+                    )}
+
+                    {/* Run Attempt History */}
+                    {implementationIssueMetrics.runs && implementationIssueMetrics.runs.length > 0 && (
+                      <div>
+                        <h5 className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground mb-1.5">Attempt History</h5>
+                        <Table className="border rounded-md border-border">
+                          <TableBody>
+                            {implementationIssueMetrics.runs.map((attempt, idx, array) => (
+                              <TableRow key={attempt.run_id} className={`${idx === array.length - 1 ? 'border-0' : 'border-b border-border'} hover:bg-transparent`}>
+                                <TableCell className="text-[10px] text-muted-foreground font-mono py-1.5">{attempt.run_id}</TableCell>
+                                <TableCell className="text-[10px] py-1.5 text-right">
+                                  <div className="flex items-center justify-end gap-1.5">
+                                    {attempt.has_telemetry_association ? (
+                                      <BarChart3 className="size-3 text-emerald-500" />
+                                    ) : (
+                                      <AlertTriangle className="size-3 text-amber-500" />
+                                    )}
+                                    {getStatusBadge(attempt.status)}
+                                  </div>
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    )}
+
+                    {/* Historical runs without telemetry diagnostics */}
+                    {implementationIssueMetrics.diagnostics.length > 0 && (
+                      <div className="mt-3">
+                        <h5 className="text-[9px] font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400 mb-1.5 flex items-center gap-1">
+                          <AlertTriangle className="size-2.5" />
+                          Telemetry Diagnostics
+                        </h5>
+                        <div className="flex flex-col gap-1.5">
+                          {implementationIssueMetrics.diagnostics.map((diag, di) => (
+                            <div key={di} className="border border-amber-200 bg-amber-50 dark:border-amber-500/35 dark:bg-amber-500/10 rounded p-2">
+                              <div className="flex items-start gap-1.5">
+                                <AlertTriangle className="size-2.5 text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
+                                <div className="flex-1 min-w-0">
+                                  <span className="text-[8px] font-mono font-bold uppercase tracking-wider text-amber-800 dark:text-amber-200">
+                                    {diag.code.replace(/_/g, ' ')}
+                                  </span>
+                                  <p className="text-[8.5px] text-amber-700 dark:text-amber-300 mt-0.5 leading-relaxed">
+                                    {diag.message}
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </section>
+                  <Separator className="bg-border" />
                 </>
               )}
 

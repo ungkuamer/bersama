@@ -406,6 +406,74 @@ def test_aggregate_implementation_issue_metrics_mixed_telemetry() -> None:
     assert snapshot.diagnostics[0].code == TelemetryDiagnosticCode.MISSING_ASSOCIATION
 
 
+def test_aggregate_implementation_issue_metrics_with_failure_count() -> None:
+    run1 = AgentRunMetricsSnapshot(
+        run_id="run-1",
+        input_tokens=1000,
+        output_tokens=500,
+    )
+    run2 = AgentRunMetricsSnapshot(
+        run_id="run-2",
+        input_tokens=2000,
+        output_tokens=1000,
+    )
+
+    snapshot = _aggregate_implementation_issue_metrics(
+        issue_number=125,
+        run_snapshots=[run1, run2],
+        run_statuses=["succeeded", "failed"],
+    )
+
+    assert snapshot.metrics_available
+    assert snapshot.run_count == 2
+    assert snapshot.failure_count == 1
+    assert snapshot.latest_run_status == "failed"
+
+
+def test_aggregate_implementation_issue_metrics_latest_run_status_from_last_run() -> None:
+    run1 = AgentRunMetricsSnapshot(
+        run_id="run-1",
+        input_tokens=1000,
+    )
+    run2 = AgentRunMetricsSnapshot(
+        run_id="run-2",
+        diagnostics=[
+            TelemetryDiagnostic(
+                code=TelemetryDiagnosticCode.MISSING_ASSOCIATION,
+                message="No association.",
+            )
+        ],
+    )
+
+    snapshot = _aggregate_implementation_issue_metrics(
+        issue_number=125,
+        run_snapshots=[run1, run2],
+        run_statuses=["succeeded", "failed"],
+    )
+
+    # latest_run_status should be the last run's status even if it lacks telemetry
+    assert snapshot.latest_run_status == "failed"
+    assert snapshot.failure_count == 1
+    assert snapshot.runs_with_telemetry == 1
+    assert snapshot.runs_without_telemetry == 1
+
+
+def test_aggregate_implementation_issue_metrics_no_run_statuses() -> None:
+    run1 = AgentRunMetricsSnapshot(
+        run_id="run-1",
+        input_tokens=1000,
+    )
+
+    snapshot = _aggregate_implementation_issue_metrics(
+        issue_number=125,
+        run_snapshots=[run1],
+    )
+
+    assert snapshot.metrics_available
+    assert snapshot.failure_count == 0
+    assert snapshot.latest_run_status is None
+
+
 def test_aggregate_implementation_issue_metrics_all_without_telemetry() -> None:
     run1 = AgentRunMetricsSnapshot(
         run_id="run-1",
@@ -507,6 +575,8 @@ def test_serialize_implementation_issue_metrics_snapshot() -> None:
         successful_run_count=2,
         runs_with_telemetry=2,
         runs_without_telemetry=1,
+        failure_count=1,
+        latest_run_status="failed",
         diagnostics=[
             TelemetryDiagnostic(
                 code=TelemetryDiagnosticCode.MISSING_ASSOCIATION,
@@ -526,6 +596,8 @@ def test_serialize_implementation_issue_metrics_snapshot() -> None:
     assert result["successful_run_count"] == 2
     assert result["runs_with_telemetry"] == 2
     assert result["runs_without_telemetry"] == 1
+    assert result["failure_count"] == 1
+    assert result["latest_run_status"] == "failed"
     assert result["input_tokens"] == 5000
     assert result["output_tokens"] == 2500
     assert len(result["diagnostics"]) == 1

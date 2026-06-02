@@ -690,9 +690,12 @@ def create_dashboard_app(
 
         # Collect all runs associated with this implementation issue via worktrees
         associations: list[dict[str, object]] = []
+        run_statuses: list[str] = []
+        run_starts: list[str] = []
+        per_run_attempts: list[dict[str, object]] = []
         worktree_root = Path(repo_cfg.worktree_root)
         if worktree_root.exists() and worktree_root.is_dir():
-            for child in worktree_root.iterdir():
+            for child in sorted(worktree_root.iterdir()):
                 if not (child.is_dir() and child.name.startswith("issue-")):
                     continue
                 try:
@@ -705,16 +708,35 @@ def create_dashboard_app(
                         run_state_data = json.loads(run_state_path.read_text(encoding="utf-8"))
                         if run_state_data.get("issue_number") == issue_number:
                             assoc = run_state_data.get("telemetry_association")
+                            run_id = ""
                             if isinstance(assoc, dict):
                                 associations.append(assoc)
+                                run_id = str(assoc.get("run_id", ""))
+                            elif run_state_data.get("agent_run_id"):
+                                run_id = str(run_state_data.get("agent_run_id", ""))
+                            run_status = str(run_state_data.get("status", ""))
+                            run_statuses.append(run_status)
+                            started_at = str(run_state_data.get("started_at", ""))
+                            run_starts.append(started_at)
+
+                            per_run_attempts.append({
+                                "run_id": run_id or f"attempt-{len(per_run_attempts) + 1}",
+                                "status": run_status,
+                                "started_at": started_at,
+                                "finished_at": run_state_data.get("finished_at"),
+                                "has_telemetry_association": isinstance(assoc, dict),
+                            })
                     except Exception:
                         pass
 
         snapshot = adapter.fetch_implementation_issue_metrics(
             issue_number=issue_number,
             associations=associations,
+            run_statuses=run_statuses if run_statuses else None,
         )
-        return serialize_implementation_issue_metrics_snapshot(snapshot)
+        result = serialize_implementation_issue_metrics_snapshot(snapshot)
+        result["runs"] = per_run_attempts
+        return result
 
     @app.get("/api/runs/{issue_number}/log")
     def get_run_log(issue_number: int, repo: str, limit: int = 100) -> dict[str, object]:
