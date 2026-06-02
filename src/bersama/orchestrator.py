@@ -545,9 +545,15 @@ class Orchestrator:
         # Wire Discord notifier if configured
         if config.discord.enabled and config.discord.webhook_url:
             from bersama.discord_notifier import DiscordNotifier
-            self.execution_service.set_discord_notifier(
-                DiscordNotifier(config.discord.webhook_url)
-            )
+            notifier = DiscordNotifier(config.discord.webhook_url)
+            self.execution_service.set_discord_notifier(notifier)
+            self.reconciliation_service.set_discord_notifier(notifier)
+
+        # Wire telemetry adapter if configured
+        if config.observability.enabled:
+            from bersama.telemetry import TelemetryAdapter
+            telemetry = TelemetryAdapter(config=config.observability)
+            self.reconciliation_service.set_telemetry(telemetry)
 
         if continuous:
             self._run_continuous(repo_name, config)

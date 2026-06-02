@@ -662,3 +662,304 @@ None
     assert len(gateway.comments) == 1
     assert "has become stale" in gateway.comments[0][1]
     assert "Claim Status" not in gateway.comments[0][1]
+
+
+# --- PRD Completion Discord Notification tests ---
+
+
+class FakeDiscordNotifier:
+    """Records sent notifications for test verification."""
+
+    def __init__(self) -> None:
+        self.sent: list[dict] = []
+
+    def send(
+        self,
+        *,
+        title: str,
+        description: str = "",
+        color: int | None = None,
+        fields: list[dict] | None = None,
+    ) -> None:
+        self.sent.append({
+            "title": title,
+            "description": description,
+            "color": color,
+            "fields": fields,
+        })
+
+
+class FakeTelemetryAdapter:
+    """Returns configurable fake AgentRunMetricsSnapshot objects."""
+
+    def __init__(self, *, metrics_by_run: dict[str, dict] | None = None) -> None:
+        from bersama.telemetry import AgentRunMetricsSnapshot
+        self._metrics_by_run = metrics_by_run or {}
+        self._snapshot_class = AgentRunMetricsSnapshot
+
+    def fetch_agent_run_metrics(
+        self, *, run_id: str, association: dict | None = None
+    ) -> "AgentRunMetricsSnapshot":
+        from bersama.telemetry import AgentRunMetricsSnapshot, TelemetryDiagnostic, TelemetryDiagnosticCode
+        if run_id in self._metrics_by_run:
+            m = self._metrics_by_run[run_id]
+            return AgentRunMetricsSnapshot(
+                run_id=run_id,
+                total_tokens=m.get("total_tokens"),
+                model_cost=m.get("model_cost"),
+                avg_latency_ms=m.get("avg_latency_ms"),
+            )
+        # Simulate missing telemetry
+        return AgentRunMetricsSnapshot(
+            run_id=run_id,
+            diagnostics=[
+                TelemetryDiagnostic(
+                    code=TelemetryDiagnosticCode.MISSING_ASSOCIATION,
+                    message="No Run Telemetry Association found.",
+                )
+            ],
+        )
+
+
+def test_prd_completion_sends_discord_notification() -> None:
+    """When all child issues of a PRD are closed, reconciliation sends an
+    'All Issues Completed' notification via Discord."""
+    prd = GitHubIssueRecord(
+        number=2,
+        title="Parent PRD",
+        body="## Problem Statement\n\nPlan features.",
+        labels=("prd",),
+        state="open",
+    )
+    child1 = GitHubIssueRecord(
+        number=5,
+        title="Child 1",
+        body="""
+## Parent PRD
+#2
+
+## What to Build
+Do 1.
+
+## Acceptance Criteria
+- [ ] Done 1.
+
+## Blocked By
+None
+""".strip(),
+        labels=("implementation",),
+        state="closed",
+    )
+    child2 = GitHubIssueRecord(
+        number=6,
+        title="Child 2",
+        body="""
+## Parent PRD
+#2
+
+## What to Build
+Do 2.
+
+## Acceptance Criteria
+- [ ] Done 2.
+
+## Blocked By
+None
+""".strip(),
+        labels=("implementation",),
+        state="closed",
+    )
+
+    gateway = FakeIssueGateway(prd, child1, child2)
+    notifier = FakeDiscordNotifier()
+    service = ReconciliationService(
+        issues=gateway,
+        discord_notifier=notifier,
+    )
+    service.reconcile()
+
+    # ready-for-human label should still be added
+    assert (2, ("ready-for-human",)) in gateway.added_labels
+
+    # Discord notification should have been sent
+    assert len(notifier.sent) == 1
+    notification = notifier.sent[0]
+    assert notification["title"] == "All Issues Completed"
+    assert "#2" in notification["description"]
+
+
+def test_prd_completion_notification_includes_telemetry_metrics() -> None:
+    """When telemetry is available, the completion notification includes
+    aggregated PRD execution metrics."""
+    prd = GitHubIssueRecord(
+        number=3,
+        title="PRD with metrics",
+        body="## Problem Statement\n\nPlan features.",
+        labels=("prd",),
+        state="open",
+    )
+    child1 = GitHubIssueRecord(
+        number=7,
+        title="Child 1",
+        body="""
+## Parent PRD
+#3
+
+## What to Build
+Do 1.
+
+## Acceptance Criteria
+- [ ] Done 1.
+
+## Blocked By
+None
+
+## Orchestration
+- Agent Run: run-aaa
+""".strip(),
+        labels=("implementation",),
+        state="closed",
+    )
+    child2 = GitHubIssueRecord(
+        number=8,
+        title="Child 2",
+        body="""
+## Parent PRD
+#3
+
+## What to Build
+Do 2.
+
+## Acceptance Criteria
+- [ ] Done 2.
+
+## Blocked By
+None
+
+## Orchestration
+- Agent Run: run-bbb
+""".strip(),
+        labels=("implementation",),
+        state="closed",
+    )
+
+    gateway = FakeIssueGateway(prd, child1, child2)
+    notifier = FakeDiscordNotifier()
+    telemetry = FakeTelemetryAdapter(metrics_by_run={
+        "run-aaa": {"total_tokens": 1000, "model_cost": 0.05, "avg_latency_ms": 250.0},
+        "run-bbb": {"total_tokens": 2000, "model_cost": 0.10, "avg_latency_ms": 350.0},
+    })
+    service = ReconciliationService(
+        issues=gateway,
+        discord_notifier=notifier,
+        telemetry=telemetry,
+    )
+    service.reconcile()
+
+    assert (3, ("ready-for-human",)) in gateway.added_labels
+    assert len(notifier.sent) == 1
+    notification = notifier.sent[0]
+    assert notification["title"] == "All Issues Completed"
+
+    # Verify metrics fields are present
+    fields = notification.get("fields") or []
+    field_names = {f["name"] for f in fields}
+    assert "Total Runs" in field_names
+    assert "Total Tokens" in field_names
+    assert "Total Cost" in field_names
+    assert "Avg Latency" in field_names
+
+
+def test_prd_completion_graceful_fallback_when_telemetry_unavailable() -> None:
+    """When telemetry is unavailable (returns diagnostics), the notification
+    still sends but falls back gracefully on metrics."""
+    prd = GitHubIssueRecord(
+        number=4,
+        title="PRD without telemetry",
+        body="## Problem Statement\n\nPlan features.",
+        labels=("prd",),
+        state="open",
+    )
+    child1 = GitHubIssueRecord(
+        number=9,
+        title="Child 1",
+        body="""
+## Parent PRD
+#4
+
+## What to Build
+Do 1.
+
+## Acceptance Criteria
+- [ ] Done 1.
+
+## Blocked By
+None
+
+## Orchestration
+- Agent Run: run-ccc
+""".strip(),
+        labels=("implementation",),
+        state="closed",
+    )
+
+    gateway = FakeIssueGateway(prd, child1)
+    notifier = FakeDiscordNotifier()
+    # Telemetry that returns diagnostics for all runs
+    telemetry = FakeTelemetryAdapter(metrics_by_run={})  # empty → returns diagnostics
+    service = ReconciliationService(
+        issues=gateway,
+        discord_notifier=notifier,
+        telemetry=telemetry,
+    )
+    service.reconcile()
+
+    assert (4, ("ready-for-human",)) in gateway.added_labels
+    assert len(notifier.sent) == 1
+    notification = notifier.sent[0]
+    assert notification["title"] == "All Issues Completed"
+    # Should gracefully handle missing telemetry — notification should still
+    # have fields, but they should indicate telemetry is unavailable
+    fields = notification.get("fields") or []
+    field_names = {f["name"] for f in fields}
+    # When telemetry is unavailable, the metrics should show "unavailable"
+    assert "Telemetry" in field_names or any("unavailable" in str(f).lower() for f in fields)
+
+
+def test_prd_completion_no_notification_when_discord_not_configured() -> None:
+    """When no Discord notifier is configured, ready-for-human is still
+    added but no notification is sent."""
+    prd = GitHubIssueRecord(
+        number=5,
+        title="PRD no discord",
+        body="## Problem Statement\n\nPlan features.",
+        labels=("prd",),
+        state="open",
+    )
+    child1 = GitHubIssueRecord(
+        number=10,
+        title="Child 1",
+        body="""
+## Parent PRD
+#5
+
+## What to Build
+Do 1.
+
+## Acceptance Criteria
+- [ ] Done 1.
+
+## Blocked By
+None
+""".strip(),
+        labels=("implementation",),
+        state="closed",
+    )
+
+    gateway = FakeIssueGateway(prd, child1)
+    # No discord_notifier passed
+    service = ReconciliationService(issues=gateway)
+    service.reconcile()
+
+    # ready-for-human should still be added
+    assert (5, ("ready-for-human",)) in gateway.added_labels
