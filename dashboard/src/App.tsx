@@ -39,6 +39,7 @@ import { useIssuesQuery } from '@/hooks/useIssuesQuery'
 import { useRunsQuery } from '@/hooks/useRunsQuery'
 import { useSSE } from '@/hooks/useSSE'
 import { useLogStream } from '@/hooks/useLogStream'
+import { useRunMetricsQuery } from '@/hooks/useRunMetricsQuery'
 
 interface ProcessGlobal {
   process?: {
@@ -221,6 +222,12 @@ export default function App() {
     latestEvent: sseState.latestMessage,
     enablePollingFallback: sseState.isPollingFallback,
   });
+
+  // Fetch run metrics when viewing an implementation issue in the drawer
+  const drawerRunIssueNumber = (drawerOpen && drawerIssue?.kind === 'implementation')
+    ? drawerIssue.number
+    : null;
+  const runMetricsQuery = useRunMetricsQuery(effectiveSelectedRepo, drawerRunIssueNumber);
 
   // Derive data from queries
   const issues: Issue[] = issuesQuery.data || [];
@@ -1476,6 +1483,7 @@ export default function App() {
           }
         }}
         selectedRunIssue={selectedRunIssue}
+        runMetrics={runMetricsQuery.data ?? null}
       />
 
       {/* Footer Info Box */}

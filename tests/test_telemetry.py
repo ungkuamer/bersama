@@ -245,6 +245,8 @@ def test_adapter_returns_metrics_snapshot_when_observability_succeeds() -> None:
                 "output_tokens_per_sec": 92.0,
             },
         },
+        "error_count": 2,
+        "latest_telemetry_at": "2026-06-02T16:24:30Z",
     }
     adapter = TelemetryAdapter(
         config=config,
@@ -277,6 +279,8 @@ def test_adapter_returns_metrics_snapshot_when_observability_succeeds() -> None:
     assert snapshot.latest_time_to_first_token_ms == 320.0
     assert snapshot.latest_latency_ms == 980.0
     assert snapshot.latest_output_tokens_per_sec == 92.0
+    assert snapshot.error_count == 2
+    assert snapshot.latest_telemetry_at == "2026-06-02T16:24:30Z"
 
 
 # ---- Normalisation unit tests ----
@@ -301,6 +305,23 @@ def test_normalise_agent_run_metrics_handles_empty_data() -> None:
     assert snapshot.metrics_available
     assert snapshot.input_tokens is None
     assert snapshot.output_tokens is None
+
+
+def test_normalise_agent_run_metrics_handles_error_count_and_latest_telemetry_at() -> None:
+    """Acceptance criteria: Run Metrics include error_count and latest_telemetry_at."""
+    snapshot = _normalise_agent_run_metrics(
+        run_id="run-1",
+        raw={
+            "model_usage": {"input_tokens": 500},
+            "error_count": 3,
+            "latest_telemetry_at": "2026-06-02T16:24:30Z",
+        },
+    )
+
+    assert snapshot.metrics_available
+    assert snapshot.error_count == 3
+    assert snapshot.latest_telemetry_at == "2026-06-02T16:24:30Z"
+    assert snapshot.input_tokens == 500
 
 
 # ---- Aggregation unit tests ----
@@ -457,6 +478,8 @@ def test_serialize_agent_run_metrics_snapshot_with_metrics() -> None:
         avg_time_to_first_token_ms=450.0,
         avg_latency_ms=1200.0,
         avg_output_tokens_per_sec=85.5,
+        error_count=2,
+        latest_telemetry_at="2026-06-02T16:24:30Z",
     )
 
     result = serialize_agent_run_metrics_snapshot(snapshot)
@@ -470,6 +493,8 @@ def test_serialize_agent_run_metrics_snapshot_with_metrics() -> None:
     assert result["tool_error_count"] == 0
     assert result["model"] == "claude-sonnet-4"
     assert result["provider"] == "anthropic"
+    assert result["error_count"] == 2
+    assert result["latest_telemetry_at"] == "2026-06-02T16:24:30Z"
     # No observability credentials exposed
     assert "token" not in result
     assert "url" not in result

@@ -36,6 +36,30 @@ export interface TelemetryDiagnosticItem {
   message: string;
 }
 
+export interface RunMetrics {
+  run_id: string;
+  diagnostics: TelemetryDiagnosticItem[];
+  metrics_available: boolean;
+  input_tokens?: number | null;
+  output_tokens?: number | null;
+  cache_read_tokens?: number | null;
+  cache_write_tokens?: number | null;
+  total_tokens?: number | null;
+  model_cost?: number | null;
+  tool_call_count?: number | null;
+  tool_error_count?: number | null;
+  error_count?: number | null;
+  model?: string | null;
+  provider?: string | null;
+  avg_time_to_first_token_ms?: number | null;
+  avg_latency_ms?: number | null;
+  avg_output_tokens_per_sec?: number | null;
+  latest_time_to_first_token_ms?: number | null;
+  latest_latency_ms?: number | null;
+  latest_output_tokens_per_sec?: number | null;
+  latest_telemetry_at?: string | null;
+}
+
 export interface Issue {
   number: number;
   title: string;
@@ -76,6 +100,8 @@ export interface SideDrawerProps {
   onClaimAgentRunIdChange?: (value: string) => void;
   // Selected run
   selectedRunIssue?: number | null;
+  // Run metrics from telemetry
+  runMetrics?: RunMetrics | null;
 }
 
 type TabId = 'overview' | 'timeline' | 'operations';
@@ -182,6 +208,7 @@ export default function SideDrawer({
   claimAgentRunId,
   onClaimAgentRunIdChange,
   selectedRunIssue,
+  runMetrics,
 }: SideDrawerProps) {
   const [selectedTab, setSelectedTab] = useState<TabId>(() => readOnly ? 'overview' : 'operations');
   const [claimFormOpen, setClaimFormOpen] = useState(false);
@@ -682,54 +709,272 @@ export default function SideDrawer({
                 </>
               ) : null}
 
-              {/* Run Telemetry Diagnostics */}
-              {isImplementation && issue.telemetry_diagnostics && issue.telemetry_diagnostics.length > 0 && (
-                <>
-                  <section>
-                    <h4 className="text-[10px] font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400 mb-2 flex items-center gap-1.5">
-                      <AlertTriangle className="size-3" />
-                      Run Telemetry
-                    </h4>
-                    <div className="flex flex-col gap-2">
-                      {issue.telemetry_diagnostics.map((diag, idx) => (
-                        <div
-                          key={idx}
-                          className="border border-amber-200 bg-amber-50 dark:border-amber-500/35 dark:bg-amber-500/10 rounded-md p-3"
-                        >
-                          <div className="flex items-start gap-2">
-                            <BarChart3 className="size-3 text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
-                            <div className="flex-1 min-w-0">
-                              <span className="text-[9px] font-mono font-bold uppercase tracking-wider text-amber-800 dark:text-amber-200">
-                                {diag.code.replace(/_/g, ' ')}
-                              </span>
-                              <p className="text-[9.5px] text-amber-700 dark:text-amber-300 mt-1 leading-relaxed">
-                                {diag.message}
-                              </p>
+              {/* Telemetry Metrics */}
+              {isImplementation && runMetrics ? (
+                runMetrics.metrics_available ? (
+                  <>
+                    {/* Model Usage Metrics */}
+                    <section>
+                      <h4 className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-2 flex items-center gap-1.5">
+                        <BarChart3 className="size-3" />
+                        Model Usage
+                      </h4>
+                      <Table className="border rounded-md border-border">
+                        <TableBody>
+                          {runMetrics.input_tokens != null && (
+                            <TableRow className="border-b border-border hover:bg-transparent">
+                              <TableCell className="text-muted-foreground text-[10px] font-medium py-2">Input Tokens</TableCell>
+                              <TableCell className="text-foreground text-[10px] font-mono text-right py-2">{runMetrics.input_tokens?.toLocaleString()}</TableCell>
+                            </TableRow>
+                          )}
+                          {runMetrics.output_tokens != null && (
+                            <TableRow className="border-b border-border hover:bg-transparent">
+                              <TableCell className="text-muted-foreground text-[10px] font-medium py-2">Output Tokens</TableCell>
+                              <TableCell className="text-foreground text-[10px] font-mono text-right py-2">{runMetrics.output_tokens?.toLocaleString()}</TableCell>
+                            </TableRow>
+                          )}
+                          {runMetrics.cache_read_tokens != null && (
+                            <TableRow className="border-b border-border hover:bg-transparent">
+                              <TableCell className="text-muted-foreground text-[10px] font-medium py-2">Cache Read</TableCell>
+                              <TableCell className="text-foreground text-[10px] font-mono text-right py-2">{runMetrics.cache_read_tokens?.toLocaleString()}</TableCell>
+                            </TableRow>
+                          )}
+                          {runMetrics.cache_write_tokens != null && (
+                            <TableRow className="border-b border-border hover:bg-transparent">
+                              <TableCell className="text-muted-foreground text-[10px] font-medium py-2">Cache Write</TableCell>
+                              <TableCell className="text-foreground text-[10px] font-mono text-right py-2">{runMetrics.cache_write_tokens?.toLocaleString()}</TableCell>
+                            </TableRow>
+                          )}
+                          {runMetrics.total_tokens != null && (
+                            <TableRow className="border-b border-border hover:bg-transparent">
+                              <TableCell className="text-muted-foreground text-[10px] font-medium py-2">Total Tokens</TableCell>
+                              <TableCell className="text-foreground text-[10px] font-mono text-right py-2">{runMetrics.total_tokens?.toLocaleString()}</TableCell>
+                            </TableRow>
+                          )}
+                          {runMetrics.model_cost != null && (
+                            <TableRow className="border-b border-border hover:bg-transparent">
+                              <TableCell className="text-muted-foreground text-[10px] font-medium py-2">Model Cost</TableCell>
+                              <TableCell className="text-foreground text-[10px] font-mono text-right py-2">${runMetrics.model_cost?.toFixed(4)}</TableCell>
+                            </TableRow>
+                          )}
+                          {runMetrics.error_count != null && (
+                            <TableRow className="border-0 hover:bg-transparent">
+                              <TableCell className="text-muted-foreground text-[10px] font-medium py-2">Errors</TableCell>
+                              <TableCell className="text-foreground text-[10px] font-mono text-right py-2">{runMetrics.error_count?.toLocaleString()}</TableCell>
+                            </TableRow>
+                          )}
+                        </TableBody>
+                      </Table>
+                    </section>
+                    <Separator className="bg-border" />
+
+                    {/* Tool Activity Metrics */}
+                    <section>
+                      <h4 className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-2">Tool Activity</h4>
+                      <Table className="border rounded-md border-border">
+                        <TableBody>
+                          {runMetrics.tool_call_count != null && (
+                            <TableRow className="border-b border-border hover:bg-transparent">
+                              <TableCell className="text-muted-foreground text-[10px] font-medium py-2">Tool Calls</TableCell>
+                              <TableCell className="text-foreground text-[10px] font-mono text-right py-2">{runMetrics.tool_call_count?.toLocaleString()}</TableCell>
+                            </TableRow>
+                          )}
+                          {runMetrics.tool_error_count != null && (
+                            <TableRow className="border-0 hover:bg-transparent">
+                              <TableCell className="text-muted-foreground text-[10px] font-medium py-2">Tool Errors</TableCell>
+                              <TableCell className="text-destructive text-[10px] font-mono text-right py-2">{runMetrics.tool_error_count?.toLocaleString()}</TableCell>
+                            </TableRow>
+                          )}
+                        </TableBody>
+                      </Table>
+                    </section>
+                    <Separator className="bg-border" />
+
+                    {/* Model & Provider */}
+                    {(runMetrics.model || runMetrics.provider) && (
+                      <>
+                        <section>
+                          <h4 className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-2">Model Info</h4>
+                          <Table className="border rounded-md border-border">
+                            <TableBody>
+                              {runMetrics.model && (
+                                <TableRow className={`${runMetrics.provider ? "border-b border-border" : "border-0"} hover:bg-transparent`}>
+                                  <TableCell className="text-muted-foreground text-[10px] font-medium py-2">Model</TableCell>
+                                  <TableCell className="text-foreground text-[10px] font-mono text-right py-2">{runMetrics.model}</TableCell>
+                                </TableRow>
+                              )}
+                              {runMetrics.provider && (
+                                <TableRow className="border-0 hover:bg-transparent">
+                                  <TableCell className="text-muted-foreground text-[10px] font-medium py-2">Provider</TableCell>
+                                  <TableCell className="text-foreground text-[10px] font-mono text-right py-2">{runMetrics.provider}</TableCell>
+                                </TableRow>
+                              )}
+                            </TableBody>
+                          </Table>
+                        </section>
+                        <Separator className="bg-border" />
+                      </>
+                    )}
+
+                    {/* Model Responsiveness */}
+                    {((runMetrics.avg_time_to_first_token_ms != null) ||
+                      (runMetrics.avg_latency_ms != null) ||
+                      (runMetrics.avg_output_tokens_per_sec != null) ||
+                      (runMetrics.latest_time_to_first_token_ms != null) ||
+                      (runMetrics.latest_latency_ms != null) ||
+                      (runMetrics.latest_output_tokens_per_sec != null)) && (
+                      <>
+                        <section>
+                          <h4 className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-2">Model Responsiveness</h4>
+                          <Table className="border rounded-md border-border">
+                            <TableBody>
+                              {runMetrics.avg_time_to_first_token_ms != null && (
+                                <TableRow className="border-b border-border hover:bg-transparent">
+                                  <TableCell className="text-muted-foreground text-[10px] font-medium py-2">Avg TTFT</TableCell>
+                                  <TableCell className="text-foreground text-[10px] font-mono text-right py-2">{runMetrics.avg_time_to_first_token_ms?.toFixed(1)} ms</TableCell>
+                                </TableRow>
+                              )}
+                              {runMetrics.avg_latency_ms != null && (
+                                <TableRow className="border-b border-border hover:bg-transparent">
+                                  <TableCell className="text-muted-foreground text-[10px] font-medium py-2">Avg Latency</TableCell>
+                                  <TableCell className="text-foreground text-[10px] font-mono text-right py-2">{runMetrics.avg_latency_ms?.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })} ms</TableCell>
+                                </TableRow>
+                              )}
+                              {runMetrics.avg_output_tokens_per_sec != null && (
+                                <TableRow className="border-b border-border hover:bg-transparent">
+                                  <TableCell className="text-muted-foreground text-[10px] font-medium py-2">Avg Tokens/s</TableCell>
+                                  <TableCell className="text-foreground text-[10px] font-mono text-right py-2">{runMetrics.avg_output_tokens_per_sec?.toFixed(1)}</TableCell>
+                                </TableRow>
+                              )}
+                              {runMetrics.latest_time_to_first_token_ms != null && (
+                                <TableRow className="border-b border-border hover:bg-transparent">
+                                  <TableCell className="text-muted-foreground text-[10px] font-medium py-2">Latest TTFT</TableCell>
+                                  <TableCell className="text-muted-foreground text-[10px] font-mono text-right py-2">{runMetrics.latest_time_to_first_token_ms?.toFixed(1)} ms</TableCell>
+                                </TableRow>
+                              )}
+                              {runMetrics.latest_latency_ms != null && (
+                                <TableRow className="border-b border-border hover:bg-transparent">
+                                  <TableCell className="text-muted-foreground text-[10px] font-medium py-2">Latest Latency</TableCell>
+                                  <TableCell className="text-muted-foreground text-[10px] font-mono text-right py-2">{runMetrics.latest_latency_ms?.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })} ms</TableCell>
+                                </TableRow>
+                              )}
+                              {runMetrics.latest_output_tokens_per_sec != null && (
+                                <TableRow className="border-0 hover:bg-transparent">
+                                  <TableCell className="text-muted-foreground text-[10px] font-medium py-2">Latest Tokens/s</TableCell>
+                                  <TableCell className="text-muted-foreground text-[10px] font-mono text-right py-2">{runMetrics.latest_output_tokens_per_sec?.toFixed(1)}</TableCell>
+                                </TableRow>
+                              )}
+                            </TableBody>
+                          </Table>
+                        </section>
+                        <Separator className="bg-border" />
+                      </>
+                    )}
+
+                    {/* Latest Telemetry Timestamp */}
+                    {runMetrics.latest_telemetry_at && (
+                      <>
+                        <section>
+                          <h4 className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-2">Telemetry</h4>
+                          <Table className="border rounded-md border-border">
+                            <TableBody>
+                              <TableRow className="border-0 hover:bg-transparent">
+                                <TableCell className="text-muted-foreground text-[10px] font-medium py-2">Latest Telemetry</TableCell>
+                                <TableCell className="text-foreground text-[10px] font-mono text-right py-2">{formatDate(runMetrics.latest_telemetry_at)}</TableCell>
+                              </TableRow>
+                            </TableBody>
+                          </Table>
+                        </section>
+                        <Separator className="bg-border" />
+                      </>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <section>
+                      <h4 className="text-[10px] font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400 mb-2 flex items-center gap-1.5">
+                        <AlertTriangle className="size-3" />
+                        Run Telemetry
+                      </h4>
+                      <div className="flex flex-col gap-2">
+                        {runMetrics.diagnostics.map((diag, idx) => (
+                          <div
+                            key={idx}
+                            className="border border-amber-200 bg-amber-50 dark:border-amber-500/35 dark:bg-amber-500/10 rounded-md p-3"
+                          >
+                            <div className="flex items-start gap-2">
+                              <BarChart3 className="size-3 text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
+                              <div className="flex-1 min-w-0">
+                                <span className="text-[9px] font-mono font-bold uppercase tracking-wider text-amber-800 dark:text-amber-200">
+                                  {diag.code.replace(/_/g, ' ')}
+                                </span>
+                                <p className="text-[9.5px] text-amber-700 dark:text-amber-300 mt-1 leading-relaxed">
+                                  {diag.message}
+                                </p>
+                              </div>
                             </div>
                           </div>
-                        </div>
-                      ))}
-                    </div>
-                    <p className="text-[9px] text-muted-foreground italic mt-2">
-                      Metrics are unavailable. This does not affect Agent Run lifecycle status.
-                    </p>
-                  </section>
-                  <Separator className="bg-border" />
-                </>
-              )}
-
-              {isImplementation && !issue.telemetry_diagnostics && (issue.status === 'running' || issue.status === 'succeeded' || issue.status === 'failed') && (
+                        ))}
+                      </div>
+                      <p className="text-[9px] text-muted-foreground italic mt-2">
+                        Metrics are unavailable. This does not affect Agent Run lifecycle status.
+                      </p>
+                    </section>
+                    <Separator className="bg-border" />
+                  </>
+                )
+              ) : (
                 <>
-                  <section>
-                    <h4 className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-2 flex items-center gap-1.5">
-                      <BarChart3 className="size-3" />
-                      Run Telemetry
-                    </h4>
-                    <p className="text-[9.5px] text-muted-foreground italic">
-                      Telemetry is available for this Agent Run. Detailed metrics can be viewed in the full metrics panel.
-                    </p>
-                  </section>
-                  <Separator className="bg-border" />
+                  {/* Run Telemetry Diagnostics (from issue, when no fetched metrics) */}
+                  {isImplementation && issue.telemetry_diagnostics && issue.telemetry_diagnostics.length > 0 && (
+                    <>
+                      <section>
+                        <h4 className="text-[10px] font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400 mb-2 flex items-center gap-1.5">
+                          <AlertTriangle className="size-3" />
+                          Run Telemetry
+                        </h4>
+                        <div className="flex flex-col gap-2">
+                          {issue.telemetry_diagnostics.map((diag, idx) => (
+                            <div
+                              key={idx}
+                              className="border border-amber-200 bg-amber-50 dark:border-amber-500/35 dark:bg-amber-500/10 rounded-md p-3"
+                            >
+                              <div className="flex items-start gap-2">
+                                <BarChart3 className="size-3 text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
+                                <div className="flex-1 min-w-0">
+                                  <span className="text-[9px] font-mono font-bold uppercase tracking-wider text-amber-800 dark:text-amber-200">
+                                    {diag.code.replace(/_/g, ' ')}
+                                  </span>
+                                  <p className="text-[9.5px] text-amber-700 dark:text-amber-300 mt-1 leading-relaxed">
+                                    {diag.message}
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                        <p className="text-[9px] text-muted-foreground italic mt-2">
+                          Metrics are unavailable. This does not affect Agent Run lifecycle status.
+                        </p>
+                      </section>
+                      <Separator className="bg-border" />
+                    </>
+                  )}
+
+                  {isImplementation && !issue.telemetry_diagnostics && (issue.status === 'running' || issue.status === 'succeeded' || issue.status === 'failed') && (
+                    <>
+                      <section>
+                        <h4 className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-2 flex items-center gap-1.5">
+                          <BarChart3 className="size-3" />
+                          Run Telemetry
+                        </h4>
+                        <p className="text-[9.5px] text-muted-foreground italic">
+                          Telemetry is available for this Agent Run. Detailed metrics can be viewed in the full metrics panel.
+                        </p>
+                      </section>
+                      <Separator className="bg-border" />
+                    </>
+                  )}
                 </>
               )}
 

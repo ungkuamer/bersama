@@ -75,6 +75,12 @@ class AgentRunMetricsSnapshot:
     latest_latency_ms: float | None = None
     latest_output_tokens_per_sec: float | None = None
 
+    # Error count (general errors, separate from tool errors)
+    error_count: int | None = None
+
+    # Latest telemetry timestamp
+    latest_telemetry_at: str | None = None
+
     @property
     def metrics_available(self) -> bool:
         return not self.diagnostics
@@ -413,6 +419,18 @@ def _normalise_agent_run_metrics(
         tool_call_count = None
         tool_error_count = None
 
+    error_count = raw.get("error_count")
+    if isinstance(error_count, (int, float)):
+        error_count = _as_int(error_count)
+    else:
+        error_count = None
+
+    latest_telemetry_at = raw.get("latest_telemetry_at")
+    if isinstance(latest_telemetry_at, str):
+        latest_telemetry_at = latest_telemetry_at
+    else:
+        latest_telemetry_at = None
+
     model = raw.get("model")
     if isinstance(model, str):
         model = model
@@ -472,6 +490,8 @@ def _normalise_agent_run_metrics(
         latest_time_to_first_token_ms=latest_ttf,
         latest_latency_ms=latest_latency,
         latest_output_tokens_per_sec=latest_tps,
+        error_count=error_count,
+        latest_telemetry_at=latest_telemetry_at,
     )
 
 
@@ -618,6 +638,8 @@ def serialize_agent_run_metrics_snapshot(
             "latest_time_to_first_token_ms": snapshot.latest_time_to_first_token_ms,
             "latest_latency_ms": snapshot.latest_latency_ms,
             "latest_output_tokens_per_sec": snapshot.latest_output_tokens_per_sec,
+            "error_count": snapshot.error_count,
+            "latest_telemetry_at": snapshot.latest_telemetry_at,
         })
     return result
 
