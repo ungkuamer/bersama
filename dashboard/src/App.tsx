@@ -598,7 +598,7 @@ export default function App() {
   // Filter issues based on UI controls
   const prdIssues = issues.filter(i => i.kind === 'prd');
   const defaultExpandedPrds = prdIssues.reduce<Record<number, boolean>>((acc, prd) => {
-    acc[prd.number] = true;
+    acc[prd.number] = false;
     return acc;
   }, {});
   const visibleExpandedPrds = { ...defaultExpandedPrds, ...expandedPrds };
@@ -776,7 +776,7 @@ export default function App() {
         <main className="grid min-h-0 grow grid-cols-1 gap-6 overflow-hidden p-6 xl:grid-cols-3">
 
         {/* LEFT COLUMN: RUNS & LOCAL LOGS */}
-        <section className="xl:col-span-1 flex flex-col gap-6 h-full min-h-[500px]">
+        <section className="xl:col-span-1 flex h-full min-h-0 flex-col gap-6">
 
           {/* Agent Runs List Panel */}
           <Card className="dashboard-glass-panel border border-border bg-card text-card-foreground flex flex-col grow shrink overflow-hidden max-h-[380px]">
@@ -873,7 +873,7 @@ export default function App() {
           </Card>
 
           {/* Local Log Tails Console */}
-          <Card className="dashboard-glass-panel flex flex-col grow shrink overflow-hidden min-h-[220px]">
+          <Card className="dashboard-glass-panel flex min-h-0 grow shrink flex-col overflow-hidden">
             <CardHeader className="flex flex-col gap-3 border-b border-border px-4 py-3.5 select-none sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <CardTitle className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-foreground">
@@ -930,7 +930,7 @@ export default function App() {
                 </div>
               )}
             </CardHeader>
-            <CardContent className="flex grow flex-col overflow-hidden bg-card p-0 font-mono">
+            <CardContent className="flex min-h-0 grow flex-col overflow-hidden bg-card p-0 font-mono">
               {selectedRunIssue === null ? (
                 <div className="flex grow flex-col items-center justify-center p-6 text-center font-mono text-muted-foreground">
                   <Terminal className="mb-2 size-8 text-muted-foreground/45" />
@@ -945,7 +945,7 @@ export default function App() {
                   </div>
                 </div>
               ) : (
-                <div className="grow flex flex-col overflow-hidden text-[10px]">
+                <div className="flex min-h-0 grow flex-col overflow-hidden text-[10px]">
                   <div className="flex shrink-0 items-center justify-between border-b border-border bg-muted/20 px-4 py-1.5 text-[9px] font-mono text-muted-foreground">
                     <span className="truncate pr-4">PATH: {logTail.log_path}</span>
                     <span className="shrink-0">{logTail.lines_returned} lines</span>
@@ -957,7 +957,7 @@ export default function App() {
                     aria-label={`Issue #${logTail.issue_number} harness log tail`}
                     aria-live="polite"
                     onScroll={handleLogScroll}
-                    className="terminal-scrollbar dashboard-focus relative grow overflow-y-auto bg-background p-4"
+                    className="terminal-scrollbar dashboard-focus relative min-h-0 grow overflow-y-auto bg-background p-4"
                   >
                     <div className="space-y-1 font-mono text-foreground whitespace-pre-wrap leading-relaxed select-text">
                       {logTail.content ? (
@@ -1075,6 +1075,16 @@ export default function App() {
                           {/* PRD Main Bar */}
                           <div
                             onClick={() => togglePrdExpand(prd.number)}
+                            role="button"
+                            tabIndex={0}
+                            aria-expanded={isExpanded}
+                            aria-label={`${isExpanded ? 'Collapse' : 'Expand'} PRD #${prd.number}`}
+                            onKeyDown={(event) => {
+                              if (event.key === 'Enter' || event.key === ' ') {
+                                event.preventDefault();
+                                togglePrdExpand(prd.number);
+                              }
+                            }}
                             className="dashboard-row bg-card hover:bg-muted/40 px-4 py-3.5 cursor-pointer flex items-center justify-between border-b border-border transition"
                           >
                             <div className="flex items-center gap-3">
@@ -1150,7 +1160,7 @@ export default function App() {
 
                           {/* PRD Children (Implementation Issues) */}
                           {isExpanded && (
-                            <div className="p-4 bg-muted/20 divide-y divide-border">
+                            <div className="terminal-scrollbar max-h-[min(34rem,calc(100vh-22rem))] overflow-y-auto bg-muted/20 p-4 divide-y divide-border">
                               {children.length === 0 ? (
                                 <div className="text-center py-4 text-[10px] text-muted-foreground">
                                   No implementation issue slices declared for this PRD.

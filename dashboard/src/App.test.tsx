@@ -36,6 +36,10 @@ const renderWithProviders = (ui: React.ReactElement) => {
   )
 }
 
+const expandPrd = async (prdNumber = 1) => {
+  fireEvent.click(await screen.findByRole('button', { name: new RegExp(`Expand PRD #${prdNumber}`, 'i') }));
+}
+
 const mockRepos = [
   {
     name: "demo",
@@ -521,6 +525,9 @@ describe('Bersama Dashboard Frontend', () => {
       expect(screen.getByText(/Parent PRD Title/i)).toBeInTheDocument();
     });
 
+    expect(screen.queryByText(/Child implementation issue/i)).not.toBeInTheDocument();
+    await expandPrd();
+
     // Expanded state shows children
     expect(screen.getByText(/Child implementation issue/i)).toBeInTheDocument();
     expect(screen.getByText(/Blocker implementation issue/i)).toBeInTheDocument();
@@ -532,6 +539,7 @@ describe('Bersama Dashboard Frontend', () => {
   it('shows open and resolved Blocking Dependencies in a compact dependency rail', async () => {
     renderWithProviders(<App />);
 
+    await expandPrd();
     await screen.findByText(/Child implementation issue/i);
 
     const rail = screen.getByRole('group', {
@@ -554,6 +562,8 @@ describe('Bersama Dashboard Frontend', () => {
 
     // Check console is originally empty
     expect(screen.getByText(/Console is offline/i)).toBeInTheDocument();
+
+    await expandPrd();
 
     // Click "View Log" button on the implementation issue
     const viewLogBtn = screen.getByRole('button', { name: /View Log/i });
@@ -600,6 +610,7 @@ describe('Bersama Dashboard Frontend', () => {
 
     renderWithProviders(<App />);
 
+    await expandPrd();
     fireEvent.click(await screen.findByRole('button', { name: /View Log/i }));
 
     const logViewer = await screen.findByRole('log', { name: /Issue #8 harness log tail/i });
@@ -646,6 +657,7 @@ describe('Bersama Dashboard Frontend', () => {
 
     renderWithProviders(<App />);
 
+    await expandPrd();
     fireEvent.click(await screen.findByRole('button', { name: /View Log/i }));
 
     const logViewer = await screen.findByRole('log', { name: /Issue #8 harness log tail/i });
@@ -698,6 +710,7 @@ describe('Bersama Dashboard Frontend', () => {
 
     renderWithProviders(<App />);
 
+    await expandPrd();
     fireEvent.click(await screen.findByRole('button', { name: /View Log/i }));
 
     const logViewer = await screen.findByRole('log', { name: /Issue #8 harness log tail/i });
@@ -745,6 +758,7 @@ describe('Bersama Dashboard Frontend', () => {
 
     renderWithProviders(<App />);
 
+    await expandPrd();
     fireEvent.click(await screen.findByRole('button', { name: /View Log/i }));
     await screen.findByText(/building assets/i);
 
@@ -956,6 +970,7 @@ describe('Bersama Dashboard Frontend', () => {
 
     renderWithProviders(<App />);
 
+    await expandPrd(4);
     await screen.findByText('Succeeded implementation issue');
     expect(screen.getByRole('button', { name: /Integrate #11/i })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Integrate #12/i })).not.toBeInTheDocument();
@@ -986,6 +1001,7 @@ describe('Bersama Dashboard Frontend', () => {
 
     renderWithProviders(<App />);
 
+    await expandPrd(4);
     await screen.findByText('Succeeded implementation issue');
     expect(screen.queryByRole('button', { name: /Integrate #11/i })).not.toBeInTheDocument();
   });
@@ -1037,6 +1053,7 @@ describe('Bersama Dashboard Frontend', () => {
 
     renderWithProviders(<App />);
 
+    await expandPrd(4);
     const integrateButton = await screen.findByRole('button', { name: /Integrate #11/i });
     fireEvent.click(integrateButton);
 
@@ -1084,6 +1101,7 @@ describe('Bersama Dashboard Frontend', () => {
 
     renderWithProviders(<App />);
 
+    await expandPrd(4);
     fireEvent.click(await screen.findByRole('button', { name: /Integrate #11/i }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent("Merge conflict while updating implementation branch against PRD branch.");
@@ -1118,6 +1136,7 @@ describe('Bersama Dashboard Frontend', () => {
 
     renderWithProviders(<App />);
 
+    await expandPrd(4);
     fireEvent.click(await screen.findByRole('button', { name: /Integrate #11/i }));
 
     await waitFor(() => {
@@ -1152,6 +1171,7 @@ describe('Bersama Dashboard Frontend', () => {
 
     renderWithProviders(<App />);
 
+    await expandPrd(5);
     await screen.findByText('Ready claim candidate');
 
     expect(screen.getByRole('button', { name: /Claim #21/i })).toBeInTheDocument();
@@ -1184,6 +1204,7 @@ describe('Bersama Dashboard Frontend', () => {
 
     renderWithProviders(<App />);
 
+    await expandPrd(5);
     fireEvent.click(await screen.findByRole('button', { name: /Claim #21/i }));
 
     const agentRunInput = screen.getByLabelText(/Agent Run identifier for Implementation Issue #21/i);
@@ -1243,6 +1264,7 @@ describe('Bersama Dashboard Frontend', () => {
 
     renderWithProviders(<App />);
 
+    await expandPrd(5);
     fireEvent.click(await screen.findByRole('button', { name: /Claim #21/i }));
     fireEvent.change(screen.getByLabelText(/Agent Run identifier for Implementation Issue #21/i), {
       target: { value: 'run-edited-21' }
@@ -1291,6 +1313,7 @@ describe('Bersama Dashboard Frontend', () => {
 
     renderWithProviders(<App />);
 
+    await expandPrd(5);
     fireEvent.click(await screen.findByRole('button', { name: /Claim #21/i }));
     fireEvent.click(screen.getByRole('button', { name: /Submit claim for Implementation Issue #21/i }));
 
@@ -1323,6 +1346,7 @@ describe('Bersama Dashboard Frontend', () => {
 
     renderWithProviders(<App />);
 
+    await expandPrd(6);
     await screen.findByText('Claimed start candidate');
 
     expect(screen.getByRole('button', { name: /Start Agent Run for Implementation Issue #31/i })).toBeInTheDocument();
@@ -1392,6 +1416,7 @@ describe('Bersama Dashboard Frontend', () => {
 
     renderWithProviders(<App />);
 
+    await expandPrd(6);
     const startButton = await screen.findByRole('button', {
       name: /Start Agent Run for Implementation Issue #31/i
     });
@@ -1444,6 +1469,7 @@ describe('Bersama Dashboard Frontend', () => {
 
     renderWithProviders(<App />);
 
+    await expandPrd(6);
     fireEvent.click(await screen.findByRole('button', {
       name: /Start Agent Run for Implementation Issue #31/i
     }));
@@ -1471,6 +1497,7 @@ describe('Bersama Dashboard Frontend', () => {
 
     renderWithProviders(<App />);
 
+    await expandPrd();
     fireEvent.click(await screen.findByRole('button', { name: /View Log/i }));
     await screen.findByText(/harness execution started/i);
 
@@ -1496,6 +1523,7 @@ describe('Bersama Dashboard Frontend', () => {
 
     renderWithProviders(<App />);
 
+    await expandPrd();
     fireEvent.click(await screen.findByRole('button', { name: /View Log/i }));
     await screen.findByText(/harness execution started/i);
 
@@ -1533,6 +1561,7 @@ describe('Bersama Dashboard Frontend', () => {
 
     renderWithProviders(<App />);
 
+    await expandPrd();
     fireEvent.click(await screen.findByRole('button', { name: /View Log/i }));
     await screen.findByText(/error error error/);
 
@@ -1563,6 +1592,8 @@ describe('Bersama Dashboard Frontend', () => {
 
       renderWithProviders(<App />);
 
+      await expandPrd();
+
       // Find and click the implementation issue in the list (not in drawer)
       const issueLinks = await screen.findAllByText(/Child implementation issue/i);
       const issueLink = issueLinks.find(el => el.tagName === 'SPAN')!;
@@ -1590,6 +1621,8 @@ describe('Bersama Dashboard Frontend', () => {
       });
 
       renderWithProviders(<App />);
+
+      await expandPrd();
 
       // Open drawer
       const issueLinks = await screen.findAllByText(/Child implementation issue/i);
@@ -1655,6 +1688,8 @@ describe('Bersama Dashboard Frontend', () => {
 
       renderWithProviders(<App />);
 
+      await expandPrd();
+
       // Open drawer
       const issueLinks = await screen.findAllByText(/Child implementation issue/i);
       const issueLink = issueLinks.find(el => el.tagName === 'SPAN')!;
@@ -1692,6 +1727,8 @@ describe('Bersama Dashboard Frontend', () => {
 
       renderWithProviders(<App />);
 
+      await expandPrd();
+
       // Open drawer
       const issueLinks = await screen.findAllByText(/Child implementation issue/i);
       const issueLink = issueLinks.find(el => el.tagName === 'SPAN')!;
@@ -1726,6 +1763,8 @@ describe('Bersama Dashboard Frontend', () => {
 
       renderWithProviders(<App />);
 
+      await expandPrd();
+
       const issueLinks = await screen.findAllByText(/Child implementation issue/i);
       const issueLink = issueLinks.find(el => el.tagName === 'SPAN')!;
       fireEvent.click(issueLink);
@@ -1757,6 +1796,8 @@ describe('Bersama Dashboard Frontend', () => {
       });
 
       renderWithProviders(<App />);
+
+      await expandPrd();
 
       const issueLinks = await screen.findAllByText(/Child implementation issue/i);
       const issueLink = issueLinks.find(el => el.tagName === 'SPAN')!;
@@ -1793,6 +1834,8 @@ describe('Bersama Dashboard Frontend', () => {
       });
 
       renderWithProviders(<App />);
+
+      await expandPrd(5);
 
       // Click ready claim candidate in the list
       const issueLinks = await screen.findAllByText(/Ready claim candidate/i);
@@ -1866,6 +1909,7 @@ describe('Bersama Dashboard Frontend', () => {
 
     renderWithProviders(<App />);
 
+    await expandPrd();
     fireEvent.click(await screen.findByRole('button', { name: /View Log/i }));
     await screen.findByText(/harness execution started/i);
 
@@ -2107,6 +2151,8 @@ describe('Bersama Dashboard Frontend', () => {
 
       // Operator Console is active initially
       expect(await screen.findByText(/Product Roadmap & Implementation Lifecycle/i)).toBeInTheDocument();
+
+      await expandPrd();
 
       // Find and click the implementation issue in the list
       const issueLinks = await screen.findAllByText(/Child implementation issue/i);

@@ -981,13 +981,26 @@ def _git_permission(repo_path: Path) -> dict[str, object] | None:
     )
     if result.returncode != 0:
         return None
-    permission = result.stdout.strip()
-    if not permission:
+    stdout = result.stdout.strip()
+    if not stdout:
         return None
+    
+    permission = None
+    try:
+        data = json.loads(stdout)
+        if isinstance(data, dict):
+            permission = data.get("viewerPermission")
+    except (json.JSONDecodeError, TypeError, KeyError):
+        pass
+    
+    if not permission:
+        permission = stdout
+
     return {
         "viewer_permission": permission,
         "push": permission in {"ADMIN", "MAINTAIN", "WRITE"},
     }
+
 
 
 def _working_tree_dirty(repo_path: Path) -> bool:
