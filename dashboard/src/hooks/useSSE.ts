@@ -121,6 +121,22 @@ export function useSSE(repo: string) {
             if (message.event === 'runs_updated') {
               await invalidateAllRepoData()
             }
+
+            if (message.event === 'metrics_updated') {
+              const issueNumber = typeof parsedData.issue_number === 'number' ? parsedData.issue_number : null
+              const prdNumber = typeof parsedData.prd_number === 'number' ? parsedData.prd_number : null
+
+              if (issueNumber !== null) {
+                await Promise.all([
+                  queryClient.invalidateQueries({ queryKey: ['run-metrics', repo, issueNumber] }),
+                  queryClient.invalidateQueries({ queryKey: ['implementation-issue-metrics', repo, issueNumber] }),
+                ])
+              }
+
+              if (prdNumber !== null) {
+                await queryClient.invalidateQueries({ queryKey: ['prd-metrics', repo, prdNumber] })
+              }
+            }
           },
           onerror(error) {
             throw error
