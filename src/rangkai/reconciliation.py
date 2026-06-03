@@ -3,8 +3,8 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from typing import Protocol, TYPE_CHECKING
 
-from bersama.github_issues import GitHubIssueRecord
-from bersama.issues import (
+from rangkai.github_issues import GitHubIssueRecord
+from rangkai.issues import (
     ClaimStatus,
     DiagnosticKind,
     GitHubIssue,
@@ -16,8 +16,8 @@ from bersama.issues import (
 )
 
 if TYPE_CHECKING:
-    from bersama.discord_notifier import DiscordNotifier
-    from bersama.telemetry import TelemetryAdapter
+    from rangkai.discord_notifier import DiscordNotifier
+    from rangkai.telemetry import TelemetryAdapter
 
 
 class IssueGateway(Protocol):
@@ -135,7 +135,7 @@ class ReconciliationService:
                                 "This is a contradictory state that requires human review."
                             )
                     else:
-                        from bersama.issues import upsert_section
+                        from rangkai.issues import upsert_section
                         # Clear Orchestration section to allow a clean new claim
                         cleared_body = upsert_section(record.body, "Orchestration", "")
                         self._issues.update_body(record.number, cleared_body)

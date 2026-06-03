@@ -1,4 +1,4 @@
-from bersama.issues import (
+from rangkai.issues import (
     DiagnosticKind,
     GitHubIssue,
     ImplementationIssue,

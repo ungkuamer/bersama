@@ -7,13 +7,16 @@ from typing import Iterable
 
 from watchfiles import awatch
 
-from bersama.event_bus import Event, EventBus, ISSUES_UPDATED, LOG_APPEND, METRICS_UPDATED, RUNS_UPDATED
+from rangkai.event_bus import Event, EventBus, ISSUES_UPDATED, LOG_APPEND, METRICS_UPDATED, RUNS_UPDATED
 
 
 class FileWatcherService:
-    def __init__(self, *, event_bus: EventBus, worktree_roots: Iterable[Path]) -> None:
+    def __init__(self, *, event_bus: EventBus, worktree_roots: dict[str, Path] | Iterable[Path]) -> None:
         self._event_bus = event_bus
-        self._worktree_roots = [Path(root) for root in worktree_roots]
+        if isinstance(worktree_roots, dict):
+            self._worktree_roots = {name: Path(root) for name, root in worktree_roots.items()}
+        else:
+            self._worktree_roots = {Path(root).name: Path(root) for root in worktree_roots}
         self._log_offsets: dict[Path, int] = {}
         self._task: asyncio.Task[None] | None = None
 
@@ -27,7 +30,7 @@ class FileWatcherService:
 
     async def _watch_loop(self) -> None:
         try:
-            async for changes in awatch(*self._worktree_roots, recursive=True):
+            async for changes in awatch(*self._worktree_roots.values(), recursive=True):
                 await self.handle_changes(changes)
         except asyncio.CancelledError:
             raise
@@ -103,12 +106,12 @@ def _issue_number_from_path(path: Path) -> int | None:
     return None
 
 
-def _repo_name_from_path(path: Path, worktree_roots: list[Path]) -> str | None:
+def _repo_name_from_path(path: Path, worktree_roots: dict[str, Path]) -> str | None:
     resolved_path = path.resolve()
-    for root in worktree_roots:
+    for repo_name, root in worktree_roots.items():
         try:
             resolved_path.relative_to(root.resolve())
         except ValueError:
             continue
-        return root.name
+        return repo_name
     return None

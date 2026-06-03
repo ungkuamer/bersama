@@ -4,8 +4,8 @@ import json
 from pathlib import Path
 import subprocess
 
-from bersama.github_issues import GitHubIssueRecord
-from bersama.integration import (
+from rangkai.github_issues import GitHubIssueRecord
+from rangkai.integration import (
     IntegrationService,
     IntegrationWorkspaceGateway,
     MergeConflictError,
@@ -14,7 +14,7 @@ from bersama.integration import (
     PushError,
     UpdateError,
 )
-from bersama.command_executor import CommandPhase, CommandResult
+from rangkai.command_executor import CommandPhase, CommandResult
 
 
 class RecordingCommandExecutor:

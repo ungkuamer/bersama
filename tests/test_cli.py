@@ -1,16 +1,16 @@
 from pathlib import Path
 from unittest.mock import patch
 
-from bersama.cli import main
-from bersama.claiming import ClaimResult
-from bersama.command_executor import CommandExecutor
-from bersama.prd_preparation import PrdPreparationResult
-from bersama.execution import ExecutionResult
-from bersama.github_issues import GitHubIssueGateway
+from rangkai.cli import main
+from rangkai.claiming import ClaimResult
+from rangkai.command_executor import CommandExecutor
+from rangkai.prd_preparation import PrdPreparationResult
+from rangkai.execution import ExecutionResult
+from rangkai.github_issues import GitHubIssueGateway
 
 
 def write_config(tmp_path: Path, contents: str) -> Path:
-    config_path = tmp_path / "bersama.yaml"
+    config_path = tmp_path / "rangkai.yaml"
     config_path.write_text(contents, encoding="utf-8")
     return config_path
 
@@ -35,7 +35,7 @@ repos:
 """.strip(),
     )
 
-    with patch("bersama.orchestrator.Orchestrator.run") as mock_run:
+    with patch("rangkai.orchestrator.Orchestrator.run") as mock_run:
         exit_code = main(["run", "demo", "--config", str(config_path)])
 
     captured = capsys.readouterr()
@@ -84,7 +84,7 @@ repos:
 """.strip(),
     )
 
-    with patch("bersama.cli.PrdPreparationService.prepare_issue") as prepare_issue:
+    with patch("rangkai.cli.PrdPreparationService.prepare_issue") as prepare_issue:
         prepare_issue.return_value = PrdPreparationResult(
             issue_number=5,
             prd_branch="prd/5-prepare-prd-issues-with-prd-branches",
@@ -124,7 +124,7 @@ repos:
 """.strip(),
     )
 
-    with patch("bersama.cli.PrdPreparationService.prepare_issue") as prepare_issue:
+    with patch("rangkai.cli.PrdPreparationService.prepare_issue") as prepare_issue:
         prepare_issue.return_value = PrdPreparationResult(
             issue_number=5,
             prd_branch="prd/5-prepare-prd-issues-with-prd-branches",
@@ -159,7 +159,7 @@ repos:
 """.strip(),
     )
 
-    with patch("bersama.cli.ImplementationClaimService.claim_issue") as claim_issue:
+    with patch("rangkai.cli.ImplementationClaimService.claim_issue") as claim_issue:
         claim_issue.return_value = ClaimResult(
             issue_number=7,
             agent_run_id="run-123",
@@ -205,7 +205,7 @@ repos:
 """.strip(),
     )
 
-    with patch("bersama.cli.ImplementationClaimService.claim_issue") as claim_issue:
+    with patch("rangkai.cli.ImplementationClaimService.claim_issue") as claim_issue:
         claim_issue.return_value = ClaimResult(
             issue_number=7,
             agent_run_id="run-123",
@@ -251,7 +251,7 @@ repos:
 """.strip(),
     )
 
-    with patch("bersama.cli.HarnessExecutionService.execute_run") as execute_run:
+    with patch("rangkai.cli.HarnessExecutionService.execute_run") as execute_run:
         execute_run.return_value = ExecutionResult(
             issue_number=8,
             status="succeeded",
@@ -296,7 +296,7 @@ repos:
 """.strip(),
     )
 
-    with patch("bersama.cli.HarnessExecutionService.execute_run") as execute_run:
+    with patch("rangkai.cli.HarnessExecutionService.execute_run") as execute_run:
         execute_run.return_value = ExecutionResult(
             issue_number=8,
             status="failed",
@@ -339,8 +339,8 @@ repos:
 """.strip(),
     )
 
-    with patch("bersama.cli.IntegrationService.integrate_issue") as integrate_issue:
-        from bersama.integration import IntegrationResult
+    with patch("rangkai.cli.IntegrationService.integrate_issue") as integrate_issue:
+        from rangkai.integration import IntegrationResult
         integrate_issue.return_value = IntegrationResult(
             issue_number=9,
             status="succeeded",
@@ -381,8 +381,8 @@ repos:
 """.strip(),
     )
 
-    with patch("bersama.cli.IntegrationService.integrate_issue") as integrate_issue:
-        from bersama.integration import IntegrationResult
+    with patch("rangkai.cli.IntegrationService.integrate_issue") as integrate_issue:
+        from rangkai.integration import IntegrationResult
         integrate_issue.return_value = IntegrationResult(
             issue_number=9,
             status="failed",
@@ -423,7 +423,7 @@ repos:
 """.strip(),
     )
 
-    with patch("bersama.cli.ReconciliationService.reconcile") as reconcile:
+    with patch("rangkai.cli.ReconciliationService.reconcile") as reconcile:
         reconcile.return_value = None
 
         exit_code = main(
@@ -491,8 +491,8 @@ repos:
 """.strip(),
     )
 
-    with patch("bersama.cli.create_bounded_issue_gateway") as create_gateway, patch(
-        "bersama.orchestrator.Orchestrator.run"
+    with patch("rangkai.cli.create_bounded_issue_gateway") as create_gateway, patch(
+        "rangkai.orchestrator.Orchestrator.run"
     ):
         create_gateway.return_value = GitHubIssueGateway()
         exit_code = main(["run", "demo", "--config", str(config_path)])
@@ -576,9 +576,9 @@ repos:
 
             return Result()
 
-    with patch("bersama.cli.PrdPreparationService", RecordingPrdPreparationService), patch(
-        "bersama.cli.ImplementationClaimService", RecordingClaimService
-    ), patch("bersama.cli.IntegrationService", RecordingIntegrationService):
+    with patch("rangkai.cli.PrdPreparationService", RecordingPrdPreparationService), patch(
+        "rangkai.cli.ImplementationClaimService", RecordingClaimService
+    ), patch("rangkai.cli.IntegrationService", RecordingIntegrationService):
         assert main(["prepare-prd", "demo", "5", "--config", str(config_path)]) == 0
         assert (
             main(
@@ -619,8 +619,8 @@ repos:
 """.strip(),
     )
 
-    with patch("bersama.cli.CommandExecutor") as command_executor, patch(
-        "bersama.cli.HarnessExecutionService.execute_run"
+    with patch("rangkai.cli.CommandExecutor") as command_executor, patch(
+        "rangkai.cli.HarnessExecutionService.execute_run"
     ) as execute_run:
         execute_run.return_value = ExecutionResult(
             issue_number=8,

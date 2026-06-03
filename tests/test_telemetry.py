@@ -3,12 +3,12 @@
 import json
 from pathlib import Path
 
-from bersama.config import AppConfig, HarnessConfig, ObservabilityConfig, RepoConfig
-from bersama.dashboard import create_dashboard_app
-from bersama.github_issues import GitHubIssueRecord
+from rangkai.config import AppConfig, HarnessConfig, ObservabilityConfig, RepoConfig
+from rangkai.dashboard import create_dashboard_app
+from rangkai.github_issues import GitHubIssueRecord
 from fastapi.testclient import TestClient
 
-from bersama.telemetry import (
+from rangkai.telemetry import (
     AgentRunMetricsSnapshot,
     ImplementationIssueMetricsSnapshot,
     PrdMetricsSnapshot,
@@ -46,7 +46,7 @@ def build_config(*, observability_enabled: bool = True) -> AppConfig:
         },
         observability=ObservabilityConfig(
             enabled=observability_enabled,
-            session_prefix="bersama",
+            session_prefix="rangkai",
             url="http://observability:8080" if observability_enabled else None,
             token="test-token" if observability_enabled else None,
         ),
@@ -1105,7 +1105,7 @@ def test_telemetry_diagnostics_do_not_change_lifecycle_status() -> None:
 
     # The snapshot carries diagnostics, not a "failed" status
     assert not snapshot.metrics_available
-    # Run status would come from Bersama lifecycle, not from telemetry
+    # Run status would come from Rangkai lifecycle, not from telemetry
     # This test verifies that the telemetry module does not emit lifecycle status
     assert not hasattr(snapshot, "status")
 

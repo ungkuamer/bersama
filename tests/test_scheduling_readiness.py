@@ -4,8 +4,8 @@ import json
 from pathlib import Path
 from unittest.mock import patch
 
-from bersama.config import AppConfig, HarnessConfig, RepoConfig
-from bersama.scheduling_readiness import SchedulingReadinessProvider
+from rangkai.config import AppConfig, HarnessConfig, RepoConfig
+from rangkai.scheduling_readiness import SchedulingReadinessProvider
 
 
 def build_config(*, repo_path: Path, worktree_root: Path, default_harness: str = "local") -> AppConfig:
@@ -40,9 +40,9 @@ def test_provider_reports_missing_required_labels_as_one_critical_failure(tmp_pa
     provider = SchedulingReadinessProvider(build_config(repo_path=repo_path, worktree_root=worktree_root))
 
     with (
-        patch("bersama.scheduling_readiness.shutil.which", return_value="/usr/bin/gh"),
-        patch("bersama.scheduling_readiness.os.access", return_value=True),
-        patch("bersama.scheduling_readiness._run_command") as run_command,
+        patch("rangkai.scheduling_readiness.shutil.which", return_value="/usr/bin/gh"),
+        patch("rangkai.scheduling_readiness.os.access", return_value=True),
+        patch("rangkai.scheduling_readiness._run_command") as run_command,
     ):
         run_command.side_effect = [
             _completed(stdout="WRITE"),
@@ -85,9 +85,9 @@ def test_provider_reports_dirty_working_tree_as_warning_not_critical_failure(tmp
     provider = SchedulingReadinessProvider(build_config(repo_path=repo_path, worktree_root=worktree_root))
 
     with (
-        patch("bersama.scheduling_readiness.shutil.which", return_value="/usr/bin/gh"),
-        patch("bersama.scheduling_readiness.os.access", return_value=True),
-        patch("bersama.scheduling_readiness._run_command") as run_command,
+        patch("rangkai.scheduling_readiness.shutil.which", return_value="/usr/bin/gh"),
+        patch("rangkai.scheduling_readiness.os.access", return_value=True),
+        patch("rangkai.scheduling_readiness._run_command") as run_command,
     ):
         run_command.side_effect = [
             _completed(stdout="WRITE"),
@@ -130,7 +130,7 @@ def test_provider_returns_snapshot_with_critical_failure_when_repo_path_is_not_g
     worktree_root.mkdir()
     provider = SchedulingReadinessProvider(build_config(repo_path=repo_path, worktree_root=worktree_root))
 
-    with patch("bersama.scheduling_readiness.shutil.which", return_value="/usr/bin/gh"):
+    with patch("rangkai.scheduling_readiness.shutil.which", return_value="/usr/bin/gh"):
         snapshot = provider.build_snapshot("demo")
 
     assert snapshot["repo"] == {
@@ -161,9 +161,9 @@ def test_provider_reports_invalid_config_as_critical_failure_when_harness_is_mis
     provider = SchedulingReadinessProvider(config)
 
     with (
-        patch("bersama.scheduling_readiness.shutil.which", return_value="/usr/bin/gh"),
-        patch("bersama.scheduling_readiness.os.access", return_value=True),
-        patch("bersama.scheduling_readiness._run_command") as run_command,
+        patch("rangkai.scheduling_readiness.shutil.which", return_value="/usr/bin/gh"),
+        patch("rangkai.scheduling_readiness.os.access", return_value=True),
+        patch("rangkai.scheduling_readiness._run_command") as run_command,
     ):
         run_command.side_effect = [
             _completed(stdout="WRITE"),
@@ -205,9 +205,9 @@ def test_provider_reports_missing_harness_command_using_path_resolution_only(tmp
     provider = SchedulingReadinessProvider(build_config(repo_path=repo_path, worktree_root=worktree_root))
 
     with (
-        patch("bersama.scheduling_readiness.shutil.which", side_effect=lambda command: None if command == "codex" else "/usr/bin/gh"),
-        patch("bersama.scheduling_readiness.os.access", return_value=True),
-        patch("bersama.scheduling_readiness._run_command") as run_command,
+        patch("rangkai.scheduling_readiness.shutil.which", side_effect=lambda command: None if command == "codex" else "/usr/bin/gh"),
+        patch("rangkai.scheduling_readiness.os.access", return_value=True),
+        patch("rangkai.scheduling_readiness._run_command") as run_command,
     ):
         run_command.side_effect = [
             _completed(stdout="WRITE"),
@@ -289,9 +289,9 @@ def test_provider_builds_prd_grouped_implementation_issue_state_capacity_and_war
     )
 
     with (
-        patch("bersama.scheduling_readiness.shutil.which", return_value="/usr/bin/gh"),
-        patch("bersama.scheduling_readiness.os.access", return_value=True),
-        patch("bersama.scheduling_readiness._run_command") as run_command,
+        patch("rangkai.scheduling_readiness.shutil.which", return_value="/usr/bin/gh"),
+        patch("rangkai.scheduling_readiness.os.access", return_value=True),
+        patch("rangkai.scheduling_readiness._run_command") as run_command,
     ):
         run_command.side_effect = [
             _completed(stdout="WRITE"),

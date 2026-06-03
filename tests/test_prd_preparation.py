@@ -1,7 +1,7 @@
 import subprocess
 
-from bersama.github_issues import GitHubIssueGateway, GitHubIssueRecord
-from bersama.prd_preparation import (
+from rangkai.github_issues import GitHubIssueGateway, GitHubIssueRecord
+from rangkai.prd_preparation import (
     GitWorkspaceGateway,
     PrdPreparationService,
     build_prd_branch_name,

@@ -9,7 +9,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from bersama.discord_notifier import DiscordNotifier
+from rangkai.discord_notifier import DiscordNotifier
 
 
 # ── helpers ──────────────────────────────────────────────────────────────────

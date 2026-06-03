@@ -3,9 +3,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Protocol
 
-from bersama.config import AppConfig
-from bersama.discord_notifier import DiscordNotifier
-from bersama.github_issues import GitHubIssueRecord
+from rangkai.config import AppConfig
+from rangkai.discord_notifier import DiscordNotifier
+from rangkai.github_issues import GitHubIssueRecord
 
 
 class IssueGateway(Protocol):
@@ -79,7 +79,7 @@ class HarnessExecutionService:
         import subprocess
         from datetime import datetime, UTC
         from pathlib import Path
-        from bersama.issues import parse_issue, GitHubIssue, ImplementationIssue, PrdIssue
+        from rangkai.issues import parse_issue, GitHubIssue, ImplementationIssue, PrdIssue
 
         # Track these for the outer exception handler
         _issue_title: str | None = None
@@ -183,16 +183,16 @@ class HarnessExecutionService:
             # 7. Prepare environments
             env = dict(os.environ)
             env.update({
-                "BERSAMA_ISSUE_NUMBER": str(issue_number),
-                "BERSAMA_PARENT_PRD_NUMBER": str(parent_prd_number),
-                "BERSAMA_PRD_BRANCH": prd_branch,
-                "BERSAMA_IMPLEMENTATION_BRANCH": implementation_branch,
-                "BERSAMA_REPO_PATH": str(repo.repo_path),
+                "RANGKAI_ISSUE_NUMBER": str(issue_number),
+                "RANGKAI_PARENT_PRD_NUMBER": str(parent_prd_number),
+                "RANGKAI_PRD_BRANCH": prd_branch,
+                "RANGKAI_IMPLEMENTATION_BRANCH": implementation_branch,
+                "RANGKAI_REPO_PATH": str(repo.repo_path),
             })
 
             # Telemetry association: explicit Run → Observability identity
             if config.observability.enabled:
-                env["BERSAMA_TELEMETRY_ASSOCIATION"] = json.dumps({
+                env["RANGKAI_TELEMETRY_ASSOCIATION"] = json.dumps({
                     "repo": repo_name,
                     "parent_prd": parent_prd_number,
                     "issue": issue_number,

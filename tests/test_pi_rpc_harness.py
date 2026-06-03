@@ -4,7 +4,7 @@ import json
 from io import StringIO
 from unittest.mock import MagicMock, patch
 
-from bersama.pi_rpc_harness import main
+from rangkai.pi_rpc_harness import main
 
 
 def test_pi_rpc_harness_success() -> None:

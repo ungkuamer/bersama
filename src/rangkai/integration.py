@@ -6,8 +6,8 @@ from pathlib import Path
 import subprocess
 from typing import Protocol, TYPE_CHECKING
 
-from bersama.github_issues import GitHubIssueGateway, GitHubIssueRecord
-from bersama.issues import (
+from rangkai.github_issues import GitHubIssueGateway, GitHubIssueRecord
+from rangkai.issues import (
     GitHubIssue,
     ImplementationIssue,
     PrdIssue,
@@ -16,9 +16,9 @@ from bersama.issues import (
 )
 
 if TYPE_CHECKING:
-    from bersama.command_executor import CommandExecutor
+    from rangkai.command_executor import CommandExecutor
 
-from bersama.command_executor import CommandPhase
+from rangkai.command_executor import CommandPhase
 
 
 class IntegrationError(RuntimeError):
@@ -254,7 +254,7 @@ class IntegrationWorkspaceGateway:
 
     def _run(self, command: tuple[str, ...], *, cwd: str, phase: CommandPhase | None = None) -> str:
         if self._command_executor is not None and phase is not None:
-            from bersama.command_executor import CommandError
+            from rangkai.command_executor import CommandError
             result = self._command_executor.execute(command, phase, cwd=cwd)
             if not result.succeeded:
                 # Map CommandError back to domain-specific errors

@@ -1,6 +1,6 @@
 """Telemetry adapter for proxying Execution Telemetry from pi-agent-observability.
 
-This module joins Bersama lifecycle state and pi-agent-observability telemetry
+This module joins Rangkai lifecycle state and pi-agent-observability telemetry
 through explicit Run Telemetry Associations. It produces dashboard-shaped metrics
 snapshots on demand and surfaces Telemetry Diagnostics when telemetry is
 unavailable instead of treating missing telemetry as an Agent Run failure.
@@ -15,7 +15,7 @@ import dataclasses
 from enum import Enum
 from typing import Protocol
 
-from bersama.config import ObservabilityConfig
+from rangkai.config import ObservabilityConfig
 
 
 class TelemetryDiagnosticCode(Enum):

@@ -8,8 +8,8 @@ import os
 import shutil
 import subprocess
 
-from bersama.config import AppConfig, ConfigError, RepoConfig
-from bersama.issues import (
+from rangkai.config import AppConfig, ConfigError, RepoConfig
+from rangkai.issues import (
     ClaimStatus,
     GitHubIssue,
     ImplementationIssue,

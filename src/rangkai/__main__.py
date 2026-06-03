@@ -1,4 +1,4 @@
-from bersama.cli import main
+from rangkai.cli import main
 
 
 if __name__ == "__main__":

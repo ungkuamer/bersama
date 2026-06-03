@@ -2,11 +2,11 @@ from pathlib import Path
 
 import pytest
 
-from bersama.config import ConfigError, DiscordConfig, load_config
+from rangkai.config import ConfigError, DiscordConfig, load_config
 
 
 def write_config(tmp_path: Path, contents: str) -> Path:
-    config_path = tmp_path / "bersama.yaml"
+    config_path = tmp_path / "rangkai.yaml"
     config_path.write_text(contents, encoding="utf-8")
     return config_path
 
@@ -153,7 +153,7 @@ repos:
     obs = config.observability
 
     assert obs.enabled is False
-    assert obs.session_prefix == "bersama"
+    assert obs.session_prefix == "rangkai"
     assert obs.url is None
     assert obs.token is None
 
@@ -213,7 +213,7 @@ observability:
     obs = config.observability
 
     assert obs.enabled is True
-    assert obs.session_prefix == "bersama"  # default
+    assert obs.session_prefix == "rangkai"  # default
     assert obs.url == "https://example.com"
     assert obs.token is None
 

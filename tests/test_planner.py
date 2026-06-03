@@ -1,7 +1,7 @@
 from datetime import UTC, datetime, timedelta
 
-from bersama.github_issues import GitHubIssueRecord
-from bersama.planner import PlannerDecisionKind, plan_issue_actions
+from rangkai.github_issues import GitHubIssueRecord
+from rangkai.planner import PlannerDecisionKind, plan_issue_actions
 
 
 NOW = datetime(2026, 5, 29, 14, 0, tzinfo=UTC)

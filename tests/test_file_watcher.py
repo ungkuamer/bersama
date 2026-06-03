@@ -5,8 +5,8 @@ from pathlib import Path
 
 import pytest
 
-from bersama.event_bus import EventBus, ISSUES_UPDATED, LOG_APPEND, METRICS_UPDATED, RUNS_UPDATED
-from bersama.file_watcher import FileWatcherService
+from rangkai.event_bus import EventBus, ISSUES_UPDATED, LOG_APPEND, METRICS_UPDATED, RUNS_UPDATED
+from rangkai.file_watcher import FileWatcherService
 
 
 @pytest.mark.asyncio

@@ -2,9 +2,16 @@ __pycache__/
 *.py[cod]
 .pytest_cache/
 worktrees/
-bersama.yaml
+rangkai.yaml
 
 # graphify
 graphify-out/manifest.json
 graphify-out/cost.json
+graphify-out/cache/
+
+# documents
+docs/*.pdf
+
+# packaging
+*.egg-info/
 

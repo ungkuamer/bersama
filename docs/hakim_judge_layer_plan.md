@@ -95,7 +95,7 @@ Triggers an immediate evaluation run on a given worktree path.
     ```json
     {
       "issue_id": "16",
-      "worktree_path": "/home/ungku/programming/bersama/worktrees/issue-16",
+      "worktree_path": "/home/ungku/programming/rangkai/worktrees/issue-16",
       "requirements": "Create a secure event-sourced order database schema in docs/adr...",
       "agent_reasoning": "I modified the db schema and ran standard unit tests..."
     }
@@ -168,7 +168,7 @@ Because you want them to be separate projects, they should communicate over clea
 Rangkai's `Agent Run` executes. Right before executing its integration phase (`integrate-run`), Rangkai invokes the Hakim CLI installed in the environment:
 ```bash
 hakim verify \
-  --repo-path "/home/ungku/programming/bersama/worktrees/issue-16" \
+  --repo-path "/home/ungku/programming/rangkai/worktrees/issue-16" \
   --issue-id "16" \
   --output-json "./hakim-report-16.json"
 ```

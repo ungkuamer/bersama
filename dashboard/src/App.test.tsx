@@ -443,7 +443,7 @@ const setLogScrollMetrics = (
   });
 };
 
-describe('Bersama Dashboard Frontend', () => {
+describe('Rangkai Dashboard Frontend', () => {
   beforeEach(() => {
     vi.resetAllMocks();
     mockFetchEventSource.mockImplementation(async (_input: string, init?: { onopen?: () => void }) => {
@@ -484,9 +484,13 @@ describe('Bersama Dashboard Frontend', () => {
   it('renders dashboard with primary branding and structure', async () => {
     renderWithProviders(<App />);
     
+    // The sidebar starts collapsed, so expand it to verify branding text
+    const expandButtons = screen.getAllByRole('button', { name: /Expand Sidebar/i });
+    expect(expandButtons.length).toBeGreaterThan(0);
+    fireEvent.click(expandButtons[0]);
+
     // Check loading indicator or titles
-    expect(screen.getByText(/Bersama/i)).toBeInTheDocument();
-    expect(screen.getByText(/Bersama OS/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/Rangkai/i)[0]).toBeInTheDocument();
     
     // Wait for repos and data to load
     await waitFor(() => {
@@ -2029,16 +2033,16 @@ describe('Bersama Dashboard Frontend', () => {
 
       // Wait for app load
       await waitFor(() => {
-        expect(screen.getByText(/Dashboard/i)).toBeInTheDocument();
-        expect(screen.getByRole('button', { name: /Lifecycle/i })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /Health Check/i })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /Operations/i })).toBeInTheDocument();
       });
 
       // Under test environment, Operator Console is active initially to keep existing tests intact
-      expect(screen.getByText(/Product Roadmap & Implementation Lifecycle/i)).toBeInTheDocument();
+      expect(screen.getByText(/Product Roadmap & Implementation Operations/i)).toBeInTheDocument();
       expect(screen.queryByText(/Repository Summary/i)).not.toBeInTheDocument();
 
       // Click on Dashboard tab
-      const readinessTab = screen.getByText(/Dashboard/i);
+      const readinessTab = screen.getByRole('button', { name: /Health Check/i });
       fireEvent.click(readinessTab);
 
       // Verify Scheduling Readiness panel elements are loaded
@@ -2079,13 +2083,13 @@ describe('Bersama Dashboard Frontend', () => {
       expect(textMatches('Start')).toHaveLength(0);
       expect(textMatches('Integrate')).toHaveLength(0);
 
-      // Switch back to Lifecycle
-      const operatorTab = screen.getByRole('button', { name: /Lifecycle/i });
+      // Switch back to Operations
+      const operatorTab = screen.getByRole('button', { name: /Operations/i });
       fireEvent.click(operatorTab);
 
       // Product Roadmap is visible again, and Scheduling Readiness panel is unmounted
       await waitFor(() => {
-        expect(screen.getByText(/Product Roadmap & Implementation Lifecycle/i)).toBeInTheDocument();
+        expect(screen.getByText(/Product Roadmap & Implementation Operations/i)).toBeInTheDocument();
       });
       expect(screen.queryByText(/Repository Summary/i)).not.toBeInTheDocument();
     });
@@ -2110,7 +2114,7 @@ describe('Bersama Dashboard Frontend', () => {
       renderWithProviders(<App />);
 
       // Go to Scheduling Readiness
-      const readinessTab = screen.getByText(/Dashboard/i);
+      const readinessTab = screen.getByRole('button', { name: /Health Check/i });
       fireEvent.click(readinessTab);
 
       // Verify page is rendered
@@ -2130,7 +2134,7 @@ describe('Bersama Dashboard Frontend', () => {
       expect(screen.getByText('Readiness Timeline')).toBeInTheDocument();
 
       // Operations tab should be completely hidden (readOnly)
-      expect(screen.queryByText('Operations')).not.toBeInTheDocument();
+      expect(within(screen.getByRole('dialog')).queryByText('Operations')).not.toBeInTheDocument();
     });
 
     it('opens side drawer in operations mode by default when clicking an issue in Operator Console view', async () => {
@@ -2150,7 +2154,7 @@ describe('Bersama Dashboard Frontend', () => {
       renderWithProviders(<App />);
 
       // Operator Console is active initially
-      expect(await screen.findByText(/Product Roadmap & Implementation Lifecycle/i)).toBeInTheDocument();
+      expect(await screen.findByText(/Product Roadmap & Implementation Operations/i)).toBeInTheDocument();
 
       await expandPrd();
 

@@ -6,12 +6,12 @@ from concurrent.futures import Future
 from pathlib import Path
 from unittest.mock import MagicMock, patch, ANY
 
-from bersama.config import AppConfig, RepoConfig
-from bersama.github_issues import GitHubIssueRecord
-from bersama.orchestrator import Orchestrator, SchedulerEvent
-from bersama.claiming import ClaimResult
-from bersama.execution import ExecutionResult
-from bersama.integration import IntegrationResult
+from rangkai.config import AppConfig, RepoConfig
+from rangkai.github_issues import GitHubIssueRecord
+from rangkai.orchestrator import Orchestrator, SchedulerEvent
+from rangkai.claiming import ClaimResult
+from rangkai.execution import ExecutionResult
+from rangkai.integration import IntegrationResult
 
 
 class FakeExecutor:

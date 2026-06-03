@@ -1,12 +1,12 @@
 import subprocess
 
-from bersama.claiming import (
+from rangkai.claiming import (
     ClaimWorkspaceGateway,
     ImplementationClaimService,
     build_implementation_branch_name,
     upsert_claim_metadata,
 )
-from bersama.github_issues import GitHubIssueRecord
+from rangkai.github_issues import GitHubIssueRecord
 
 
 class FakeIssueGateway:
@@ -404,7 +404,7 @@ None
     # Simulate a competing Agent Run that overwrites the provisional metadata
     # immediately after the first write.
     def inject_competing_claim(issue_number: int, body: str) -> None:
-        from bersama.claiming import upsert_claim_metadata
+        from rangkai.claiming import upsert_claim_metadata
 
         competing_body = upsert_claim_metadata(
             body,

@@ -4,7 +4,7 @@ import asyncio
 
 import pytest
 
-from bersama.event_bus import Event, EventBus
+from rangkai.event_bus import Event, EventBus
 
 
 @pytest.mark.asyncio

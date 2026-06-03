@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from bersama.command_executor import (
+from rangkai.command_executor import (
     CommandError,
     CommandExecutor,
     CommandPhase,
@@ -296,7 +296,7 @@ class TestPhaseSpecificRetry:
             def kill(self):
                 pass
 
-        import bersama.command_executor as mod
+        import rangkai.command_executor as mod
         original_popen = subprocess.Popen
         try:
             subprocess.Popen = FakePopen
@@ -358,7 +358,7 @@ class TestJitteredBackoff:
                 def kill(self):
                     pass
 
-            import bersama.command_executor as mod
+            import rangkai.command_executor as mod
             original_popen = subprocess.Popen
             original_is_transient = mod._is_transient_failure
             try:

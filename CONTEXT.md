@@ -56,6 +56,46 @@ _Avoid_: Retriable ticket, errored task, stuck issue
 A single autonomous attempt to complete one Claimed Implementation Issue. An Agent Run either completes the issue or leaves it as a Failed Implementation Issue.
 _Avoid_: Agent session, worker job, execution
 
+**Execution Telemetry**:
+Observed measurements and event history from an Agent Run, such as usage, cost, tool activity, errors, and timing. Execution Telemetry describes what happened during execution; it does not define PRD Issue, Implementation Issue, or Agent Run lifecycle state.
+_Avoid_: Work state, issue state, lifecycle state
+
+**Telemetry Diagnostic**:
+An operator-facing explanation of missing, incomplete, or unreadable Execution Telemetry. A Telemetry Diagnostic does not by itself change Agent Run or Implementation Issue lifecycle state.
+_Avoid_: Run failure, issue failure, lifecycle error
+
+**Telemetry Session**:
+The telemetry stream captured by an external observability system for one agent execution context. A Telemetry Session may be associated with an Agent Run, but it is not itself the Agent Run.
+_Avoid_: Agent Run, issue run, worker job
+
+**Run Telemetry Association**:
+An explicit relationship between an Agent Run and the Telemetry Session data that describes that run's execution. The association must be declared by the orchestrator or harness, not inferred from timestamps, log text, or working directory alone.
+_Avoid_: Telemetry guess, session match, log correlation
+
+**Run Metrics**:
+Execution Telemetry summarized for one Agent Run. Run Metrics are the primary metrics unit because each Agent Run is one distinct attempt to complete an Implementation Issue.
+_Avoid_: Issue metrics, session stats
+
+**Model Usage Metrics**:
+Run Metrics that describe model token usage and provider-reported model cost for an Agent Run. Model Usage Metrics do not include shell runtime, CI usage, external API calls made by tools, or human review effort.
+_Avoid_: Total run cost, tool cost, infrastructure cost
+
+**Model Responsiveness Metrics**:
+Run Metrics that describe how quickly the model starts and completes assistant output, including Time to First Token, response latency, and output tokens per second. For one Agent Run, the average value is primary and the latest value is secondary; across Implementation Issues or PRD Issues, these metrics are averaged rather than totaled.
+_Avoid_: Prefill metrics, speed totals, throughput sum
+
+**Implementation Issue Metrics**:
+Execution Telemetry summarized across the Agent Runs associated with one Implementation Issue. Implementation Issue Metrics describe aggregate attempt history, not one execution attempt.
+_Avoid_: Run Metrics, ticket metrics
+
+**PRD Metrics**:
+Delivery metrics summarized across the Implementation Issues and Agent Runs owned by one PRD Issue. PRD Metrics exclude planning telemetry unless that telemetry is explicitly modeled separately.
+_Avoid_: Planning metrics, product metrics, feature metrics
+
+**Run Success Rate**:
+The share of Agent Runs that produced an Integrated Implementation Issue. A harness exit success without successful integration into the Parent PRD branch does not count as Run Success Rate success.
+_Avoid_: Harness success rate, execution success rate
+
 **Concurrent Agent Run**:
 An Agent Run that executes at the same time as another Agent Run in the same orchestrator process.
 _Avoid_: Parallel task, worker task, background job

@@ -6,7 +6,7 @@ This document contains drafts for LinkedIn (Builder-focused, professional yet ca
 
 ## 👔 LinkedIn Post (Option 2: The "Builder's Insight" Style)
 
-I've been building a project called **bersama** (orchestrated via **rangkai**). 
+I've been building a project called **rangkai** (part of the **bersama** agentic ecosystem). 
 
 It is a lightweight Python orchestrator that uses **GitHub Issues, labels, branches, and worktrees as the orchestration state machine.**
 
@@ -44,7 +44,7 @@ AI coding agents are great, but let’s be real: without proper planning, your c
 
 It’s painful when an agent starts writing code that completely drifts from the actual specs.
 
-So I started building: **bersama** (orchestrator: **rangkai**). 
+So I started building: **rangkai** (an orchestrator for the **bersama** ecosystem). 
 
 Thread below on why it’s different 👇
 

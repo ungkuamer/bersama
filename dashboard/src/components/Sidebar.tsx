@@ -5,6 +5,7 @@ import {
   ChevronLeft, 
   ChevronRight, 
   ChevronDown,
+  Network,
 } from 'lucide-react';
 
 interface Repo {
@@ -37,8 +38,8 @@ export default function Sidebar({
   setIsCollapsed
 }: SidebarProps) {
   const navItems = [
-    { label: 'Dashboard', icon: BarChart3, tab: 'readiness' as const },
-    { label: 'Lifecycle', icon: Layers, tab: 'operator' as const },
+    { label: 'Health Check', icon: BarChart3, tab: 'readiness' as const },
+    { label: 'Operations', icon: Layers, tab: 'operator' as const },
   ];
 
   return (
@@ -47,14 +48,15 @@ export default function Sidebar({
         isCollapsed ? 'w-16' : 'w-70'
       }`}
     >
-      <div className="flex min-h-14 items-center justify-between border-b border-sidebar-border px-4">
-        <div className="flex items-center gap-2 overflow-hidden">
-          <div className="flex size-4 shrink-0 items-center justify-center rounded-full border-2 border-sidebar-foreground">
-            <span className="size-1.5 rounded-full bg-sidebar-foreground" />
-          </div>
-          
-          {!isCollapsed && (
-            <span className="truncate text-sm font-semibold tracking-tight">Bersama OS</span>
+      <div className={`flex min-h-14 items-center border-b border-sidebar-border ${isCollapsed ? 'justify-center px-2' : 'justify-between px-4'}`}>
+        <div className="flex items-center gap-2 overflow-hidden" title={isCollapsed ? "Rangkai" : undefined}>
+          {isCollapsed ? (
+            <Network className="size-5 shrink-0 text-sidebar-foreground animate-pulse" />
+          ) : (
+            <>
+              <Network className="size-4 shrink-0 text-sidebar-foreground" />
+              <span className="truncate text-sm font-semibold tracking-tight">Rangkai</span>
+            </>
           )}
         </div>
 
@@ -120,6 +122,7 @@ export default function Sidebar({
                     : 'text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
                 }`}
                 title={isCollapsed ? item.label : undefined}
+                aria-label={item.label}
               >
                 <Icon className="size-4 shrink-0" />
                 {!isCollapsed && <span>{item.label}</span>}

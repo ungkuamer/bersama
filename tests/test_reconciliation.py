@@ -1,7 +1,7 @@
 from datetime import UTC, datetime, timedelta
 
-from bersama.github_issues import GitHubIssueRecord
-from bersama.reconciliation import ReconciliationService
+from rangkai.github_issues import GitHubIssueRecord
+from rangkai.reconciliation import ReconciliationService
 
 
 class FakeIssueGateway:
@@ -693,14 +693,14 @@ class FakeTelemetryAdapter:
     """Returns configurable fake AgentRunMetricsSnapshot objects."""
 
     def __init__(self, *, metrics_by_run: dict[str, dict] | None = None) -> None:
-        from bersama.telemetry import AgentRunMetricsSnapshot
+        from rangkai.telemetry import AgentRunMetricsSnapshot
         self._metrics_by_run = metrics_by_run or {}
         self._snapshot_class = AgentRunMetricsSnapshot
 
     def fetch_agent_run_metrics(
         self, *, run_id: str, association: dict | None = None
     ) -> "AgentRunMetricsSnapshot":
-        from bersama.telemetry import AgentRunMetricsSnapshot, TelemetryDiagnostic, TelemetryDiagnosticCode
+        from rangkai.telemetry import AgentRunMetricsSnapshot, TelemetryDiagnostic, TelemetryDiagnosticCode
         if run_id in self._metrics_by_run:
             m = self._metrics_by_run[run_id]
             return AgentRunMetricsSnapshot(

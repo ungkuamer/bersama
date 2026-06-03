@@ -10,20 +10,20 @@ from fastapi import BackgroundTasks, FastAPI, HTTPException
 from pydantic import BaseModel
 from sse_starlette import EventSourceResponse
 
-from bersama.claiming import ClaimWorkspaceGateway, ImplementationClaimService
-from bersama.config import AppConfig, ConfigError, RepoConfig
-from bersama.execution import HarnessExecutionService
-from bersama.event_bus import EventBus
-from bersama.file_watcher import FileWatcherService
-from bersama.github_issues import GitHubIssueGateway, create_bounded_issue_gateway
-from bersama.integration import IntegrationService, IntegrationWorkspaceGateway
-from bersama.issues import GitHubIssue, ImplementationIssue, parse_issue
-from bersama.prd_preparation import GitWorkspaceGateway, PrdPreparationService
-from bersama.reconciliation import ReconciliationService
-from bersama.repo_lock import RepoLock
-from bersama.scheduling_readiness import SchedulingReadinessProvider
-from bersama.command_executor import CommandExecutor
-from bersama.telemetry import (
+from rangkai.claiming import ClaimWorkspaceGateway, ImplementationClaimService
+from rangkai.config import AppConfig, ConfigError, RepoConfig
+from rangkai.execution import HarnessExecutionService
+from rangkai.event_bus import EventBus
+from rangkai.file_watcher import FileWatcherService
+from rangkai.github_issues import GitHubIssueGateway, create_bounded_issue_gateway
+from rangkai.integration import IntegrationService, IntegrationWorkspaceGateway
+from rangkai.issues import GitHubIssue, ImplementationIssue, parse_issue
+from rangkai.prd_preparation import GitWorkspaceGateway, PrdPreparationService
+from rangkai.reconciliation import ReconciliationService
+from rangkai.repo_lock import RepoLock
+from rangkai.scheduling_readiness import SchedulingReadinessProvider
+from rangkai.command_executor import CommandExecutor
+from rangkai.telemetry import (
     ImplementationIssueMetricsSnapshot,
     TelemetryAdapter,
     serialize_agent_run_metrics_snapshot,
@@ -94,7 +94,7 @@ def create_dashboard_app(
         app.state.event_bus = event_bus
         app.state.file_watcher = watcher_factory(
             app.state.event_bus,
-            [repo.worktree_root for repo in config.repos.values()],
+            {repo_name: repo.worktree_root for repo_name, repo in config.repos.items()},
         )
         app.state.file_watcher.start()
         try:

@@ -39,7 +39,7 @@ class DiscordConfig:
 @dataclass(frozen=True)
 class ObservabilityConfig:
     enabled: bool = False
-    session_prefix: str = "bersama"
+    session_prefix: str = "rangkai"
     url: str | None = None
     token: str | None = None
 
@@ -187,7 +187,7 @@ def _parse_observability(raw: object) -> ObservabilityConfig:
         raise ConfigError("observability.token must be a string.")
     return ObservabilityConfig(
         enabled=enabled,
-        session_prefix=session_prefix or "bersama",
+        session_prefix=session_prefix or "rangkai",
         url=url,
         token=token,
     )

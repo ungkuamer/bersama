@@ -6,9 +6,9 @@ import subprocess
 
 from unittest.mock import MagicMock
 
-from bersama.config import AppConfig, HarnessConfig, ObservabilityConfig, RepoConfig
-from bersama.execution import HarnessExecutionService
-from bersama.github_issues import GitHubIssueRecord
+from rangkai.config import AppConfig, HarnessConfig, ObservabilityConfig, RepoConfig
+from rangkai.execution import HarnessExecutionService
+from rangkai.github_issues import GitHubIssueRecord
 
 
 class FakeIssueGateway:
@@ -303,7 +303,7 @@ def test_execution_timeout_kills_process_group(tmp_path: Path) -> None:
 
 def test_observability_telemetry_association_metadata(tmp_path: Path) -> None:
     """When observability is enabled, run_state.json includes telemetry_association
-    and the harness receives BERSAMA_TELEMETRY_ASSOCIATION in its environment."""
+    and the harness receives RANGKAI_TELEMETRY_ASSOCIATION in its environment."""
     repo_path, worktree_root, worktree_path = setup_test_git_repo(tmp_path)
     issues = get_mock_issues()
 
@@ -313,7 +313,7 @@ def test_observability_telemetry_association_metadata(tmp_path: Path) -> None:
             command="bash",
             args_template=(
                 "-c",
-                "echo $BERSAMA_TELEMETRY_ASSOCIATION > telemetry.txt && git add telemetry.txt && git commit -m 'telemetry check'",
+                "echo $RANGKAI_TELEMETRY_ASSOCIATION > telemetry.txt && git add telemetry.txt && git commit -m 'telemetry check'",
             ),
         )
     }
@@ -328,7 +328,7 @@ def test_observability_telemetry_association_metadata(tmp_path: Path) -> None:
             default_harness="local-agent",
         )
     }
-    observability_config = ObservabilityConfig(enabled=True, session_prefix="bersama")
+    observability_config = ObservabilityConfig(enabled=True, session_prefix="rangkai")
     config = AppConfig(repos=repos, harnesses=harnesses, observability=observability_config)
 
     service = HarnessExecutionService(issues=issues)
@@ -362,7 +362,7 @@ def test_observability_telemetry_association_metadata(tmp_path: Path) -> None:
 
 def test_observability_disabled_no_telemetry_metadata(tmp_path: Path) -> None:
     """When observability is disabled (default), no telemetry_association is written
-    and BERSAMA_TELEMETRY_ASSOCIATION is not set in the harness environment."""
+    and RANGKAI_TELEMETRY_ASSOCIATION is not set in the harness environment."""
     repo_path, worktree_root, worktree_path = setup_test_git_repo(tmp_path)
     issues = get_mock_issues()
 
@@ -372,7 +372,7 @@ def test_observability_disabled_no_telemetry_metadata(tmp_path: Path) -> None:
             command="bash",
             args_template=(
                 "-c",
-                "echo ${{BERSAMA_TELEMETRY_ASSOCIATION:-UNSET}} > telemetry_status.txt && git add telemetry_status.txt && git commit -m 'no telemetry'",
+                "echo ${{RANGKAI_TELEMETRY_ASSOCIATION:-UNSET}} > telemetry_status.txt && git add telemetry_status.txt && git commit -m 'no telemetry'",
             ),
         )
     }
@@ -540,7 +540,7 @@ def test_execution_env_context_delivery(tmp_path: Path) -> None:
             command="bash",
             args_template=(
                 "-c",
-                "echo $BERSAMA_ISSUE_NUMBER:$BERSAMA_PARENT_PRD_NUMBER:$BERSAMA_PRD_BRANCH:$BERSAMA_IMPLEMENTATION_BRANCH > env.txt && git add env.txt && git commit -m 'env check'",
+                "echo $RANGKAI_ISSUE_NUMBER:$RANGKAI_PARENT_PRD_NUMBER:$RANGKAI_PRD_BRANCH:$RANGKAI_IMPLEMENTATION_BRANCH > env.txt && git add env.txt && git commit -m 'env check'",
             ),
         )
     }

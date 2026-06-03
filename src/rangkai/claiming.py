@@ -7,13 +7,13 @@ import re
 import subprocess
 from typing import Protocol, TYPE_CHECKING
 
-from bersama.github_issues import GitHubIssueGateway
-from bersama.issues import GitHubIssue, ImplementationIssue, PrdIssue, parse_issue, upsert_section
+from rangkai.github_issues import GitHubIssueGateway
+from rangkai.issues import GitHubIssue, ImplementationIssue, PrdIssue, parse_issue, upsert_section
 
 if TYPE_CHECKING:
-    from bersama.command_executor import CommandExecutor
+    from rangkai.command_executor import CommandExecutor
 
-from bersama.command_executor import CommandError, CommandPhase
+from rangkai.command_executor import CommandError, CommandPhase
 
 
 SLUG_RE = re.compile(r"[^a-z0-9]+")
@@ -133,7 +133,7 @@ class ClaimWorkspaceGateway:
 
     def _run(self, command: tuple[str, ...], *, cwd: str, phase: CommandPhase | None = None) -> str:
         if self._command_executor is not None and phase is not None:
-            from bersama.command_executor import CommandError
+            from rangkai.command_executor import CommandError
             result = self._command_executor.execute(command, phase, cwd=cwd)
             if not result.succeeded:
                 raise CommandError(result)

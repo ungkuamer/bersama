@@ -3,15 +3,15 @@ from __future__ import annotations
 import argparse
 import sys
 
-from bersama.claiming import ClaimWorkspaceGateway, ImplementationClaimService
-from bersama.command_executor import CommandExecutor
-from bersama.config import ConfigError, load_config
-from bersama.github_issues import create_bounded_issue_gateway
-from bersama.execution import HarnessExecutionService
-from bersama.orchestrator import build_run_plan
-from bersama.prd_preparation import GitWorkspaceGateway, PrdPreparationService
-from bersama.integration import IntegrationService, IntegrationWorkspaceGateway
-from bersama.reconciliation import ReconciliationService
+from rangkai.claiming import ClaimWorkspaceGateway, ImplementationClaimService
+from rangkai.command_executor import CommandExecutor
+from rangkai.config import ConfigError, load_config
+from rangkai.github_issues import create_bounded_issue_gateway
+from rangkai.execution import HarnessExecutionService
+from rangkai.orchestrator import build_run_plan
+from rangkai.prd_preparation import GitWorkspaceGateway, PrdPreparationService
+from rangkai.integration import IntegrationService, IntegrationWorkspaceGateway
+from rangkai.reconciliation import ReconciliationService
 
 
 def _build_command_executor() -> CommandExecutor:
@@ -19,7 +19,7 @@ def _build_command_executor() -> CommandExecutor:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="bersama")
+    parser = argparse.ArgumentParser(prog="rangkai")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     run_parser = subparsers.add_parser(
@@ -29,8 +29,8 @@ def build_parser() -> argparse.ArgumentParser:
     run_parser.add_argument("repo_name", help="Named repo from the YAML config.")
     run_parser.add_argument(
         "--config",
-        default="bersama.yaml",
-        help="Path to the YAML config file. Defaults to ./bersama.yaml",
+        default="rangkai.yaml",
+        help="Path to the YAML config file. Defaults to ./rangkai.yaml",
     )
     run_parser.add_argument(
         "--continuous",
@@ -47,8 +47,8 @@ def build_parser() -> argparse.ArgumentParser:
     prepare_prd_parser.add_argument("issue_number", type=int, help="PRD Issue number.")
     prepare_prd_parser.add_argument(
         "--config",
-        default="bersama.yaml",
-        help="Path to the YAML config file. Defaults to ./bersama.yaml",
+        default="rangkai.yaml",
+        help="Path to the YAML config file. Defaults to ./rangkai.yaml",
     )
     prepare_prd_parser.set_defaults(handler=_prepare_prd_command)
 
@@ -65,8 +65,8 @@ def build_parser() -> argparse.ArgumentParser:
     )
     claim_parser.add_argument(
         "--config",
-        default="bersama.yaml",
-        help="Path to the YAML config file. Defaults to ./bersama.yaml",
+        default="rangkai.yaml",
+        help="Path to the YAML config file. Defaults to ./rangkai.yaml",
     )
     claim_parser.set_defaults(handler=_claim_issue_command)
 
@@ -78,8 +78,8 @@ def build_parser() -> argparse.ArgumentParser:
     execute_parser.add_argument("issue_number", type=int, help="Implementation Issue number.")
     execute_parser.add_argument(
         "--config",
-        default="bersama.yaml",
-        help="Path to the YAML config file. Defaults to ./bersama.yaml",
+        default="rangkai.yaml",
+        help="Path to the YAML config file. Defaults to ./rangkai.yaml",
     )
     execute_parser.set_defaults(handler=_execute_run_command)
 
@@ -91,8 +91,8 @@ def build_parser() -> argparse.ArgumentParser:
     integrate_parser.add_argument("issue_number", type=int, help="Implementation Issue number.")
     integrate_parser.add_argument(
         "--config",
-        default="bersama.yaml",
-        help="Path to the YAML config file. Defaults to ./bersama.yaml",
+        default="rangkai.yaml",
+        help="Path to the YAML config file. Defaults to ./rangkai.yaml",
     )
     integrate_parser.set_defaults(handler=_integrate_run_command)
 
@@ -103,8 +103,8 @@ def build_parser() -> argparse.ArgumentParser:
     reconcile_parser.add_argument("repo_name", help="Named repo from the YAML config.")
     reconcile_parser.add_argument(
         "--config",
-        default="bersama.yaml",
-        help="Path to the YAML config file. Defaults to ./bersama.yaml",
+        default="rangkai.yaml",
+        help="Path to the YAML config file. Defaults to ./rangkai.yaml",
     )
     reconcile_parser.set_defaults(handler=_reconcile_command)
 
@@ -114,8 +114,8 @@ def build_parser() -> argparse.ArgumentParser:
     )
     dashboard_parser.add_argument(
         "--config",
-        default="bersama.yaml",
-        help="Path to the YAML config file. Defaults to ./bersama.yaml",
+        default="rangkai.yaml",
+        help="Path to the YAML config file. Defaults to ./rangkai.yaml",
     )
     dashboard_parser.add_argument(
         "--host",
@@ -158,7 +158,7 @@ def _run_command(args: argparse.Namespace) -> int:
     repo = config.repo(args.repo_name)
     issues_gateway = create_bounded_issue_gateway(cwd=repo.repo_path)
 
-    from bersama.orchestrator import Orchestrator
+    from rangkai.orchestrator import Orchestrator
     orchestrator = Orchestrator(issues_gateway=issues_gateway)
     orchestrator.run(args.repo_name, config, continuous=args.continuous)
     return 0
@@ -303,7 +303,7 @@ def _reconcile_command(args: argparse.Namespace) -> int:
 
 def _dashboard_command(args: argparse.Namespace) -> int:
     import uvicorn
-    from bersama.dashboard import create_dashboard_app
+    from rangkai.dashboard import create_dashboard_app
 
     config = load_config(args.config)
     app = create_dashboard_app(config=config)

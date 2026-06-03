@@ -27,7 +27,7 @@ import {
   Zap,
   Cpu
 } from 'lucide-react'
-import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardAction } from '@/components/ui/card'
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Button } from '@/components/ui/button'
@@ -204,7 +204,7 @@ export default function App() {
   const [drawerOpen, setDrawerOpen] = useState<boolean>(false);
   const [drawerReadOnly, setDrawerReadOnly] = useState<boolean>(false);
   const [activeTab, setActiveTab] = useState<'readiness' | 'operator'>(isTestEnv ? 'operator' : 'readiness');
-  const [isCollapsed, setIsCollapsed] = useState<boolean>(false);
+  const [isCollapsed, setIsCollapsed] = useState<boolean>(true);
 
   // Theme State
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
@@ -760,7 +760,6 @@ export default function App() {
   const currentRepo = repos.find(r => r.name === effectiveSelectedRepo);
   const capacity = currentRepo?.global_concurrency || 0;
   const activeRunsCount = getActiveRunsCount();
-  const capacityUtilization = capacity > 0 ? Math.round((activeRunsCount / capacity) * 100) : 0;
 
   return (
     <div className="dashboard-shell relative min-h-screen text-foreground flex antialiased">
@@ -792,87 +791,12 @@ export default function App() {
           }}
           theme={theme}
           toggleTheme={toggleTheme}
+          activeRunsCount={activeRunsCount}
+          capacity={capacity}
+          readyIssuesCount={getReadyIssuesCount()}
+          failedRunsCount={getFailedRunsCount()}
+          reposCount={repos.length}
         />
-
-        <div className="grid shrink-0 grid-cols-1 gap-4 px-6 pt-6 sm:grid-cols-2 xl:grid-cols-4">
-          <Card className="min-h-40 justify-between border bg-card shadow-sm">
-            <CardHeader className="grid-cols-[1fr_auto] px-6">
-              <div className="flex flex-col gap-1">
-                <CardDescription>Total Active Runs</CardDescription>
-                <CardTitle className="font-mono text-3xl font-semibold tracking-tight">{activeRunsCount}</CardTitle>
-              </div>
-              <CardAction>
-                <Badge variant="outline" className="font-mono text-xs">
-                  {capacityUtilization}% util
-                </Badge>
-              </CardAction>
-            </CardHeader>
-            <CardContent className="px-6">
-              <div className="flex items-center gap-2 text-sm font-medium">
-                <Activity className="size-4" />
-                {activeRunsCount} of {capacity} execution slots occupied
-              </div>
-              <p className="mt-2 text-sm text-muted-foreground">Live runner capacity across this repository.</p>
-            </CardContent>
-          </Card>
-
-          <Card className="min-h-40 justify-between border bg-card shadow-sm">
-            <CardHeader className="px-6">
-              <div className="flex flex-col gap-1">
-                <CardDescription>Ready Issues</CardDescription>
-                <CardTitle className="font-mono text-3xl font-semibold tracking-tight">{getReadyIssuesCount()}</CardTitle>
-              </div>
-            </CardHeader>
-            <CardContent className="px-6">
-              <div className="flex items-center gap-2 text-sm font-medium">
-                <Layers className="size-4" />
-                Waiting for claim
-              </div>
-              <p className="mt-2 text-sm text-muted-foreground">Eligible implementation work that can be scheduled.</p>
-            </CardContent>
-          </Card>
-
-          <Card className="min-h-40 justify-between border bg-card shadow-sm">
-            <CardHeader className="px-6">
-              <div className="flex flex-col gap-1">
-                <CardDescription>Failed Runs</CardDescription>
-                <CardTitle className={`font-mono text-3xl font-semibold tracking-tight ${getFailedRunsCount() > 0 ? 'text-destructive' : ''}`}>
-                  {getFailedRunsCount()}
-                </CardTitle>
-              </div>
-            </CardHeader>
-            <CardContent className="px-6">
-              <div className="flex items-center gap-2 text-sm font-medium">
-                <AlertCircle className="size-4" />
-                Requires review
-              </div>
-              <p className="mt-2 text-sm text-muted-foreground">Runs that need manual intervention or retry.</p>
-            </CardContent>
-          </Card>
-
-          <Card className="min-h-40 justify-between border bg-card shadow-sm">
-            <CardHeader className="grid-cols-[1fr_auto] px-6">
-              <div className="flex flex-col gap-1">
-                <CardDescription>Registered Repos</CardDescription>
-                <CardTitle className="font-mono text-3xl font-semibold tracking-tight">{repos.length}</CardTitle>
-              </div>
-              <CardAction>
-                <Badge variant="outline" className="gap-1 text-xs">
-                  <span className="size-1.5 rounded-full bg-emerald-500" />
-
-                  Active
-                </Badge>
-              </CardAction>
-            </CardHeader>
-            <CardContent className="px-6">
-              <div className="flex items-center gap-2 text-sm font-medium">
-                <Database className="size-4" />
-                Connected workspaces
-              </div>
-              <p className="mt-2 text-sm text-muted-foreground">Codebases available for orchestration.</p>
-            </CardContent>
-          </Card>
-        </div>
 
       {/* Main Content Layout */}
       {activeTab === 'readiness' ? (
@@ -1139,7 +1063,7 @@ export default function App() {
               <div>
                 <CardTitle className="text-sm text-foreground flex items-center gap-2 uppercase tracking-wider">
                   <Database className="size-4 text-muted-foreground" />
-                  Product Roadmap & Implementation Lifecycle
+                  Product Roadmap & Implementation Operations
                 </CardTitle>
                 <CardDescription className="text-xs text-muted-foreground">
                   PRD issues hierarchy derived from GitHub Issues state
@@ -1622,7 +1546,7 @@ export default function App() {
       <footer className="mt-auto flex shrink-0 items-center justify-between border-t px-6 py-3 text-[10px] text-muted-foreground">
         <SSEStatus isConnected={sseState.isConnected} />
         <div>
-          <span>Antigravity Orchestration Scaffold v1.0.0</span>
+          <span>Rangkai v1.0.0</span>
         </div>
       </footer>
       </div>

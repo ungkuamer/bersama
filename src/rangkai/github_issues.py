@@ -6,10 +6,10 @@ import subprocess
 from typing import Protocol, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from bersama.command_executor import CommandExecutor
+    from rangkai.command_executor import CommandExecutor
 
-from bersama.command_executor import CommandError, CommandPhase, CommandResult
-from bersama.command_executor import CommandExecutor
+from rangkai.command_executor import CommandError, CommandPhase, CommandResult
+from rangkai.command_executor import CommandExecutor
 
 
 @dataclass(frozen=True)
@@ -55,7 +55,7 @@ class GitHubIssueGateway:
         phase: CommandPhase | None = None,
     ) -> str:
         if self._command_executor is not None and phase is not None:
-            from bersama.command_executor import CommandError
+            from rangkai.command_executor import CommandError
             result = self._command_executor.execute(command, phase, cwd=str(self._cwd) if self._cwd else None)
             if not result.succeeded:
                 raise CommandError(result)

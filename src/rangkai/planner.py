@@ -4,8 +4,8 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from enum import Enum
 
-from bersama.github_issues import GitHubIssueRecord
-from bersama.issues import (
+from rangkai.github_issues import GitHubIssueRecord
+from rangkai.issues import (
     ClaimStatus,
     Diagnostic,
     DiagnosticKind,

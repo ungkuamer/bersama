@@ -7,17 +7,17 @@ import pytest
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
-from bersama.claiming import ClaimResult
-from bersama.command_executor import CommandExecutor
-from bersama.config import AppConfig, HarnessConfig, RepoConfig
-from bersama.dashboard import create_dashboard_app
-from bersama.event_bus import Event
-from bersama.execution import ExecutionResult
-from bersama.file_watcher import FileWatcherService
-from bersama.github_issues import GitHubIssueGateway, GitHubIssueRecord
-from bersama.integration import IntegrationResult
-from bersama.prd_preparation import PrdPreparationResult
-from bersama.repo_lock import RepoLock
+from rangkai.claiming import ClaimResult
+from rangkai.command_executor import CommandExecutor
+from rangkai.config import AppConfig, HarnessConfig, RepoConfig
+from rangkai.dashboard import create_dashboard_app
+from rangkai.event_bus import Event
+from rangkai.execution import ExecutionResult
+from rangkai.file_watcher import FileWatcherService
+from rangkai.github_issues import GitHubIssueGateway, GitHubIssueRecord
+from rangkai.integration import IntegrationResult
+from rangkai.prd_preparation import PrdPreparationResult
+from rangkai.repo_lock import RepoLock
 
 
 class FakeReconciliationService:
@@ -264,8 +264,8 @@ def test_default_dashboard_service_factory_builds_bounded_issue_gateway() -> Non
         created_gateways.append(gateway)
         return gateway
 
-    with patch("bersama.dashboard.create_bounded_issue_gateway", side_effect=fake_gateway_factory), patch(
-        "bersama.dashboard.ReconciliationService.reconcile", return_value=None
+    with patch("rangkai.dashboard.create_bounded_issue_gateway", side_effect=fake_gateway_factory), patch(
+        "rangkai.dashboard.ReconciliationService.reconcile", return_value=None
     ):
         client = TestClient(create_dashboard_app(config=build_config()))
         response = client.post("/dashboard/repos/demo/reconcile")
@@ -331,9 +331,9 @@ def test_default_dashboard_service_factories_bind_repo_lock_to_internal_workspac
                 prd_branch="prd/15-demo",
             )
 
-    with patch("bersama.dashboard.PrdPreparationService", RecordingPrdPreparationService), patch(
-        "bersama.dashboard.ImplementationClaimService", RecordingClaimService
-    ), patch("bersama.dashboard.IntegrationService", RecordingIntegrationService):
+    with patch("rangkai.dashboard.PrdPreparationService", RecordingPrdPreparationService), patch(
+        "rangkai.dashboard.ImplementationClaimService", RecordingClaimService
+    ), patch("rangkai.dashboard.IntegrationService", RecordingIntegrationService):
         client = TestClient(create_dashboard_app(config=build_config()))
         assert client.post("/dashboard/repos/demo/prd-issues/15/prepare").status_code == 200
         assert client.post(
@@ -406,9 +406,9 @@ def test_default_dashboard_service_factories_inject_command_executor_into_worksp
                 prd_branch="prd/15-demo",
             )
 
-    with patch("bersama.dashboard.PrdPreparationService", RecordingPrdPreparationService), patch(
-        "bersama.dashboard.ImplementationClaimService", RecordingClaimService
-    ), patch("bersama.dashboard.IntegrationService", RecordingIntegrationService):
+    with patch("rangkai.dashboard.PrdPreparationService", RecordingPrdPreparationService), patch(
+        "rangkai.dashboard.ImplementationClaimService", RecordingClaimService
+    ), patch("rangkai.dashboard.IntegrationService", RecordingIntegrationService):
         client = TestClient(create_dashboard_app(config=build_config()))
         client.post("/dashboard/repos/demo/prd-issues/15/prepare")
         client.post(

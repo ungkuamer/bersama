@@ -9,14 +9,14 @@ from datetime import UTC, datetime
 from typing import TypedDict, List, Optional, Any
 from langgraph.graph import StateGraph, END
 
-from bersama.config import AppConfig
-from bersama.github_issues import GitHubIssueGateway
-from bersama.prd_preparation import GitWorkspaceGateway, PrdPreparationService
-from bersama.claiming import ClaimWorkspaceGateway, ImplementationClaimService
-from bersama.execution import HarnessExecutionService
-from bersama.integration import IntegrationWorkspaceGateway, IntegrationService
-from bersama.reconciliation import ReconciliationService
-from bersama.repo_lock import RepoLock
+from rangkai.config import AppConfig
+from rangkai.github_issues import GitHubIssueGateway
+from rangkai.prd_preparation import GitWorkspaceGateway, PrdPreparationService
+from rangkai.claiming import ClaimWorkspaceGateway, ImplementationClaimService
+from rangkai.execution import HarnessExecutionService
+from rangkai.integration import IntegrationWorkspaceGateway, IntegrationService
+from rangkai.reconciliation import ReconciliationService
+from rangkai.repo_lock import RepoLock
 
 
 @dataclass(frozen=True)
@@ -176,7 +176,7 @@ class Orchestrator:
         repo_config = state["config"].repo(state["repo_name"])
         records = self.issues.list_issues(state="open", labels=("prd",))
         for record in records:
-            from bersama.issues import parse_issue, GitHubIssue, PrdIssue
+            from rangkai.issues import parse_issue, GitHubIssue, PrdIssue
             parsed = parse_issue(
                 GitHubIssue(
                     number=record.number,
@@ -233,7 +233,7 @@ class Orchestrator:
 
         # Resolve blocking dependencies that fell out of the sliding
         # window cache via single-issue lookups (gh issue view <num>).
-        from bersama.issues import parse_issue, GitHubIssue, ImplementationIssue
+        from rangkai.issues import parse_issue, GitHubIssue, ImplementationIssue
         records_by_number = {r.number: r for r in records}
         missing_blockers_by_issue: dict[int, set[int]] = {}
         for record in records:
@@ -264,7 +264,7 @@ class Orchestrator:
                     # the planner will generate a diagnostic for it.
                     pass
 
-        from bersama.planner import plan_issue_actions
+        from rangkai.planner import plan_issue_actions
         planner_result = plan_issue_actions(
             tuple(records),
             global_concurrency=repo_config.global_concurrency,
@@ -477,7 +477,7 @@ class Orchestrator:
             )
             return
 
-        from bersama.issues import parse_issue, GitHubIssue, ImplementationIssue
+        from rangkai.issues import parse_issue, GitHubIssue, ImplementationIssue
 
         for record in open_records:
             parsed = parse_issue(
@@ -544,14 +544,14 @@ class Orchestrator:
 
         # Wire Discord notifier if configured
         if config.discord.enabled and config.discord.webhook_url:
-            from bersama.discord_notifier import DiscordNotifier
+            from rangkai.discord_notifier import DiscordNotifier
             notifier = DiscordNotifier(config.discord.webhook_url)
             self.execution_service.set_discord_notifier(notifier)
             self.reconciliation_service.set_discord_notifier(notifier)
 
         # Wire telemetry adapter if configured
         if config.observability.enabled:
-            from bersama.telemetry import TelemetryAdapter
+            from rangkai.telemetry import TelemetryAdapter
             telemetry = TelemetryAdapter(config=config.observability)
             self.reconciliation_service.set_telemetry(telemetry)
 

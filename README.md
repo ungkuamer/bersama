@@ -1,15 +1,18 @@
-# Bersama: Autonomous Agentic SDLC Ecosystem
+# Rangkai: Autonomous Agentic Orchestrator (Bersama Ecosystem)
 
 [![Python Version](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue.svg)](https://www.python.org/)
 [![Orchestrator](https://img.shields.io/badge/orchestrator-rangkai-orange.svg)](#1-rangkai-orchestration-engine)
-[![Quality Gate](https://img.shields.io/badge/quality--gate-saringan-green.svg)](#2-saringan-automated-qa--judge-gate)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE.md)
 
-**Bersama** *(Malay for "Together")* is an autonomous, headless agentic SDLC ecosystem. It enables swarms of coding agents to plan, implement, and self-correct software changes directly against GitHub Issues. Rather than acting as a simple chatbot wrapper, Bersama operates as a rigorous systems-level engine that manages git workspaces, serializes repository state, streams agent telemetry, and audits code quality before merging.
+**Rangkai** *(pronounced: "rUNG-kye", /raŋ.kaɪ/, meaning to connect, sequence, or assemble separate parts)* is the core state-machine orchestration engine of the **Bersama** SDLC ecosystem. It coordinates autonomous agent tasks by claiming issues, spinning up isolated git worktrees, executing agent harnesses, and safely integrating code changes.
+
+> [!NOTE]
+> This repository houses the standalone **Rangkai** orchestrator and its dashboard cockpit. For details on the broader ecosystem roadmap (including the planned judge, memory, and sandbox layers), see [ECOSYSTEM.md](file:///home/ungku/programming/rangkai/ECOSYSTEM.md).
 
 The ecosystem is built around two core architectural layers:
-1.  **Rangkai (Orchestrator):** A state-machine engine that claims issues, spins up isolated worktrees, executes agent harnesses, and manages task integration.
-2.  **Saringan (QA & Judge Gate):** A multi-stage quality gate combining deterministic rule-based checks (lints, test suites, builds) with a decoupled **LLM-as-a-Judge** verification pipeline (utilizing Decision Trees/DAGs and QAG checklists).
+1.  **Rangkai (Orchestrator):** A state-machine engine that claims issues, spins up isolated worktrees, executes agent harnesses, and manages task integration (contained in this repository).
+2.  **Saringan (QA & Judge Gate):** A decoupled, multi-stage quality gate combining deterministic checks with an LLM-as-a-Judge verification pipeline (designed to live in an external repository).
+
 
 ---
 
@@ -88,7 +91,7 @@ Saringan acts as a headless code auditor that evaluates the code changes generat
 ### Prerequisites
 - `git`
 - GitHub CLI `gh`, authenticated for the target repository.
-- The Agent Harness command configured in `bersama.yaml`, such as `codex`.
+- The Agent Harness command configured in `rangkai.yaml`, such as `codex`.
 
 ### Installation
 Clone the repository and install in editable mode with development dependencies:
@@ -104,7 +107,7 @@ python -m pip install -e ".[dev]"
 ```
 
 ### Configuration
-Bersama reads `bersama.yaml` from the current directory by default. 
+Rangkai reads `rangkai.yaml` from the current directory by default. 
 
 ```yaml
 harnesses:
@@ -116,10 +119,10 @@ harnesses:
       - "$tdd solve issue #{issue_number} on github and commit once execution is complete"
 
 repos:
-  bersama:
-    repo_path: /home/me/src/bersama
+  rangkai:
+    repo_path: /home/me/src/rangkai
     main_branch: main
-    worktree_root: /home/me/src/bersama/worktrees
+    worktree_root: /home/me/src/rangkai/worktrees
     global_concurrency: 2
     per_prd_concurrency: 1
     default_harness: codex-headless
@@ -143,7 +146,7 @@ Compiles React assets and serves both frontend and FastAPI endpoints on a single
    ```
 2. **Start the API server:**
    ```bash
-   bersama dashboard --config bersama.yaml --host 127.0.0.1 --port 8000
+   rangkai dashboard --config rangkai.yaml --host 127.0.0.1 --port 8000
    ```
 3. **Open:** [http://127.0.0.1:8000](http://127.0.0.1:8000)
 
@@ -152,7 +155,7 @@ Runs backend API and Vite hot-reloading dev server concurrently for code modific
 
 1. **Start backend API (Port 8000):**
    ```bash
-   bersama dashboard --config bersama.yaml --host 127.0.0.1 --port 8000
+   rangkai dashboard --config rangkai.yaml --host 127.0.0.1 --port 8000
    ```
 2. **Start Vite server (Port 5173):**
    ```bash
@@ -184,20 +187,20 @@ To run observability locally:
 
 Run one orchestration cycle:
 ```bash
-bersama run bersama --config bersama.yaml
+rangkai run rangkai --config rangkai.yaml
 ```
 
 Run continuously until all claimable Ready Issues are complete:
 ```bash
-bersama run bersama --config bersama.yaml --continuous
+rangkai run rangkai --config rangkai.yaml --continuous
 ```
 
 ### Manual Operations (Granular Control)
-*   **Reconcile issue state:** `bersama reconcile bersama`
-*   **Prepare PRD Issue branch:** `bersama prepare-prd bersama {issue_number}`
-*   **Claim an issue & build worktree:** `bersama claim-issue bersama {issue_number} --agent-run-id {run_id}`
-*   **Run harness against claimed issue:** `bersama execute-run bersama {issue_number}`
-*   **Integrate successful changes:** `bersama integrate-run bersama {issue_number}`
+*   **Reconcile issue state:** `rangkai reconcile rangkai`
+*   **Prepare PRD Issue branch:** `rangkai prepare-prd rangkai {issue_number}`
+*   **Claim an issue & build worktree:** `rangkai claim-issue rangkai {issue_number} --agent-run-id {run_id}`
+*   **Run harness against claimed issue:** `rangkai execute-run rangkai {issue_number}`
+*   **Integrate successful changes:** `rangkai integrate-run rangkai {issue_number}`
 
 ---
 

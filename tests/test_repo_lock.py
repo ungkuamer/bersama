@@ -16,10 +16,10 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
-from bersama.claiming import ClaimWorkspaceGateway
-from bersama.prd_preparation import GitWorkspaceGateway
-from bersama.integration import IntegrationWorkspaceGateway
-from bersama.repo_lock import RepoLock
+from rangkai.claiming import ClaimWorkspaceGateway
+from rangkai.prd_preparation import GitWorkspaceGateway
+from rangkai.integration import IntegrationWorkspaceGateway
+from rangkai.repo_lock import RepoLock
 
 
 class FakeGitRunner:
@@ -383,7 +383,7 @@ def test_multiple_gateways_share_the_same_lock() -> None:
 def test_orchestrator_repo_lock_is_none_when_no_repo_path() -> None:
     """When created without repo_path, the Orchestrator's _repo_lock is None
     and gateways receive None. The lock is bound when run() provides repo_path."""
-    from bersama.orchestrator import Orchestrator
+    from rangkai.orchestrator import Orchestrator
 
     orchestrator = Orchestrator()
 
@@ -408,8 +408,8 @@ def test_orchestrator_binds_repo_lock_on_run() -> None:
     a RepoLock bound to that path and injects it into all gateways."""
     import tempfile
     from pathlib import Path
-    from bersama.orchestrator import Orchestrator
-    from bersama.repo_lock import RepoLock
+    from rangkai.orchestrator import Orchestrator
+    from rangkai.repo_lock import RepoLock
 
     with tempfile.TemporaryDirectory() as tmpdir:
         repo_path = Path(tmpdir) / "repo"
@@ -438,10 +438,10 @@ def test_orchestrator_binds_repo_lock_on_run() -> None:
 def test_orchestrator_does_not_bind_lock_when_gateways_provided() -> None:
     """When external gateways are provided, the Orchestrator does not
     override their locks. The caller is responsible for lock injection."""
-    from bersama.claiming import ClaimWorkspaceGateway
-    from bersama.prd_preparation import GitWorkspaceGateway
-    from bersama.integration import IntegrationWorkspaceGateway
-    from bersama.orchestrator import Orchestrator
+    from rangkai.claiming import ClaimWorkspaceGateway
+    from rangkai.prd_preparation import GitWorkspaceGateway
+    from rangkai.integration import IntegrationWorkspaceGateway
+    from rangkai.orchestrator import Orchestrator
 
     claim = ClaimWorkspaceGateway()
     git = GitWorkspaceGateway()
@@ -471,7 +471,7 @@ def test_harness_execution_service_does_not_receive_repo_lock() -> None:
     """The HarnessExecutionService must NOT receive or hold the Repository
     Operation Lock. Harness execution is worktree-local and must remain
     parallel while shared Git operations are serialized."""
-    from bersama.orchestrator import Orchestrator
+    from rangkai.orchestrator import Orchestrator
 
     orchestrator = Orchestrator()
 

@@ -1,4 +1,4 @@
-"""bersama orchestrator package."""
+"""rangkai orchestrator package."""
 
 __all__ = [
     "cli",

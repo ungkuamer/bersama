@@ -2,8 +2,8 @@ import json
 
 import pytest
 
-from bersama.command_executor import CommandError, CommandPhase, CommandResult
-from bersama.github_issues import GitHubIssueGateway, GitHubIssueRecord
+from rangkai.command_executor import CommandError, CommandPhase, CommandResult
+from rangkai.github_issues import GitHubIssueGateway, GitHubIssueRecord
 
 
 class FakeRunner:
