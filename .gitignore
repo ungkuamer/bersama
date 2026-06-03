@@ -5,13 +5,18 @@ worktrees/
 rangkai.yaml
 
 # graphify
-graphify-out/manifest.json
-graphify-out/cost.json
-graphify-out/cache/
+graphify-out/
+
+# environment / build / dependencies
+.commandcode/
+node_modules/
+*.egg-info/
+
+# assets
+design.png
 
 # documents
+docs/*
+!docs/*/
 docs/*.pdf
-
-# packaging
-*.egg-info/
 
