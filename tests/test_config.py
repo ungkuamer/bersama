@@ -343,3 +343,190 @@ repos:
     config = load_config(config_path)
 
     assert config.discord.webhook_url == "https://discord.com/api/webhooks/env-only"
+
+
+# ── Quality Gate config tests ──────────────────────────────────────
+
+
+def test_quality_gate_omitted_defaults_disabled(tmp_path: Path) -> None:
+    """When quality_gate is omitted, it defaults to disabled."""
+    config_path = write_config(
+        tmp_path,
+        """
+harnesses:
+  local:
+    command: codex
+repos:
+  demo:
+    repo_path: /repos/demo
+    main_branch: main
+    worktree_root: /worktrees/demo
+    default_harness: local
+""".strip(),
+    )
+
+    config = load_config(config_path)
+    repo = config.repos["demo"]
+
+    assert repo.quality_gate.enabled is False
+    assert repo.quality_gate.command is None
+    assert repo.quality_gate.args_template == ()
+    assert repo.quality_gate.timeout_seconds is None
+
+
+def test_quality_gate_disabled_explicitly(tmp_path: Path) -> None:
+    """When quality_gate is present but enabled is false, it stays disabled."""
+    config_path = write_config(
+        tmp_path,
+        """
+harnesses:
+  local:
+    command: codex
+repos:
+  demo:
+    repo_path: /repos/demo
+    main_branch: main
+    worktree_root: /worktrees/demo
+    default_harness: local
+    quality_gate:
+      enabled: false
+""".strip(),
+    )
+
+    config = load_config(config_path)
+    repo = config.repos["demo"]
+
+    assert repo.quality_gate.enabled is False
+
+
+def test_quality_gate_enabled_with_command_and_args(tmp_path: Path) -> None:
+    """When quality_gate is enabled, command and args_template are parsed."""
+    config_path = write_config(
+        tmp_path,
+        """
+harnesses:
+  local:
+    command: codex
+repos:
+  demo:
+    repo_path: /repos/demo
+    main_branch: main
+    worktree_root: /worktrees/demo
+    default_harness: local
+    quality_gate:
+      enabled: true
+      command: saringan
+      args_template:
+        - validate
+        - --repo
+        - "{repo_name}"
+        - --issue
+        - "{issue_number}"
+""".strip(),
+    )
+
+    config = load_config(config_path)
+    gate = config.repos["demo"].quality_gate
+
+    assert gate.enabled is True
+    assert gate.command == "saringan"
+    assert gate.args_template == ("validate", "--repo", "{repo_name}", "--issue", "{issue_number}")
+    assert gate.timeout_seconds is None
+
+
+def test_quality_gate_enabled_with_timeout(tmp_path: Path) -> None:
+    """Quality gate supports optional timeout_seconds."""
+    config_path = write_config(
+        tmp_path,
+        """
+harnesses:
+  local:
+    command: codex
+repos:
+  demo:
+    repo_path: /repos/demo
+    main_branch: main
+    worktree_root: /worktrees/demo
+    default_harness: local
+    quality_gate:
+      enabled: true
+      command: saringan
+      timeout_seconds: 600
+""".strip(),
+    )
+
+    config = load_config(config_path)
+    gate = config.repos["demo"].quality_gate
+
+    assert gate.enabled is True
+    assert gate.timeout_seconds == 600
+
+
+def test_quality_gate_enabled_missing_command_raises_error(tmp_path: Path) -> None:
+    """When quality_gate is enabled but command is missing, raises ConfigError."""
+    config_path = write_config(
+        tmp_path,
+        """
+harnesses:
+  local:
+    command: codex
+repos:
+  demo:
+    repo_path: /repos/demo
+    main_branch: main
+    worktree_root: /worktrees/demo
+    default_harness: local
+    quality_gate:
+      enabled: true
+""".strip(),
+    )
+
+    with pytest.raises(ConfigError, match="quality_gate must define non-empty 'command'"):
+        load_config(config_path)
+
+
+def test_quality_gate_not_a_mapping_raises_error(tmp_path: Path) -> None:
+    """When quality_gate is not a mapping, raises ConfigError."""
+    config_path = write_config(
+        tmp_path,
+        """
+harnesses:
+  local:
+    command: codex
+repos:
+  demo:
+    repo_path: /repos/demo
+    main_branch: main
+    worktree_root: /worktrees/demo
+    default_harness: local
+    quality_gate: "not-a-mapping"
+""".strip(),
+    )
+
+    with pytest.raises(ConfigError, match="quality_gate must be a mapping"):
+        load_config(config_path)
+
+
+def test_quality_gate_invalid_timeout_raises_error(tmp_path: Path) -> None:
+    """When quality_gate timeout_seconds is not a positive int, raises ConfigError."""
+    config_path = write_config(
+        tmp_path,
+        """
+harnesses:
+  local:
+    command: codex
+repos:
+  demo:
+    repo_path: /repos/demo
+    main_branch: main
+    worktree_root: /worktrees/demo
+    default_harness: local
+    quality_gate:
+      enabled: true
+      command: saringan
+      timeout_seconds: 0
+""".strip(),
+    )
+
+    with pytest.raises(ConfigError, match="quality_gate timeout_seconds must be a positive integer"):
+        load_config(config_path)
