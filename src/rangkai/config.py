@@ -42,6 +42,7 @@ class ObservabilityConfig:
     session_prefix: str = "rangkai"
     url: str | None = None
     token: str | None = None
+    extension_path: str | None = None
 
 
 @dataclass(frozen=True)
@@ -185,11 +186,15 @@ def _parse_observability(raw: object) -> ObservabilityConfig:
     token = raw.get("token")
     if token is not None and not isinstance(token, str):
         raise ConfigError("observability.token must be a string.")
+    extension_path = raw.get("extension_path")
+    if extension_path is not None and not isinstance(extension_path, str):
+        raise ConfigError("observability.extension_path must be a string.")
     return ObservabilityConfig(
         enabled=enabled,
         session_prefix=session_prefix or "rangkai",
         url=url,
         token=token,
+        extension_path=extension_path,
     )
 
 

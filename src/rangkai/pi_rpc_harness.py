@@ -29,6 +29,24 @@ def main() -> int:
 
     # Spawn Pi in RPC Mode
     cmd = ["pi", "--mode", "rpc", "--no-session"]
+
+    # Load the telemetry extension if configured
+    telemetry_ext = os.environ.get("RANGKAI_TELEMETRY_EXTENSION")
+    if telemetry_ext:
+        cmd.extend(["-e", telemetry_ext])
+
+    # Bind the exact agent run ID as the session ID
+    association_raw = os.environ.get("RANGKAI_TELEMETRY_ASSOCIATION")
+    if association_raw:
+        try:
+            assoc = json.loads(association_raw)
+            run_id = assoc.get("run_id")
+            if run_id:
+                # --session-id forces pi to use this exact session ID for events
+                cmd.extend(["--session-id", run_id])
+        except Exception:
+            pass
+
     if args.provider:
         cmd.extend(["--provider", args.provider])
     if args.model:

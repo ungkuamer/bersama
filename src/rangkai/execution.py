@@ -198,6 +198,12 @@ class HarnessExecutionService:
                     "issue": issue_number,
                     "run_id": agent_run_id,
                 })
+                if config.observability.url:
+                    env["OBS_SERVER_URL"] = config.observability.url
+                if config.observability.token:
+                    env["OBS_AUTH_TOKEN"] = config.observability.token
+                if config.observability.extension_path:
+                    env["RANGKAI_TELEMETRY_EXTENSION"] = config.observability.extension_path
 
             # 8. Record initial HEAD commit
             def get_head_commit(cwd: Path) -> str:
