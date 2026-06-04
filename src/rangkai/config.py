@@ -20,6 +20,14 @@ class HarnessConfig:
 
 
 @dataclass(frozen=True)
+class QualityGateConfig:
+    enabled: bool = False
+    command: str | None = None
+    args_template: tuple[str, ...] = ()
+    timeout_seconds: int | None = None
+
+
+@dataclass(frozen=True)
 class RepoConfig:
     name: str
     repo_path: Path
@@ -28,6 +36,7 @@ class RepoConfig:
     global_concurrency: int
     per_prd_concurrency: int
     default_harness: str
+    quality_gate: QualityGateConfig = field(default_factory=QualityGateConfig)
 
 
 @dataclass(frozen=True)
@@ -152,6 +161,10 @@ def _parse_repos(
                 f"Repo '{name}' references unknown harness '{default_harness}'."
             )
 
+        quality_gate = _parse_quality_gate(
+            raw_value.get("quality_gate"), context=f"repo '{name}'"
+        )
+
         repos[name] = RepoConfig(
             name=name,
             repo_path=Path(
@@ -166,6 +179,7 @@ def _parse_repos(
             global_concurrency=global_concurrency,
             per_prd_concurrency=per_prd_concurrency,
             default_harness=default_harness,
+            quality_gate=quality_gate,
         )
 
     return repos
@@ -215,6 +229,37 @@ def _parse_discord(raw: object) -> DiscordConfig:
         webhook_url = env_webhook_url
         enabled = True
     return DiscordConfig(enabled=enabled, webhook_url=webhook_url)
+
+
+def _parse_quality_gate(
+    raw: object, *, context: str
+) -> QualityGateConfig:
+    if raw is None:
+        return QualityGateConfig()
+    if not isinstance(raw, dict):
+        raise ConfigError(f"{context} quality_gate must be a mapping.")
+
+    enabled = bool(raw.get("enabled", False))
+    if not enabled:
+        return QualityGateConfig()
+
+    command = _require_string(raw, "command", context=f"{context} quality_gate")
+    args_template = _parse_string_list(
+        raw.get("args_template", []),
+        context=f"{context} quality_gate args_template",
+    )
+    timeout_seconds = raw.get("timeout_seconds")
+    if timeout_seconds is not None:
+        timeout_seconds = _parse_positive_int(
+            timeout_seconds, context=f"{context} quality_gate timeout_seconds"
+        )
+
+    return QualityGateConfig(
+        enabled=enabled,
+        command=command,
+        args_template=tuple(args_template),
+        timeout_seconds=timeout_seconds,
+    )
 
 
 def _require_string(data: dict[str, object], key: str, *, context: str) -> str:
