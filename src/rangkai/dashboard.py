@@ -917,25 +917,46 @@ def create_dashboard_app(
         diag_dir = worktree_path / "quality-gate"
         result_json_path = diag_dir / "result.json"
 
-        # If worktree doesn't exist or quality-gate folder doesn't exist, return "not run"
-        if not worktree_path.exists() or not diag_dir.exists() or not diag_dir.is_dir():
-            return {"status": "not run"}
+        try:
+            # If worktree doesn't exist or quality-gate folder doesn't exist, return "not_run"
+            if not worktree_path.exists() or not diag_dir.exists() or not diag_dir.is_dir():
+                return {"status": "not_run", "message": "Quality gate has not been run."}
+        except OSError as exc:
+            raise HTTPException(
+                status_code=500,
+                detail={
+                    "code": "unreadable-quality-gate",
+                    "kind": "read-error",
+                    "message": f"Repository or worktree access failure: {exc}",
+                }
+            ) from exc
 
-        # If quality-gate folder exists but result.json doesn't, return "invalid"
+        # If quality-gate folder exists but result.json doesn't, return "not_run" with diagnostic message
         if not result_json_path.exists():
-            return {"status": "invalid"}
+            return {"status": "not_run", "message": "Quality gate result.json file is missing."}
 
         try:
             data = json.loads(result_json_path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
-            return {"status": "invalid"}
+        except json.JSONDecodeError as exc:
+            return {"status": "invalid", "message": f"Malformed JSON in result.json: {exc}"}
+        except OSError as exc:
+            raise HTTPException(
+                status_code=500,
+                detail={
+                    "code": "unreadable-quality-gate",
+                    "kind": "read-error",
+                    "message": f"Repository or worktree access failure on result.json: {exc}",
+                }
+            ) from exc
 
         if not isinstance(data, dict):
-            return {"status": "invalid"}
+            return {"status": "invalid", "message": "Quality gate result.json does not contain a JSON object."}
 
         status = data.get("status")
-        if status not in {"passed", "failed", "error", "not run", "invalid", "unavailable"}:
-            return {"status": "invalid"}
+        if status is None:
+            return {"status": "invalid", "message": "Quality gate status field is missing in result.json."}
+        if status not in {"passed", "failed", "error", "not run", "not_run", "invalid", "unavailable"}:
+            return {"status": "invalid", "message": f"Unrecognized Quality Gate status in result.json: {status}"}
 
         response = {"status": status}
         message = data.get("message")

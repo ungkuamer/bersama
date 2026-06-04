@@ -12,7 +12,7 @@ export interface QualityGateCheck {
 }
 
 export interface QualityGateSummary {
-  status: 'passed' | 'failed' | 'error' | 'not run' | 'invalid' | 'unavailable'
+  status: 'passed' | 'failed' | 'error' | 'not run' | 'not_run' | 'invalid' | 'unavailable'
   message?: string
   checks?: QualityGateCheck[]
 }

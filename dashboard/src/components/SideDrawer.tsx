@@ -265,7 +265,12 @@ export default function SideDrawer({
 
   const isImplementation = issue?.kind === 'implementation';
 
-  const { data: qualityGateSummary, isLoading: qualityGateLoading } = useQualityGateSummaryQuery(
+  const {
+    data: qualityGateSummary,
+    isLoading: qualityGateLoading,
+    error: qualityGateError,
+    isError: isQualityGateError
+  } = useQualityGateSummaryQuery(
     repo,
     isImplementation && issue ? issue.number : null
   );
@@ -374,6 +379,26 @@ export default function SideDrawer({
                         <Skeleton className="h-6 w-24 rounded-full" />
                         <Skeleton className="h-4 w-32" />
                       </div>
+                    ) : isQualityGateError ? (
+                      <div className="flex flex-col gap-2">
+                        <div className="flex items-center gap-2">
+                          <Badge
+                            variant="outline"
+                            className="text-[9px] font-bold uppercase tracking-wider h-5 flex items-center gap-1 rounded-full border-red-200 bg-red-50 text-red-800 dark:border-red-500/35 dark:bg-red-500/15 dark:text-red-300"
+                          >
+                            <AlertCircle className="size-3.5" />
+                            <span>Query Error</span>
+                          </Badge>
+                        </div>
+                        <div className="bg-red-500/5 border border-red-500/10 rounded p-2.5 text-[9.5px] font-mono text-red-600 dark:text-red-400 mt-1 leading-relaxed">
+                          Failed to load Quality Gate data. Worktree or repository access may have failed.
+                          {qualityGateError instanceof Error && (
+                            <div className="mt-1 text-[8.5px] text-red-500/80 dark:text-red-400/80 border-t border-red-500/10 pt-1">
+                              {qualityGateError.message}
+                            </div>
+                          )}
+                        </div>
+                      </div>
                     ) : qualityGateSummary ? (
                       <div className="flex flex-col gap-2">
                         <div className="flex items-center gap-2">
@@ -403,6 +428,10 @@ export default function SideDrawer({
                               badgeStyle = "border-border bg-muted text-muted-foreground/75";
                               icon = <Info className="size-3.5" />;
                               labelText = "Disabled";
+                            } else if (status === 'not run' || status === 'not_run') {
+                              badgeStyle = "border-muted-foreground/30 bg-muted text-muted-foreground";
+                              icon = <Clock className="size-3.5" />;
+                              labelText = "Not Run";
                             }
 
                             return (

@@ -1328,5 +1328,48 @@ describe('SideDrawer Quality Gate Status', () => {
     expect(screen.getAllByText('unknown').length).toBe(2);
     expect(screen.getByText('partial-check')).toBeInTheDocument();
   });
+
+  it('renders "Not Run" badge when status is not_run', () => {
+    vi.mocked(useQualityGateSummaryQuery).mockReturnValue({
+      data: { status: 'not_run', message: 'result.json is missing' },
+      isLoading: false,
+    } as any);
+
+    render(
+      <SideDrawer
+        issue={mockIssue}
+        open={true}
+        onOpenChange={() => {}}
+        repo="demo"
+        readOnly={true}
+      />
+    );
+
+    expect(screen.getByText('Not Run')).toBeInTheDocument();
+    expect(screen.getByText('result.json is missing')).toBeInTheDocument();
+  });
+
+  it('renders query error state when useQualityGateSummaryQuery returns an error', () => {
+    vi.mocked(useQualityGateSummaryQuery).mockReturnValue({
+      data: null,
+      isLoading: false,
+      isError: true,
+      error: new Error('HTTP error 500: Repository or worktree access failure'),
+    } as any);
+
+    render(
+      <SideDrawer
+        issue={mockIssue}
+        open={true}
+        onOpenChange={() => {}}
+        repo="demo"
+        readOnly={true}
+      />
+    );
+
+    expect(screen.getByText('Query Error')).toBeInTheDocument();
+    expect(screen.getByText('Failed to load Quality Gate data. Worktree or repository access may have failed.')).toBeInTheDocument();
+    expect(screen.getByText('HTTP error 500: Repository or worktree access failure')).toBeInTheDocument();
+  });
 });
 

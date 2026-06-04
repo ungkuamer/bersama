@@ -1747,13 +1747,60 @@ def test_quality_gate_api_not_run(tmp_path: Path) -> None:
     # 1. Worktree doesn't exist at all
     response = TestClient(app).get("/api/repos/demo/implementation-issues/18/quality-gate")
     assert response.status_code == 200
-    assert response.json() == {"status": "not run"}
+    assert response.json() == {"status": "not_run", "message": "Quality gate has not been run."}
 
     # 2. Worktree exists, but quality-gate folder doesn't exist
     (tmp_path / "issue-18").mkdir(parents=True)
     response = TestClient(app).get("/api/repos/demo/implementation-issues/18/quality-gate")
     assert response.status_code == 200
-    assert response.json() == {"status": "not run"}
+    assert response.json() == {"status": "not_run", "message": "Quality gate has not been run."}
+
+
+
+def test_quality_gate_api_missing_result_json(tmp_path: Path) -> None:
+    import dataclasses
+    config = build_config()
+    config.repos["demo"] = dataclasses.replace(
+        config.repos["demo"],
+        quality_gate=QualityGateConfig(enabled=True, command="true"),
+        worktree_root=tmp_path
+    )
+    
+    app = create_dashboard_app(config=config)
+    client = TestClient(app)
+    
+    issue_wt = tmp_path / "issue-18"
+    diag_dir = issue_wt / "quality-gate"
+    diag_dir.mkdir(parents=True)
+    
+    # Missing result.json produces a "not_run" Quality Gate snapshot with diagnostic message
+    response = client.get("/api/repos/demo/implementation-issues/18/quality-gate")
+    assert response.status_code == 200
+    res_json = response.json()
+    assert res_json["status"] == "not_run"
+    assert "missing" in res_json["message"].lower()
+
+
+def test_quality_gate_api_access_failure(tmp_path: Path) -> None:
+    from unittest.mock import patch
+    import dataclasses
+    config = build_config()
+    config.repos["demo"] = dataclasses.replace(
+        config.repos["demo"],
+        quality_gate=QualityGateConfig(enabled=True, command="true"),
+        worktree_root=tmp_path
+    )
+    
+    app = create_dashboard_app(config=config)
+    client = TestClient(app)
+    
+    # Mock Path.exists to raise PermissionError
+    with patch.object(Path, "exists", side_effect=PermissionError("Permission denied")):
+        response = client.get("/api/repos/demo/implementation-issues/18/quality-gate")
+        assert response.status_code == 500
+        res_json = response.json()
+        assert res_json["detail"]["code"] == "unreadable-quality-gate"
+        assert "permission denied" in res_json["detail"]["message"].lower()
 
 
 def test_quality_gate_api_states(tmp_path: Path) -> None:
@@ -1796,19 +1843,25 @@ def test_quality_gate_api_states(tmp_path: Path) -> None:
     (diag_dir / "result.json").write_text('{invalid json')
     response = client.get("/api/repos/demo/implementation-issues/18/quality-gate")
     assert response.status_code == 200
-    assert response.json() == {"status": "invalid"}
+    res_json = response.json()
+    assert res_json["status"] == "invalid"
+    assert "malformed" in res_json["message"].lower() or "json" in res_json["message"].lower() or "read" in res_json["message"].lower()
 
-    # 5. Invalid schema state (missing status field)
+    # 5. Invalid schema state (missing status field or not a dictionary)
     (diag_dir / "result.json").write_text('{"message": "Coverage is 40%"}')
     response = client.get("/api/repos/demo/implementation-issues/18/quality-gate")
     assert response.status_code == 200
-    assert response.json() == {"status": "invalid"}
+    res_json = response.json()
+    assert res_json["status"] == "invalid"
+    assert "status" in res_json["message"].lower() or "missing" in res_json["message"].lower() or "invalid" in res_json["message"].lower()
 
     # 6. Invalid schema state (unexpected status field value)
     (diag_dir / "result.json").write_text('{"status": "unknown"}')
     response = client.get("/api/repos/demo/implementation-issues/18/quality-gate")
     assert response.status_code == 200
-    assert response.json() == {"status": "invalid"}
+    res_json = response.json()
+    assert res_json["status"] == "invalid"
+    assert "unrecognized" in res_json["message"].lower() or "unknown" in res_json["message"].lower() or "status" in res_json["message"].lower()
 
 
 def test_quality_gate_api_checks(tmp_path: Path) -> None:
