@@ -270,8 +270,36 @@ def _integrate_run_command(args: argparse.Namespace) -> int:
     config = load_config(args.config)
     repo = config.repo(args.repo_name)
 
+    issues_gateway = create_bounded_issue_gateway(cwd=repo.repo_path)
+
+    # Run quality gate if enabled — reuse the same diagnostics,
+    # needs-triage labelling, and persisted evidence as the scheduler.
+    from rangkai.orchestrator import Orchestrator
+    orchestrator = Orchestrator(issues_gateway=issues_gateway)
+    gate_result = orchestrator._run_quality_gate(
+        repo_name=args.repo_name,
+        repo_path=str(repo.repo_path),
+        worktree_root=str(repo.worktree_root),
+        issue_number=args.issue_number,
+        config=config,
+    )
+    if gate_result is False:
+        print(
+            f"Quality gate blocked integration for issue #{args.issue_number}",
+            file=sys.stderr,
+        )
+        _reconcile_safe(args.repo_name, config)
+        return 1
+    if gate_result is None:
+        print(
+            f"Quality gate error for issue #{args.issue_number}",
+            file=sys.stderr,
+        )
+        _reconcile_safe(args.repo_name, config)
+        return 1
+
     service = IntegrationService(
-        issues=create_bounded_issue_gateway(cwd=repo.repo_path),
+        issues=issues_gateway,
         workspace=IntegrationWorkspaceGateway(command_executor=_build_command_executor()),
     )
     result = service.integrate_issue(
