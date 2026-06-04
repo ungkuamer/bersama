@@ -339,7 +339,9 @@ repos:
 """.strip(),
     )
 
-    with patch("rangkai.cli.IntegrationService.integrate_issue") as integrate_issue:
+    with patch("rangkai.orchestrator.Orchestrator._run_quality_gate") as gate, \
+         patch("rangkai.cli.IntegrationService.integrate_issue") as integrate_issue:
+        gate.return_value = True  # disabled gate (default)
         from rangkai.integration import IntegrationResult
         integrate_issue.return_value = IntegrationResult(
             issue_number=9,
@@ -381,7 +383,9 @@ repos:
 """.strip(),
     )
 
-    with patch("rangkai.cli.IntegrationService.integrate_issue") as integrate_issue:
+    with patch("rangkai.orchestrator.Orchestrator._run_quality_gate") as gate, \
+         patch("rangkai.cli.IntegrationService.integrate_issue") as integrate_issue:
+        gate.return_value = True  # disabled gate (default)
         from rangkai.integration import IntegrationResult
         integrate_issue.return_value = IntegrationResult(
             issue_number=9,
@@ -405,6 +409,152 @@ repos:
     assert captured.out == ""
     assert "Failed to integrate issue #9: Merge conflict in README.md" in captured.err
     assert "Failure type: merge_conflict" in captured.err
+
+
+def test_integrate_run_quality_gate_passes_allows_integration(capsys, tmp_path: Path) -> None:
+    """When quality gate passes, integration proceeds normally."""
+    config_path = write_config(
+        tmp_path,
+        """
+harnesses:
+  local:
+    command: codex
+repos:
+  demo:
+    repo_path: /repos/demo
+    main_branch: main
+    worktree_root: /worktrees/demo
+    default_harness: local
+    quality_gate:
+      enabled: true
+      command: /bin/true
+""".strip(),
+    )
+
+    with patch("rangkai.orchestrator.Orchestrator._run_quality_gate") as gate, \
+         patch("rangkai.cli.IntegrationService.integrate_issue") as integrate_issue:
+        gate.return_value = True
+        from rangkai.integration import IntegrationResult
+        integrate_issue.return_value = IntegrationResult(
+            issue_number=9,
+            status="succeeded",
+            implementation_branch="impl/1/9-test",
+            prd_branch="prd/1-parent",
+        )
+
+        exit_code = main(
+            ["integrate-run", "demo", "9", "--config", str(config_path)]
+        )
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert "Successfully integrated issue #9" in captured.out
+
+
+def test_integrate_run_quality_gate_failed_blocks_integration(capsys, tmp_path: Path) -> None:
+    """When quality gate fails, integration is blocked and returns non-zero."""
+    config_path = write_config(
+        tmp_path,
+        """
+harnesses:
+  local:
+    command: codex
+repos:
+  demo:
+    repo_path: /repos/demo
+    main_branch: main
+    worktree_root: /worktrees/demo
+    default_harness: local
+    quality_gate:
+      enabled: true
+      command: /bin/false
+""".strip(),
+    )
+
+    with patch("rangkai.orchestrator.Orchestrator._run_quality_gate") as gate, \
+         patch("rangkai.cli.IntegrationService.integrate_issue") as integrate_issue:
+        gate.return_value = False
+
+        exit_code = main(
+            ["integrate-run", "demo", "9", "--config", str(config_path)]
+        )
+
+    captured = capsys.readouterr()
+    assert exit_code == 1
+    # Integration service should NOT be called
+    integrate_issue.assert_not_called()
+    assert "Quality gate" in captured.err
+
+
+def test_integrate_run_quality_gate_error_blocks_integration(capsys, tmp_path: Path) -> None:
+    """When quality gate errors, integration is blocked and returns non-zero."""
+    config_path = write_config(
+        tmp_path,
+        """
+harnesses:
+  local:
+    command: codex
+repos:
+  demo:
+    repo_path: /repos/demo
+    main_branch: main
+    worktree_root: /worktrees/demo
+    default_harness: local
+    quality_gate:
+      enabled: true
+      command: /nonexistent/binary
+""".strip(),
+    )
+
+    with patch("rangkai.orchestrator.Orchestrator._run_quality_gate") as gate, \
+         patch("rangkai.cli.IntegrationService.integrate_issue") as integrate_issue:
+        gate.return_value = None
+
+        exit_code = main(
+            ["integrate-run", "demo", "9", "--config", str(config_path)]
+        )
+
+    captured = capsys.readouterr()
+    assert exit_code == 1
+    integrate_issue.assert_not_called()
+    assert "Quality gate" in captured.err
+
+
+def test_integrate_run_quality_gate_disabled_allows_integration(capsys, tmp_path: Path) -> None:
+    """When quality_gate is disabled (omitted), integration proceeds normally."""
+    config_path = write_config(
+        tmp_path,
+        """
+harnesses:
+  local:
+    command: codex
+repos:
+  demo:
+    repo_path: /repos/demo
+    main_branch: main
+    worktree_root: /worktrees/demo
+    default_harness: local
+""".strip(),
+    )
+
+    with patch("rangkai.orchestrator.Orchestrator._run_quality_gate") as gate, \
+         patch("rangkai.cli.IntegrationService.integrate_issue") as integrate_issue:
+        gate.return_value = True
+        from rangkai.integration import IntegrationResult
+        integrate_issue.return_value = IntegrationResult(
+            issue_number=9,
+            status="succeeded",
+            implementation_branch="impl/1/9-test",
+            prd_branch="prd/1-parent",
+        )
+
+        exit_code = main(
+            ["integrate-run", "demo", "9", "--config", str(config_path)]
+        )
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert "Successfully integrated issue #9" in captured.out
 
 
 def test_reconcile_command_success(capsys, tmp_path: Path) -> None:
@@ -578,7 +728,11 @@ repos:
 
     with patch("rangkai.cli.PrdPreparationService", RecordingPrdPreparationService), patch(
         "rangkai.cli.ImplementationClaimService", RecordingClaimService
-    ), patch("rangkai.cli.IntegrationService", RecordingIntegrationService):
+    ), patch("rangkai.cli.IntegrationService", RecordingIntegrationService), patch(
+        "rangkai.orchestrator.Orchestrator._run_quality_gate", return_value=True
+    ), patch(
+        "rangkai.cli.create_bounded_issue_gateway", return_value=GitHubIssueGateway()
+    ):
         assert main(["prepare-prd", "demo", "5", "--config", str(config_path)]) == 0
         assert (
             main(
