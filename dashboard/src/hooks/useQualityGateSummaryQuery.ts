@@ -2,9 +2,19 @@ import { useQuery } from '@tanstack/react-query'
 
 const API_BASE = import.meta.env.DEV ? `http://${window.location.hostname}:8000` : ''
 
+export interface QualityGateCheck {
+  id: string
+  name: string
+  type?: string | null
+  status: string
+  advisory?: boolean
+  message?: string | null
+}
+
 export interface QualityGateSummary {
   status: 'passed' | 'failed' | 'error' | 'not run' | 'invalid' | 'unavailable'
   message?: string
+  checks?: QualityGateCheck[]
 }
 
 export function useQualityGateSummaryQuery(repo: string, issueNumber: number | null) {

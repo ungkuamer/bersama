@@ -942,6 +942,39 @@ def create_dashboard_app(
         if isinstance(message, str) and message:
             response["message"] = message
 
+        checks = data.get("checks")
+        normalized_checks = []
+        if isinstance(checks, list):
+            for check in checks:
+                if not isinstance(check, dict):
+                    continue
+                c_id = check.get("id")
+                c_name = check.get("name")
+                resolved_id = str(c_id) if c_id is not None else (str(c_name) if c_name is not None else "unknown")
+                resolved_name = str(c_name) if c_name is not None else (str(c_id) if c_id is not None else "unknown")
+                
+                c_type = check.get("type")
+                resolved_type = str(c_type) if c_type is not None else None
+                
+                c_status = check.get("status")
+                resolved_status = str(c_status) if c_status is not None else "unknown"
+                
+                c_advisory = check.get("advisory")
+                resolved_advisory = bool(c_advisory) if c_advisory is not None else False
+                
+                c_msg = check.get("message")
+                resolved_msg = str(c_msg) if c_msg is not None else None
+                
+                normalized_checks.append({
+                    "id": resolved_id,
+                    "name": resolved_name,
+                    "type": resolved_type,
+                    "status": resolved_status,
+                    "advisory": resolved_advisory,
+                    "message": resolved_msg
+                })
+        
+        response["checks"] = normalized_checks
         return response
 
     dist_dir = Path("dashboard/dist")

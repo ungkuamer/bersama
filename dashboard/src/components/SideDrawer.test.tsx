@@ -1244,5 +1244,89 @@ describe('SideDrawer Quality Gate Status', () => {
     const skeletons = document.body.querySelectorAll('[data-slot="skeleton"]');
     expect(skeletons.length).toBeGreaterThan(0);
   });
+
+  it('renders individual checks with correct styles and statuses', () => {
+    vi.mocked(useQualityGateSummaryQuery).mockReturnValue({
+      data: {
+        status: 'failed',
+        checks: [
+          {
+            id: 'custom-check-1',
+            name: 'Custom Check One',
+            type: 'lint',
+            status: 'passed',
+            advisory: false,
+            message: 'All files check out'
+          },
+          {
+            id: 'custom-check-2',
+            name: 'Custom Check Two',
+            type: 'typecheck',
+            status: 'failed',
+            advisory: true,
+            message: 'Type error on line 45'
+          }
+        ]
+      },
+      isLoading: false,
+    } as any);
+
+    render(
+      <SideDrawer
+        issue={mockIssue}
+        open={true}
+        onOpenChange={() => {}}
+        repo="demo"
+        readOnly={true}
+      />
+    );
+
+    // Check names
+    expect(screen.getByText('Custom Check One')).toBeInTheDocument();
+    expect(screen.getByText('Custom Check Two')).toBeInTheDocument();
+
+    // Check types
+    expect(screen.getByText('lint')).toBeInTheDocument();
+    expect(screen.getByText('typecheck')).toBeInTheDocument();
+
+    // Advisory label/badge
+    expect(screen.getByText('advisory')).toBeInTheDocument();
+
+    // Check messages
+    expect(screen.getByText('All files check out')).toBeInTheDocument();
+    expect(screen.getByText('Type error on line 45')).toBeInTheDocument();
+  });
+
+  it('remains stable when checks array is empty or contains partial/empty check objects', () => {
+    vi.mocked(useQualityGateSummaryQuery).mockReturnValue({
+      data: {
+        status: 'failed',
+        checks: [
+          {
+            // completely empty check object
+          } as any,
+          {
+            id: 'partial-check',
+            status: 'passed'
+          }
+        ]
+      },
+      isLoading: false,
+    } as any);
+
+    render(
+      <SideDrawer
+        issue={mockIssue}
+        open={true}
+        onOpenChange={() => {}}
+        repo="demo"
+        readOnly={true}
+      />
+    );
+
+    // For the empty object it should fall back to 'unknown' or similar and render
+    expect(screen.getAllByText('unknown').length).toBe(2);
+    expect(screen.getByText('partial-check')).toBeInTheDocument();
+  });
 });
 

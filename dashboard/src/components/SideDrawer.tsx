@@ -421,6 +421,67 @@ export default function SideDrawer({
                             {qualityGateSummary.message}
                           </div>
                         )}
+                        {qualityGateSummary.checks && qualityGateSummary.checks.length > 0 && (
+                          <div className="flex flex-col gap-1.5 mt-2 border-t border-border/40 pt-2">
+                            {qualityGateSummary.checks.map((check, idx) => {
+                              const checkName = check.name || check.id || "unknown";
+                              const checkStatus = check.status || "unknown";
+                              const isAdvisory = !!check.advisory;
+                              const checkType = check.type;
+                              const checkMsg = check.message;
+
+                              let checkIcon = <Clock className="size-3 text-muted-foreground" />;
+                              let checkStatusClass = "text-muted-foreground";
+
+                              if (checkStatus === 'passed') {
+                                checkIcon = <CheckCircle2 className="size-3 text-emerald-500" />;
+                                checkStatusClass = "text-emerald-700 dark:text-emerald-400";
+                              } else if (checkStatus === 'failed' || checkStatus === 'error') {
+                                checkIcon = <AlertCircle className="size-3 text-red-500" />;
+                                checkStatusClass = "text-red-700 dark:text-red-400";
+                              } else if (checkStatus === 'warning') {
+                                checkIcon = <AlertTriangle className="size-3 text-amber-500" />;
+                                checkStatusClass = "text-amber-700 dark:text-amber-400";
+                              }
+
+                              return (
+                                <div key={check.id || idx} className="flex flex-col gap-1 text-[10px] bg-muted/20 border border-border/30 rounded p-2">
+                                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                                    <div className="flex items-center gap-1.5 min-w-0">
+                                      {checkIcon}
+                                      <span className="font-semibold text-foreground truncate" title={checkName}>
+                                        {checkName}
+                                      </span>
+                                      {checkType && (
+                                        <span className="text-[8px] px-1 bg-muted border border-border/50 text-muted-foreground rounded font-mono">
+                                          {checkType}
+                                        </span>
+                                      )}
+                                    </div>
+                                    <div className="flex items-center gap-1.5">
+                                      {isAdvisory && (
+                                        <Badge
+                                          variant="outline"
+                                          className="text-[8px] px-1 h-4 font-semibold uppercase tracking-wider text-muted-foreground border-muted-foreground/30 bg-muted/40 rounded"
+                                        >
+                                          advisory
+                                        </Badge>
+                                      )}
+                                      <span className={`font-mono text-[9px] uppercase font-bold ${checkStatusClass}`}>
+                                        {checkStatus}
+                                      </span>
+                                    </div>
+                                  </div>
+                                  {checkMsg && (
+                                    <div className="text-[8.5px] font-mono text-muted-foreground/90 pl-4 border-l border-border/40 whitespace-pre-wrap mt-0.5 break-all">
+                                      {checkMsg}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
                       </div>
                     ) : (
                       <div className="text-[10px] text-muted-foreground italic py-1">

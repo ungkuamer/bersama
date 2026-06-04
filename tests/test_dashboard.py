@@ -1778,19 +1778,19 @@ def test_quality_gate_api_states(tmp_path: Path) -> None:
     (diag_dir / "stderr.txt").write_text("dummy stderr")
     response = client.get("/api/repos/demo/implementation-issues/18/quality-gate")
     assert response.status_code == 200
-    assert response.json() == {"status": "passed", "message": "All checks passed"}
+    assert response.json() == {"status": "passed", "message": "All checks passed", "checks": []}
 
     # 2. Failed state
     (diag_dir / "result.json").write_text('{"status": "failed", "message": "Coverage is 40%"}')
     response = client.get("/api/repos/demo/implementation-issues/18/quality-gate")
     assert response.status_code == 200
-    assert response.json() == {"status": "failed", "message": "Coverage is 40%"}
+    assert response.json() == {"status": "failed", "message": "Coverage is 40%", "checks": []}
 
     # 3. Error state
     (diag_dir / "result.json").write_text('{"status": "error", "message": "Command not found"}')
     response = client.get("/api/repos/demo/implementation-issues/18/quality-gate")
     assert response.status_code == 200
-    assert response.json() == {"status": "error", "message": "Command not found"}
+    assert response.json() == {"status": "error", "message": "Command not found", "checks": []}
 
     # 4. Invalid JSON state (malformed JSON)
     (diag_dir / "result.json").write_text('{invalid json')
@@ -1809,3 +1809,131 @@ def test_quality_gate_api_states(tmp_path: Path) -> None:
     response = client.get("/api/repos/demo/implementation-issues/18/quality-gate")
     assert response.status_code == 200
     assert response.json() == {"status": "invalid"}
+
+
+def test_quality_gate_api_checks(tmp_path: Path) -> None:
+    import dataclasses
+    config = build_config()
+    config.repos["demo"] = dataclasses.replace(
+        config.repos["demo"],
+        quality_gate=QualityGateConfig(enabled=True, command="true"),
+        worktree_root=tmp_path
+    )
+    
+    app = create_dashboard_app(config=config)
+    client = TestClient(app)
+
+    issue_wt = tmp_path / "issue-18"
+    diag_dir = issue_wt / "quality-gate"
+    diag_dir.mkdir(parents=True)
+
+    # 1. Check normalization with fully populated checks
+    result_data = {
+        "status": "failed",
+        "message": "Some checks failed",
+        "checks": [
+            {
+                "id": "python-lint",
+                "name": "Python Lint",
+                "type": "python_lint",
+                "status": "failed",
+                "advisory": True,
+                "message": "Ruff failed"
+            },
+            {
+                "id": "python-tests",
+                "name": "Python Tests",
+                "type": "python_tests",
+                "status": "passed",
+                "advisory": False,
+                "message": None
+            }
+        ]
+    }
+    (diag_dir / "result.json").write_text(json.dumps(result_data))
+    response = client.get("/api/repos/demo/implementation-issues/18/quality-gate")
+    assert response.status_code == 200
+    assert response.json() == {
+        "status": "failed",
+        "message": "Some checks failed",
+        "checks": [
+            {
+                "id": "python-lint",
+                "name": "Python Lint",
+                "type": "python_lint",
+                "status": "failed",
+                "advisory": True,
+                "message": "Ruff failed"
+            },
+            {
+                "id": "python-tests",
+                "name": "Python Tests",
+                "type": "python_tests",
+                "status": "passed",
+                "advisory": False,
+                "message": None
+            }
+        ]
+    }
+
+    # 2. Check normalization with missing checks array
+    (diag_dir / "result.json").write_text('{"status": "passed"}')
+    response = client.get("/api/repos/demo/implementation-issues/18/quality-gate")
+    assert response.status_code == 200
+    assert response.json() == {"status": "passed", "checks": []}
+
+    # 3. Check normalization with partial checks (fallback behavior)
+    result_data_partial = {
+        "status": "failed",
+        "checks": [
+            {
+                # Only id
+                "id": "only-id",
+                "status": "failed"
+            },
+            {
+                # Only name
+                "name": "only-name",
+                "status": "passed",
+                "advisory": True
+            },
+            {
+                # Missing name and id, status and type missing
+                "type": "some-type"
+            }
+        ]
+    }
+    (diag_dir / "result.json").write_text(json.dumps(result_data_partial))
+    response = client.get("/api/repos/demo/implementation-issues/18/quality-gate")
+    assert response.status_code == 200
+    res_json = response.json()
+    assert res_json["status"] == "failed"
+    assert len(res_json["checks"]) == 3
+    
+    # Assert specific fallback values
+    c1, c2, c3 = res_json["checks"]
+    assert c1 == {
+        "id": "only-id",
+        "name": "only-id",
+        "type": None,
+        "status": "failed",
+        "advisory": False,
+        "message": None
+    }
+    assert c2 == {
+        "id": "only-name",
+        "name": "only-name",
+        "type": None,
+        "status": "passed",
+        "advisory": True,
+        "message": None
+    }
+    assert c3 == {
+        "id": "unknown",
+        "name": "unknown",
+        "type": "some-type",
+        "status": "unknown",
+        "advisory": False,
+        "message": None
+    }
+
