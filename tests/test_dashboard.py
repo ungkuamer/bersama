@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 
 from rangkai.claiming import ClaimResult
 from rangkai.command_executor import CommandExecutor
-from rangkai.config import AppConfig, HarnessConfig, RepoConfig
+from rangkai.config import AppConfig, HarnessConfig, RepoConfig, QualityGateConfig
 from rangkai.dashboard import create_dashboard_app
 from rangkai.event_bus import Event
 from rangkai.execution import ExecutionResult
@@ -1722,3 +1722,90 @@ async def test_sse_events_endpoint_disconnect_removes_subscriber() -> None:
         await asyncio.sleep(0)
     else:
         raise AssertionError("SSE subscriber did not detach.")
+
+
+def test_quality_gate_api_disabled() -> None:
+    # Quality gate is disabled by default in build_config() repo Config
+    app = create_dashboard_app(config=build_config())
+    response = TestClient(app).get("/api/repos/demo/implementation-issues/18/quality-gate")
+    assert response.status_code == 200
+    assert response.json() == {"status": "unavailable"}
+
+
+def test_quality_gate_api_not_run(tmp_path: Path) -> None:
+    import dataclasses
+    config = build_config()
+    # Enable quality gate and set temp worktree root using replace
+    config.repos["demo"] = dataclasses.replace(
+        config.repos["demo"],
+        quality_gate=QualityGateConfig(enabled=True, command="true"),
+        worktree_root=tmp_path
+    )
+    
+    app = create_dashboard_app(config=config)
+    
+    # 1. Worktree doesn't exist at all
+    response = TestClient(app).get("/api/repos/demo/implementation-issues/18/quality-gate")
+    assert response.status_code == 200
+    assert response.json() == {"status": "not run"}
+
+    # 2. Worktree exists, but quality-gate folder doesn't exist
+    (tmp_path / "issue-18").mkdir(parents=True)
+    response = TestClient(app).get("/api/repos/demo/implementation-issues/18/quality-gate")
+    assert response.status_code == 200
+    assert response.json() == {"status": "not run"}
+
+
+def test_quality_gate_api_states(tmp_path: Path) -> None:
+    import dataclasses
+    config = build_config()
+    config.repos["demo"] = dataclasses.replace(
+        config.repos["demo"],
+        quality_gate=QualityGateConfig(enabled=True, command="true"),
+        worktree_root=tmp_path
+    )
+    
+    app = create_dashboard_app(config=config)
+    client = TestClient(app)
+
+    issue_wt = tmp_path / "issue-18"
+    diag_dir = issue_wt / "quality-gate"
+    diag_dir.mkdir(parents=True)
+
+    # 1. Passed state
+    (diag_dir / "result.json").write_text('{"status": "passed", "message": "All checks passed"}')
+    (diag_dir / "stdout.txt").write_text("dummy stdout")
+    (diag_dir / "stderr.txt").write_text("dummy stderr")
+    response = client.get("/api/repos/demo/implementation-issues/18/quality-gate")
+    assert response.status_code == 200
+    assert response.json() == {"status": "passed", "message": "All checks passed"}
+
+    # 2. Failed state
+    (diag_dir / "result.json").write_text('{"status": "failed", "message": "Coverage is 40%"}')
+    response = client.get("/api/repos/demo/implementation-issues/18/quality-gate")
+    assert response.status_code == 200
+    assert response.json() == {"status": "failed", "message": "Coverage is 40%"}
+
+    # 3. Error state
+    (diag_dir / "result.json").write_text('{"status": "error", "message": "Command not found"}')
+    response = client.get("/api/repos/demo/implementation-issues/18/quality-gate")
+    assert response.status_code == 200
+    assert response.json() == {"status": "error", "message": "Command not found"}
+
+    # 4. Invalid JSON state (malformed JSON)
+    (diag_dir / "result.json").write_text('{invalid json')
+    response = client.get("/api/repos/demo/implementation-issues/18/quality-gate")
+    assert response.status_code == 200
+    assert response.json() == {"status": "invalid"}
+
+    # 5. Invalid schema state (missing status field)
+    (diag_dir / "result.json").write_text('{"message": "Coverage is 40%"}')
+    response = client.get("/api/repos/demo/implementation-issues/18/quality-gate")
+    assert response.status_code == 200
+    assert response.json() == {"status": "invalid"}
+
+    # 6. Invalid schema state (unexpected status field value)
+    (diag_dir / "result.json").write_text('{"status": "unknown"}')
+    response = client.get("/api/repos/demo/implementation-issues/18/quality-gate")
+    assert response.status_code == 200
+    assert response.json() == {"status": "invalid"}

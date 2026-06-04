@@ -439,6 +439,124 @@ def test_failed_gate_adds_diagnostic_comment(tmp_path: Path) -> None:
     assert "lint" in comment_body
 
 
+def test_passed_gate_persists_diagnostics_to_worktree(tmp_path: Path) -> None:
+    """When the gate passes, stdout, stderr, and result.json are persisted to the quality-gate/ directory in the worktree."""
+    worktree_root = tmp_path / "worktrees"
+    worktree_root.mkdir()
+    worktree_path = worktree_root / "issue-150"
+    worktree_path.mkdir()
+
+    issues = _make_gate_issues()
+    events = FakeEventEmitter()
+    orchestrator = Orchestrator(issues_gateway=issues, event_emitter=events)
+
+    repo = _make_gate_repo(
+        worktree_root,
+        quality_gate=_make_gate_config(
+            command="/bin/bash",
+            args_template=("-c", 'echo \'{{"status": "passed", "message": "everything is fine"}}\''),
+        ),
+    )
+    config = _make_gate_app_config(repo)
+
+    result = orchestrator._run_quality_gate(
+        repo_name="test-repo",
+        repo_path=str(repo.repo_path),
+        worktree_root=str(worktree_root),
+        issue_number=150,
+        config=config,
+    )
+
+    assert result is True
+    diag_dir = worktree_path / "quality-gate"
+    assert diag_dir.is_dir()
+    assert (diag_dir / "stdout.txt").exists()
+    assert (diag_dir / "stderr.txt").exists()
+    assert (diag_dir / "result.json").exists()
+
+    stdout_content = (diag_dir / "stdout.txt").read_text()
+    assert "everything is fine" in stdout_content
+
+    import json
+    result_json = json.loads((diag_dir / "result.json").read_text())
+    assert result_json["status"] == "passed"
+
+
+def test_fallback_diagnostics_on_timeout_and_error(tmp_path: Path) -> None:
+    """When the gate times out or has execution errors, result.json should still be written with fallback values."""
+    worktree_root = tmp_path / "worktrees"
+    worktree_root.mkdir()
+    
+    # 1. Test timeout path
+    worktree_path_timeout = worktree_root / "issue-160"
+    worktree_path_timeout.mkdir()
+
+    issues = _make_gate_issues(impl_number=160)
+    events = FakeEventEmitter()
+    orchestrator = Orchestrator(issues_gateway=issues, event_emitter=events)
+
+    repo_timeout = _make_gate_repo(
+        worktree_root,
+        quality_gate=_make_gate_config(
+            command="sleep",
+            args_template=("2",),
+            timeout_seconds=1,
+        ),
+    )
+    config_timeout = _make_gate_app_config(repo_timeout)
+
+    result = orchestrator._run_quality_gate(
+        repo_name="test-repo",
+        repo_path=str(repo_timeout.repo_path),
+        worktree_root=str(worktree_root),
+        issue_number=160,
+        config=config_timeout,
+    )
+    assert result is False
+
+    diag_dir_timeout = worktree_path_timeout / "quality-gate"
+    assert diag_dir_timeout.is_dir()
+    assert (diag_dir_timeout / "result.json").exists()
+    
+    import json
+    res_timeout = json.loads((diag_dir_timeout / "result.json").read_text())
+    assert res_timeout["status"] == "failed"
+    assert "timed out" in res_timeout["message"].lower()
+
+    # 2. Test execution error path
+    worktree_path_error = worktree_root / "issue-161"
+    worktree_path_error.mkdir()
+
+    issues_error = _make_gate_issues(impl_number=161)
+    orchestrator_error = Orchestrator(issues_gateway=issues_error, event_emitter=events)
+
+    repo_error = _make_gate_repo(
+        worktree_root,
+        quality_gate=_make_gate_config(
+            command="nonexistent_command_12345",
+            args_template=(),
+        ),
+    )
+    config_error = _make_gate_app_config(repo_error)
+
+    result_error = orchestrator_error._run_quality_gate(
+        repo_name="test-repo",
+        repo_path=str(repo_error.repo_path),
+        worktree_root=str(worktree_root),
+        issue_number=161,
+        config=config_error,
+    )
+    assert result_error is None or result_error is False
+
+    diag_dir_error = worktree_path_error / "quality-gate"
+    assert diag_dir_error.is_dir()
+    assert (diag_dir_error / "result.json").exists()
+    
+    res_error = json.loads((diag_dir_error / "result.json").read_text())
+    assert res_error["status"] == "error"
+    assert "execution error" in res_error["message"].lower()
+
+
 def test_failed_gate_persists_diagnostics_to_worktree(tmp_path: Path) -> None:
     """When the gate fails, stdout, stderr, and parsed result are persisted."""
     worktree_root = tmp_path / "worktrees"

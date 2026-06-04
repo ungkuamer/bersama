@@ -32,6 +32,7 @@ import {
   WifiOff,
 } from 'lucide-react'
 import { formatCompactTokens, formatCompactCost, formatCompactMs, formatCompactTokensPerSec } from '@/lib/metrics'
+import { useQualityGateSummaryQuery } from '@/hooks/useQualityGateSummaryQuery'
 
 export interface TelemetryDiagnosticItem {
   code: string;
@@ -122,6 +123,7 @@ export interface SideDrawerProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   readOnly?: boolean;
+  repo?: string;
   // Action handlers
   onClaim?: (issueNumber: number) => void;
   onStart?: (issueNumber: number) => void;
@@ -240,6 +242,7 @@ export default function SideDrawer({
   open,
   onOpenChange,
   readOnly = false,
+  repo = '',
   onClaim,
   onStart,
   onIntegrate,
@@ -260,9 +263,14 @@ export default function SideDrawer({
   const [selectedTab, setSelectedTab] = useState<TabId>(() => readOnly ? 'overview' : 'operations');
   const [claimFormOpen, setClaimFormOpen] = useState(false);
 
-  if (!issue) return null;
+  const isImplementation = issue?.kind === 'implementation';
 
-  const isImplementation = issue.kind === 'implementation';
+  const { data: qualityGateSummary, isLoading: qualityGateLoading } = useQualityGateSummaryQuery(
+    repo,
+    isImplementation && issue ? issue.number : null
+  );
+
+  if (!issue) return null;
   const canClaimIssue = isImplementation && issue.state !== 'closed' && issue.status === 'ready';
   const canStartIssue = isImplementation && issue.state !== 'closed' && issue.status === 'claimed';
   const canIntegrateIssue = isImplementation && issue.state !== 'closed' && issue.status === 'succeeded';
@@ -355,6 +363,74 @@ export default function SideDrawer({
                   </TableBody>
                 </Table>
               </section>
+
+              {/* Quality Gate Status */}
+              {isImplementation && (
+                <>
+                  <section>
+                    <h4 className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-2">Quality Gate</h4>
+                    {qualityGateLoading ? (
+                      <div className="flex items-center gap-2 py-2">
+                        <Skeleton className="h-6 w-24 rounded-full" />
+                        <Skeleton className="h-4 w-32" />
+                      </div>
+                    ) : qualityGateSummary ? (
+                      <div className="flex flex-col gap-2">
+                        <div className="flex items-center gap-2">
+                          {(() => {
+                            const status = qualityGateSummary.status;
+                            let badgeStyle = "border-muted-foreground/30 bg-muted text-muted-foreground";
+                            let icon = <Clock className="size-3.5" />;
+                            let labelText = "Not Run";
+
+                            if (status === 'passed') {
+                              badgeStyle = "border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-500/35 dark:bg-emerald-500/15 dark:text-emerald-300";
+                              icon = <CheckCircle2 className="size-3.5" />;
+                              labelText = "Passed";
+                            } else if (status === 'failed') {
+                              badgeStyle = "border-red-200 bg-red-50 text-red-800 dark:border-red-500/35 dark:bg-red-500/15 dark:text-red-300";
+                              icon = <AlertCircle className="size-3.5" />;
+                              labelText = "Failed";
+                            } else if (status === 'error') {
+                              badgeStyle = "border-red-200 bg-red-50 text-red-800 dark:border-red-500/35 dark:bg-red-500/15 dark:text-red-300";
+                              icon = <AlertCircle className="size-3.5" />;
+                              labelText = "Error";
+                            } else if (status === 'invalid') {
+                              badgeStyle = "border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-500/35 dark:bg-amber-500/15 dark:text-amber-300";
+                              icon = <AlertTriangle className="size-3.5" />;
+                              labelText = "Invalid";
+                            } else if (status === 'unavailable') {
+                              badgeStyle = "border-border bg-muted text-muted-foreground/75";
+                              icon = <Info className="size-3.5" />;
+                              labelText = "Disabled";
+                            }
+
+                            return (
+                              <Badge
+                                variant="outline"
+                                className={`text-[9px] font-bold uppercase tracking-wider h-5 flex items-center gap-1 rounded-full ${badgeStyle}`}
+                              >
+                                {icon}
+                                <span>{labelText}</span>
+                              </Badge>
+                            );
+                          })()}
+                        </div>
+                        {qualityGateSummary.message && (
+                          <div className="bg-muted/50 border border-border/50 rounded p-2 text-[9px] font-mono text-muted-foreground mt-1 max-h-24 overflow-y-auto">
+                            {qualityGateSummary.message}
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="text-[10px] text-muted-foreground italic py-1">
+                        Quality Gate details unavailable.
+                      </div>
+                    )}
+                  </section>
+                  <Separator className="bg-border" />
+                </>
+              )}
 
               <Separator className="bg-border" />
 

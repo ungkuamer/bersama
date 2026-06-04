@@ -1,7 +1,19 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import SideDrawer, { type Issue, type RunMetrics, type ImplementationIssueMetrics } from './SideDrawer';
+import { useQualityGateSummaryQuery } from '@/hooks/useQualityGateSummaryQuery';
+
+vi.mock('@/hooks/useQualityGateSummaryQuery', () => ({
+  useQualityGateSummaryQuery: vi.fn(),
+}));
+
+beforeEach(() => {
+  vi.mocked(useQualityGateSummaryQuery).mockReturnValue({
+    data: { status: 'not run' },
+    isLoading: false,
+  } as any);
+});
 
 // Mock UI elements or setup when needed
 const mockIssue: Issue = {
@@ -1148,6 +1160,89 @@ describe('SideDrawer Metrics Empty States', () => {
 
     // Action Controls must still be present
     expect(screen.getByText('Action Controls')).toBeInTheDocument();
+  });
+});
+
+
+describe('SideDrawer Quality Gate Status', () => {
+  it('renders "Disabled" badge when status is unavailable', () => {
+    vi.mocked(useQualityGateSummaryQuery).mockReturnValue({
+      data: { status: 'unavailable' },
+      isLoading: false,
+    } as any);
+
+    render(
+      <SideDrawer
+        issue={mockIssue}
+        open={true}
+        onOpenChange={() => {}}
+        repo="demo"
+        readOnly={true}
+      />
+    );
+
+    expect(screen.getByText('Quality Gate')).toBeInTheDocument();
+    expect(screen.getByText('Disabled')).toBeInTheDocument();
+  });
+
+  it('renders "Passed" badge when status is passed', () => {
+    vi.mocked(useQualityGateSummaryQuery).mockReturnValue({
+      data: { status: 'passed' },
+      isLoading: false,
+    } as any);
+
+    render(
+      <SideDrawer
+        issue={mockIssue}
+        open={true}
+        onOpenChange={() => {}}
+        repo="demo"
+        readOnly={true}
+      />
+    );
+
+    expect(screen.getByText('Passed')).toBeInTheDocument();
+  });
+
+  it('renders "Failed" badge and optional message when status is failed', () => {
+    vi.mocked(useQualityGateSummaryQuery).mockReturnValue({
+      data: { status: 'failed', message: 'test failed message' },
+      isLoading: false,
+    } as any);
+
+    render(
+      <SideDrawer
+        issue={mockIssue}
+        open={true}
+        onOpenChange={() => {}}
+        repo="demo"
+        readOnly={true}
+      />
+    );
+
+    expect(screen.getByText('Failed')).toBeInTheDocument();
+    expect(screen.getByText('test failed message')).toBeInTheDocument();
+  });
+
+  it('renders loading state (skeletons)', () => {
+    vi.mocked(useQualityGateSummaryQuery).mockReturnValue({
+      data: null,
+      isLoading: true,
+    } as any);
+
+    render(
+      <SideDrawer
+        issue={mockIssue}
+        open={true}
+        onOpenChange={() => {}}
+        repo="demo"
+        readOnly={true}
+      />
+    );
+
+    // Should render Skeleton elements in the Quality Gate section
+    const skeletons = document.body.querySelectorAll('[data-slot="skeleton"]');
+    expect(skeletons.length).toBeGreaterThan(0);
   });
 });
 

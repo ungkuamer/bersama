@@ -902,6 +902,48 @@ def create_dashboard_app(
                 },
             ) from exc
 
+    @app.get("/api/repos/{repo}/implementation-issues/{issue_number}/quality-gate")
+    def get_quality_gate_summary(repo: str, issue_number: int) -> dict[str, object]:
+        try:
+            repo_cfg = config.repo(repo)
+        except ConfigError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+        # If quality gate is not enabled, return status "unavailable"
+        if not repo_cfg.quality_gate or not repo_cfg.quality_gate.enabled:
+            return {"status": "unavailable"}
+
+        worktree_path = Path(repo_cfg.worktree_root) / f"issue-{issue_number}"
+        diag_dir = worktree_path / "quality-gate"
+        result_json_path = diag_dir / "result.json"
+
+        # If worktree doesn't exist or quality-gate folder doesn't exist, return "not run"
+        if not worktree_path.exists() or not diag_dir.exists() or not diag_dir.is_dir():
+            return {"status": "not run"}
+
+        # If quality-gate folder exists but result.json doesn't, return "invalid"
+        if not result_json_path.exists():
+            return {"status": "invalid"}
+
+        try:
+            data = json.loads(result_json_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return {"status": "invalid"}
+
+        if not isinstance(data, dict):
+            return {"status": "invalid"}
+
+        status = data.get("status")
+        if status not in {"passed", "failed", "error", "not run", "invalid", "unavailable"}:
+            return {"status": "invalid"}
+
+        response = {"status": status}
+        message = data.get("message")
+        if isinstance(message, str) and message:
+            response["message"] = message
+
+        return response
+
     dist_dir = Path("dashboard/dist")
     if dist_dir.exists() and dist_dir.is_dir():
         from fastapi.staticfiles import StaticFiles

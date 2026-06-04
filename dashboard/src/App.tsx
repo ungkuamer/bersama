@@ -1525,6 +1525,7 @@ export default function App() {
         open={drawerOpen}
         onOpenChange={setDrawerOpen}
         readOnly={drawerReadOnly}
+        repo={effectiveSelectedRepo}
         onClaim={openClaimForm}
         onStart={startImplementationIssue}
         onIntegrate={integrateImplementationIssue}

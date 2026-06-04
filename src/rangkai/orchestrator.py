@@ -548,6 +548,15 @@ class Orchestrator:
                         issue_number=issue_number,
                         status="passed",
                     ))
+                    try:
+                        self._persist_gate_diagnostics(
+                            worktree_path=worktree_path,
+                            stdout=stdout,
+                            stderr=stderr,
+                            parsed_result=parsed_result,
+                        )
+                    except Exception:
+                        pass
                     return True
                 else:
                     failure_reason = f"Quality gate status: {gate_status}"
@@ -647,6 +656,8 @@ class Orchestrator:
                 stdout=stdout,
                 stderr=stderr,
                 parsed_result=parsed_result,
+                fallback_status=gate_status,
+                fallback_message=failure_reason,
             )
         except Exception:
             pass  # Best-effort persistence
@@ -690,6 +701,8 @@ class Orchestrator:
         stdout: str,
         stderr: str,
         parsed_result: dict | None,
+        fallback_status: str | None = None,
+        fallback_message: str | None = None,
     ) -> None:
         """Write quality gate diagnostics to the worktree for later inspection."""
         diag_dir = Path(worktree_path) / "quality-gate"
@@ -703,6 +716,13 @@ class Orchestrator:
         if parsed_result is not None:
             (diag_dir / "result.json").write_text(
                 json.dumps(parsed_result, indent=2), encoding="utf-8"
+            )
+        elif fallback_status is not None:
+            fallback = {"status": fallback_status}
+            if fallback_message:
+                fallback["message"] = fallback_message
+            (diag_dir / "result.json").write_text(
+                json.dumps(fallback, indent=2), encoding="utf-8"
             )
 
     def _run_agent_run(
