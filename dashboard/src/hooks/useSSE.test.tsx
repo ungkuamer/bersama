@@ -274,4 +274,59 @@ describe('useSSE', () => {
     // This verifies the hook correctly transitions to fallback state without SSE events
     unmount()
   })
+
+  it('invalidates quality-gate-summary queries on quality_gate_updated event with issue_number', async () => {
+    const queryClient = new QueryClient({
+      defaultOptions: {
+        queries: {
+          retry: false,
+        },
+      },
+    })
+    const invalidateQueries = vi.spyOn(queryClient, 'invalidateQueries')
+
+    mockFetchEventSource.mockImplementationOnce(async (_input: string, init?: { onopen?: () => void; onmessage?: (message: { event: string; data: string }) => void }) => {
+      init?.onopen?.()
+      init?.onmessage?.({
+        event: 'quality_gate_updated',
+        data: JSON.stringify({ repo: 'demo', issue_number: 125 }),
+      })
+    })
+
+    renderHook(() => useSSE('demo'), {
+      wrapper: createWrapper(queryClient),
+    })
+
+    await waitFor(() => {
+      expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ['quality-gate-summary', 'demo', 125] })
+    })
+  })
+
+  it('invalidates quality-gate-summary queries on runs_updated event', async () => {
+    const queryClient = new QueryClient({
+      defaultOptions: {
+        queries: {
+          retry: false,
+        },
+      },
+    })
+    const invalidateQueries = vi.spyOn(queryClient, 'invalidateQueries')
+
+    mockFetchEventSource.mockImplementationOnce(async (_input: string, init?: { onopen?: () => void; onmessage?: (message: { event: string; data: string }) => void }) => {
+      init?.onopen?.()
+      init?.onmessage?.({
+        event: 'runs_updated',
+        data: JSON.stringify({ repo: 'demo', issue_number: 125 }),
+      })
+    })
+
+    renderHook(() => useSSE('demo'), {
+      wrapper: createWrapper(queryClient),
+    })
+
+    await waitFor(() => {
+      expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ['quality-gate-summary', 'demo'] })
+    })
+  })
 })
+

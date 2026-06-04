@@ -17,7 +17,15 @@ export interface QualityGateSummary {
   checks?: QualityGateCheck[]
 }
 
-export function useQualityGateSummaryQuery(repo: string, issueNumber: number | null) {
+export function useQualityGateSummaryQuery(
+  repo: string,
+  issueNumber: number | null,
+  options?: {
+    enablePollingFallback?: boolean
+    drawerOpen?: boolean
+  }
+) {
+  const isEnabled = !!repo && issueNumber !== null && (options?.drawerOpen ?? true)
   return useQuery<QualityGateSummary>({
     queryKey: ['quality-gate-summary', repo, issueNumber],
     queryFn: async () => {
@@ -27,6 +35,9 @@ export function useQualityGateSummaryQuery(repo: string, issueNumber: number | n
       if (!res.ok) throw new Error(`HTTP error ${res.status}`)
       return res.json()
     },
-    enabled: !!repo && issueNumber !== null,
+    enabled: isEnabled,
+    refetchInterval: isEnabled && options?.enablePollingFallback ? 5_000 : false,
+    refetchIntervalInBackground: isEnabled && (options?.enablePollingFallback ?? false),
   })
 }
+

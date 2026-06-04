@@ -146,6 +146,7 @@ export interface SideDrawerProps {
   implementationIssueMetrics?: ImplementationIssueMetrics | null;
   implementationIssueMetricsLoading?: boolean;
   implementationIssueMetricsError?: string | null;
+  enablePollingFallback?: boolean;
 }
 
 type TabId = 'overview' | 'timeline' | 'operations';
@@ -259,6 +260,7 @@ export default function SideDrawer({
   implementationIssueMetrics,
   implementationIssueMetricsLoading = false,
   implementationIssueMetricsError = null,
+  enablePollingFallback = false,
 }: SideDrawerProps) {
   const [selectedTab, setSelectedTab] = useState<TabId>(() => readOnly ? 'overview' : 'operations');
   const [claimFormOpen, setClaimFormOpen] = useState(false);
@@ -272,7 +274,11 @@ export default function SideDrawer({
     isError: isQualityGateError
   } = useQualityGateSummaryQuery(
     repo,
-    isImplementation && issue ? issue.number : null
+    isImplementation && issue ? issue.number : null,
+    {
+      enablePollingFallback,
+      drawerOpen: open,
+    }
   );
 
   if (!issue) return null;

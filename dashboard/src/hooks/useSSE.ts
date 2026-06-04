@@ -65,6 +65,7 @@ export function useSSE(repo: string) {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['issues', repo] }),
         queryClient.invalidateQueries({ queryKey: ['runs', repo] }),
+        queryClient.invalidateQueries({ queryKey: ['quality-gate-summary', repo] }),
       ])
     }
 
@@ -122,6 +123,19 @@ export function useSSE(repo: string) {
               await invalidateAllRepoData()
             }
 
+            if (message.event === 'quality_gate_updated') {
+              const issueNumber = typeof parsedData.issue_number === 'number' ? parsedData.issue_number : null
+              if (issueNumber !== null) {
+                await queryClient.invalidateQueries({
+                  queryKey: ['quality-gate-summary', repo, issueNumber],
+                })
+              } else {
+                await queryClient.invalidateQueries({
+                  queryKey: ['quality-gate-summary', repo],
+                })
+              }
+            }
+
             if (message.event === 'metrics_updated') {
               const issueNumber = typeof parsedData.issue_number === 'number' ? parsedData.issue_number : null
               const prdNumber = typeof parsedData.prd_number === 'number' ? parsedData.prd_number : null
@@ -138,6 +152,7 @@ export function useSSE(repo: string) {
               }
             }
           },
+
           onerror(error) {
             throw error
           },

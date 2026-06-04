@@ -7,7 +7,15 @@ from typing import Iterable
 
 from watchfiles import awatch
 
-from rangkai.event_bus import Event, EventBus, ISSUES_UPDATED, LOG_APPEND, METRICS_UPDATED, RUNS_UPDATED
+from rangkai.event_bus import (
+    Event,
+    EventBus,
+    ISSUES_UPDATED,
+    LOG_APPEND,
+    METRICS_UPDATED,
+    QUALITY_GATE_UPDATED,
+    RUNS_UPDATED,
+)
 
 
 class FileWatcherService:
@@ -75,6 +83,9 @@ class FileWatcherService:
                             },
                         )
                     )
+            elif path.parent.name == "quality-gate" and path.name == "result.json":
+                payload = {"repo": repo_name, "issue_number": issue_number}
+                await self._event_bus.publish(Event(type=QUALITY_GATE_UPDATED, data=payload))
 
     def _read_appended_lines(self, path: Path) -> list[str]:
         if not path.exists():

@@ -8,6 +8,8 @@ ISSUES_UPDATED = "issues_updated"
 RUNS_UPDATED = "runs_updated"
 METRICS_UPDATED = "metrics_updated"
 LOG_APPEND = "log_append"
+QUALITY_GATE_UPDATED = "quality_gate_updated"
+
 
 
 @dataclass(frozen=True)

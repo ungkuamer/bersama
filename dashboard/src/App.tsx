@@ -1526,6 +1526,7 @@ export default function App() {
         onOpenChange={setDrawerOpen}
         readOnly={drawerReadOnly}
         repo={effectiveSelectedRepo}
+        enablePollingFallback={sseState.isPollingFallback}
         onClaim={openClaimForm}
         onStart={startImplementationIssue}
         onIntegrate={integrateImplementationIssue}

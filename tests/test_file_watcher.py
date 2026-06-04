@@ -130,3 +130,21 @@ async def test_start_and_stop_manage_background_task() -> None:
     await asyncio.sleep(0)
 
     assert watcher._task.cancelled()
+
+
+@pytest.mark.asyncio
+async def test_quality_gate_result_change_emits_quality_gate_updated_event(tmp_path: Path) -> None:
+    from rangkai.event_bus import QUALITY_GATE_UPDATED
+    bus = EventBus()
+    watcher = FileWatcherService(event_bus=bus, worktree_roots=[tmp_path])
+    result_path = tmp_path / "issue-18" / "quality-gate" / "result.json"
+    result_path.parent.mkdir(parents=True)
+    result_path.write_text('{"status":"passed"}', encoding="utf-8")
+
+    async with bus.subscribe() as subscriber:
+        await watcher.handle_changes({(None, str(result_path))})
+        event = await asyncio.wait_for(subscriber.__anext__(), timeout=1.0)
+
+    assert event.type == QUALITY_GATE_UPDATED
+    assert event.data == {"repo": tmp_path.name, "issue_number": 18}
+

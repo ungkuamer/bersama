@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { renderHook, waitFor } from '@testing-library/react'
+import { act, renderHook, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { useQualityGateSummaryQuery } from './useQualityGateSummaryQuery'
 import type { ReactNode } from 'react'
@@ -71,4 +71,55 @@ describe('useQualityGateSummaryQuery', () => {
     expect(result.current.error).toBeInstanceOf(Error)
     expect(result.current.error?.message).toContain('HTTP error 500')
   })
+
+  it('refetches every 5 seconds only when fallback polling is enabled and drawer is open', async () => {
+    vi.useFakeTimers()
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ status: 'passed' }),
+    })
+
+    const { unmount } = renderHook(
+      () => useQualityGateSummaryQuery('demo', 125, { enablePollingFallback: true, drawerOpen: true }),
+      { wrapper: createWrapper() }
+    )
+
+    await act(async () => {
+      await Promise.resolve()
+    })
+    expect(mockFetch).toHaveBeenCalledTimes(1)
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5_000)
+    })
+
+    expect(mockFetch).toHaveBeenCalledTimes(2)
+    unmount()
+  })
+
+  it('does not fetch or poll when drawer is closed', async () => {
+    vi.useFakeTimers()
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ status: 'passed' }),
+    })
+
+    const { unmount } = renderHook(
+      () => useQualityGateSummaryQuery('demo', 125, { enablePollingFallback: true, drawerOpen: false }),
+      { wrapper: createWrapper() }
+    )
+
+    await act(async () => {
+      await Promise.resolve()
+    })
+    expect(mockFetch).not.toHaveBeenCalled()
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5_000)
+    })
+
+    expect(mockFetch).not.toHaveBeenCalled()
+    unmount()
+  })
 })
+
