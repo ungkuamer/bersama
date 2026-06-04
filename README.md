@@ -128,6 +128,149 @@ repos:
     default_harness: codex-headless
 ```
 
+### Quality Gate (Saringan Layer 1)
+
+Each repository can configure an optional Quality Gate that runs after a successful Agent Run and before an Integration Pull Request is created. The gate invokes [Saringan](https://github.com/ungkuamer/saringan) — or any compatible validation CLI — as an external command and parses a machine-readable Validation Result JSON from stdout.
+
+**Default behavior:** quality gates are disabled. Repos without a `quality_gate` configuration (or with `enabled: false`) skip the gate and proceed directly to Integration Pull Request creation.
+
+#### Configuration Fields
+
+| Field | Type | Required | Default | Description |
+| :--- | :--- | :--- | :--- | :--- |
+| `enabled` | boolean | no | `false` | When `false`, the gate is skipped. When `true`, `command` is required. |
+| `command` | string | when enabled | — | Path to the Saringan CLI or wrapper (e.g. `saringan`, `./bin/validate.sh`, `/path/to/sibling/saringan/cli.py`). |
+| `args_template` | list of strings | no | `[]` | Positional arguments appended after `command`. Supports template variables (see below). |
+| `timeout_seconds` | integer | no | `300` | Maximum wall-clock seconds for the command. Timed-out gates are treated as failures. |
+
+#### Template Variables
+
+The following variables are available in `args_template` strings and are rendered at invocation time:
+
+| Variable | Value |
+| :--- | :--- |
+| `{repo_name}` | Repository name from config |
+| `{repo_path}` | Absolute path to the repository root |
+| `{worktree_root}` | Worktree root directory |
+| `{worktree_path}` | Absolute path to the isolated worktree for this issue |
+| `{issue_number}` | GitHub issue number of the Implementation Issue |
+| `{parent_prd_number}` | GitHub issue number of the parent PRD Issue |
+| `{prd_branch}` | PRD branch name (e.g. `prd/149-some-feature`) |
+| `{implementation_branch}` | Implementation branch name (e.g. `impl/149/153-docs`) |
+
+#### Example: Installed Saringan CLI
+
+```yaml
+repos:
+  rangkai:
+    repo_path: /home/me/src/rangkai
+    main_branch: main
+    worktree_root: /home/me/src/rangkai/worktrees
+    global_concurrency: 2
+    per_prd_concurrency: 1
+    default_harness: codex-headless
+    quality_gate:
+      enabled: true
+      command: saringan
+      args_template:
+        - "validate"
+        - "--worktree"
+        - "{worktree_path}"
+        - "--issue"
+        - "{issue_number}"
+        - "--prd-branch"
+        - "{prd_branch}"
+        - "--implementation-branch"
+        - "{implementation_branch}"
+      timeout_seconds: 600
+```
+
+#### Example: Local Sibling Checkout or Wrapper Script
+
+```yaml
+quality_gate:
+  enabled: true
+  command: /home/me/src/saringan/cli.py
+  args_template:
+    - "validate"
+    - "--worktree"
+    - "{worktree_path}"
+    - "--issue"
+    - "{issue_number}"
+
+# Or a shell wrapper:
+quality_gate:
+  enabled: true
+  command: /bin/bash
+  args_template:
+    - "./scripts/gate.sh"
+    - "{worktree_path}"
+    - "{issue_number}"
+```
+
+#### Validation Result JSON
+
+On success (exit code 0), Saringan must emit a JSON object on stdout containing at least a `status` key:
+
+```json
+{"status": "passed"}
+```
+
+Rangkai parses the first JSON object in stdout that contains a recognised `status` value — `passed`, `failed`, or `error` — and extracts it from surrounding text.
+The `stderr` stream is treated as human-readable diagnostic output and is included in GitHub issue comments when the gate fails, truncated to the last 500 characters.
+
+When `status` is `failed`, Rangkai includes any `checks` array and `message` string from the JSON in the diagnostic comment:
+
+```json
+{
+  "status": "failed",
+  "message": "Coverage dropped below 80%",
+  "checks": [
+    {"name": "ruff", "status": "passed"},
+    {"name": "pyright", "status": "failed"},
+    {"name": "pytest", "status": "failed"}
+  ]
+}
+```
+
+#### Gate Outcomes
+
+| Outcome | Condition | Effect |
+| :--- | :--- | :--- |
+| **pass** | Exit code 0, stdout contains `{"status": "passed"}` | Integration Pull Request is created. Remote CI runs as usual. |
+| **failed** | Exit code 0, stdout contains `{"status": "failed"}` or `"error"` | No PR created. `needs-triage` applied. Diagnostic comment posted. Diagnostics persisted at `<worktree>/quality-gate/`. Implementation branch and worktree preserved. |
+| **invalid output** | Exit code 0 but stdout contains no valid Validation Result JSON | Same as failed. |
+| **non-zero exit** | Command exits with non-zero code | Same as failed, with exit code included in diagnostics. |
+| **timeout** | Command exceeds `timeout_seconds` | Same as failed. `Timed Out` noted in diagnostics. |
+| **command error** | Command not found, permission denied, etc. | Same as failed. `quality_gate.error` event emitted. |
+
+#### Relationship to Remote Integration Pull Request CI
+
+The Quality Gate is a **local deterministic pre-flight check** that runs inside the agent's worktree before an Integration Pull Request is created. It does **not** replace remote CI/CD checks that run on the Integration Pull Request after creation.
+
+- If the Quality Gate passes → Integration Pull Request is created → remote CI validates as normal (polled during scheduling passes).
+- If the Quality Gate fails → no Integration Pull Request is ever created, so remote CI never runs.
+
+This means a passing Quality Gate guarantees the change enters the Integration Pull Request lane, but remote CI (branch protection, required checks, statuses) remains the final arbiter before merge.
+
+#### Diagnostics
+
+When a quality gate blocks integration, Rangkai persists the following files to `<worktree>/quality-gate/`:
+
+| File | Content |
+| :--- | :--- |
+| `stdout.txt` | Complete stdout, truncated to 100 KB |
+| `stderr.txt` | Complete stderr, truncated to 100 KB |
+| `result.json` | Parsed Validation Result (if valid JSON was found) |
+
+These files are preserved alongside the implementation branch and worktree so operators can inspect what went wrong.
+
+#### Design Notes
+
+- Rangkai does **not** import Saringan as a Python package. The gate is always invoked as an external CLI process.
+- Rangkai does **not** infer validation checks. The target repository must provide a `saringan.toml` or equivalent configuration that Saringan reads at runtime.
+- Template variables are rendered with safe formatting: unknown variables are left as literal `{key}` strings rather than raising errors.
+
 ---
 
 ## Running the Dashboard
