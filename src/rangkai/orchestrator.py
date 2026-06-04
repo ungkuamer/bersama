@@ -72,6 +72,67 @@ def _parse_validation_result(stdout: str) -> dict | None:
     return None
 
 
+def _build_gate_blocked_comment(
+    *,
+    failure_reason: str,
+    gate_status: str,
+    exit_code: int,
+    timed_out: bool,
+    parsed_result: dict | None,
+    stdout: str,
+    stderr: str,
+    implementation_branch: str,
+    prd_branch: str,
+    worktree_path: str,
+) -> str:
+    """Build a diagnostic comment for a blocked quality gate."""
+    lines = [
+        f"Quality Gate blocked Integration Pull Request creation for implementation branch `{implementation_branch}`",
+        f" into PRD branch `{prd_branch}`.",
+        "",
+        f"**Gate Status:** {gate_status}",
+        f"**Exit Code:** {exit_code}",
+    ]
+    if timed_out:
+        lines.append("**Timed Out:** yes")
+    if failure_reason:
+        lines.append(f"**Reason:** {failure_reason}")
+
+    if parsed_result is not None:
+        # Include failed checks if available
+        checks = parsed_result.get("checks")
+        if isinstance(checks, list) and checks:
+            lines.append("")
+            lines.append("**Failed Checks:**")
+            for check in checks:
+                if isinstance(check, dict):
+                    name = check.get("name", "unknown")
+                    status = check.get("status", "unknown")
+                    lines.append(f"- `{name}`: {status}")
+        # Include message if present
+        message = parsed_result.get("message")
+        if isinstance(message, str) and message:
+            lines.append(f"**Message:** {message}")
+
+    if stderr.strip():
+        # Bound stderr to last 500 chars
+        stderr_snippet = stderr.strip()[-500:]
+        lines.append("")
+        lines.append("**stderr (last 500 chars):**")
+        lines.append("```")
+        lines.append(stderr_snippet)
+        lines.append("```")
+
+    lines.append("")
+    lines.append(f"**Diagnostics persisted at:** `{worktree_path}/quality-gate/`")
+    lines.append("- `stdout.txt` — complete stdout output")
+    lines.append("- `stderr.txt` — complete stderr output")
+    if parsed_result is not None:
+        lines.append("- `result.json` — parsed validation result")
+
+    return "\n".join(lines)
+
+
 @dataclass(frozen=True)
 class RunPlan:
     repo_name: str
@@ -338,6 +399,10 @@ class Orchestrator:
         Returns:
             True if gate is disabled or passes, False if gate fails,
             None if gate is enabled but couldn't be executed.
+
+        On failure or error, persists diagnostics to the worktree,
+        adds ``needs-triage`` label and a diagnostic comment to the
+        implementation issue, and emits a ``quality_gate.blocked`` event.
         """
         repo = config.repo(repo_name)
         quality_gate = repo.quality_gate
@@ -441,6 +506,15 @@ class Orchestrator:
             status="running",
         ))
 
+        # Capture variables for diagnostics persistence
+        stdout = ""
+        stderr = ""
+        exit_code = -1
+        timed_out = False
+        parsed_result = None
+        failure_reason = ""
+        gate_status = ""
+
         try:
             timeout = quality_gate.timeout_seconds if quality_gate.timeout_seconds is not None else 300
             env = dict(os.environ)
@@ -454,60 +528,182 @@ class Orchestrator:
             )
             exit_code = completed.returncode
             stdout = completed.stdout or ""
-
-            if exit_code != 0:
-                self._event_emitter(SchedulerEvent(
-                    event="quality_gate.failed",
-                    issue_number=issue_number,
-                    status="failed",
-                    detail=f"Quality gate command exited with code {exit_code}.",
-                ))
-                return False
+            stderr = completed.stderr or ""
+            timed_out = False
 
             # Parse validation result JSON from stdout
-            result = _parse_validation_result(stdout)
-            if result is None:
-                self._event_emitter(SchedulerEvent(
-                    event="quality_gate.failed",
-                    issue_number=issue_number,
-                    status="failed",
-                    detail="Quality gate stdout did not contain valid Validation Result JSON.",
-                ))
-                return False
+            parsed_result = _parse_validation_result(stdout)
 
-            gate_status = result.get("status", "")
-            if gate_status == "passed":
-                self._event_emitter(SchedulerEvent(
-                    event="quality_gate.passed",
-                    issue_number=issue_number,
-                    status="passed",
-                ))
-                return True
+            if exit_code != 0:
+                failure_reason = f"Quality gate command exited with code {exit_code}."
+                gate_status = "failed"
+            elif parsed_result is None:
+                failure_reason = "Quality gate stdout did not contain valid Validation Result JSON."
+                gate_status = "failed"
             else:
-                self._event_emitter(SchedulerEvent(
-                    event="quality_gate.failed",
-                    issue_number=issue_number,
-                    status="failed",
-                    detail=f"Quality gate status: {gate_status}",
-                ))
-                return False
+                gate_status = parsed_result.get("status", "")
+                if gate_status == "passed":
+                    self._event_emitter(SchedulerEvent(
+                        event="quality_gate.passed",
+                        issue_number=issue_number,
+                        status="passed",
+                    ))
+                    return True
+                else:
+                    failure_reason = f"Quality gate status: {gate_status}"
 
-        except subprocess.TimeoutExpired:
+            # If we got here with a non-passed status, the gate blocks.
             self._event_emitter(SchedulerEvent(
                 event="quality_gate.failed",
                 issue_number=issue_number,
                 status="failed",
-                detail=f"Quality gate timed out after {timeout}s.",
+                detail=failure_reason,
             ))
+            self._handle_gate_blocked(
+                issue_number=issue_number,
+                worktree_path=worktree_path,
+                stdout=stdout,
+                stderr=stderr,
+                exit_code=exit_code,
+                timed_out=timed_out,
+                parsed_result=parsed_result,
+                failure_reason=failure_reason,
+                gate_status=gate_status,
+                implementation_branch=implementation_branch or "",
+                prd_branch=prd_branch or "",
+            )
             return False
+
+        except subprocess.TimeoutExpired as exc:
+            stdout = exc.stdout or ""
+            stderr = exc.stderr or ""
+            timed_out = True
+            failure_reason = f"Quality gate timed out after {timeout}s."
+            gate_status = "failed"
+            self._event_emitter(SchedulerEvent(
+                event="quality_gate.failed",
+                issue_number=issue_number,
+                status="failed",
+                detail=failure_reason,
+            ))
+            self._handle_gate_blocked(
+                issue_number=issue_number,
+                worktree_path=worktree_path,
+                stdout=stdout,
+                stderr=stderr,
+                exit_code=-1,
+                timed_out=timed_out,
+                parsed_result=None,
+                failure_reason=failure_reason,
+                gate_status=gate_status,
+                implementation_branch=implementation_branch or "",
+                prd_branch=prd_branch or "",
+            )
+            return False
+
         except Exception as exc:
+            failure_reason = f"Quality gate execution error: {exc}"
             self._event_emitter(SchedulerEvent(
                 event="quality_gate.error",
                 issue_number=issue_number,
                 status="failed",
-                detail=f"Quality gate execution error: {exc}",
+                detail=failure_reason,
             ))
+            self._handle_gate_blocked(
+                issue_number=issue_number,
+                worktree_path=worktree_path,
+                stdout=stdout,
+                stderr=stderr,
+                exit_code=-1,
+                timed_out=False,
+                parsed_result=None,
+                failure_reason=failure_reason,
+                gate_status="error",
+                implementation_branch=implementation_branch or "",
+                prd_branch=prd_branch or "",
+            )
             return None
+
+    def _handle_gate_blocked(
+        self,
+        *,
+        issue_number: int,
+        worktree_path: str,
+        stdout: str,
+        stderr: str,
+        exit_code: int,
+        timed_out: bool,
+        parsed_result: dict | None,
+        failure_reason: str,
+        gate_status: str,
+        implementation_branch: str,
+        prd_branch: str,
+    ) -> None:
+        """Persist diagnostics, label, and comment when a quality gate blocks integration."""
+        # Persist diagnostics to worktree
+        try:
+            self._persist_gate_diagnostics(
+                worktree_path=worktree_path,
+                stdout=stdout,
+                stderr=stderr,
+                parsed_result=parsed_result,
+            )
+        except Exception:
+            pass  # Best-effort persistence
+
+        # Build diagnostic comment
+        comment = _build_gate_blocked_comment(
+            failure_reason=failure_reason,
+            gate_status=gate_status,
+            exit_code=exit_code,
+            timed_out=timed_out,
+            parsed_result=parsed_result,
+            stdout=stdout,
+            stderr=stderr,
+            implementation_branch=implementation_branch,
+            prd_branch=prd_branch,
+            worktree_path=worktree_path,
+        )
+
+        # Notify the implementation issue
+        try:
+            self.issues.add_labels(issue_number, "needs-triage")
+        except Exception:
+            pass
+        try:
+            self.issues.add_comment(issue_number, comment)
+        except Exception:
+            pass
+
+        # Emit blocked event
+        self._event_emitter(SchedulerEvent(
+            event="quality_gate.blocked",
+            issue_number=issue_number,
+            status="blocked",
+            detail=failure_reason,
+        ))
+
+    @staticmethod
+    def _persist_gate_diagnostics(
+        *,
+        worktree_path: str,
+        stdout: str,
+        stderr: str,
+        parsed_result: dict | None,
+    ) -> None:
+        """Write quality gate diagnostics to the worktree for later inspection."""
+        diag_dir = Path(worktree_path) / "quality-gate"
+        diag_dir.mkdir(parents=True, exist_ok=True)
+
+        # Truncate stdout/stderr to a bounded size (100KB each)
+        max_size = 100 * 1024
+        (diag_dir / "stdout.txt").write_text(stdout[:max_size], encoding="utf-8")
+        (diag_dir / "stderr.txt").write_text(stderr[:max_size], encoding="utf-8")
+
+        if parsed_result is not None:
+            (diag_dir / "result.json").write_text(
+                json.dumps(parsed_result, indent=2), encoding="utf-8"
+            )
 
     def _run_agent_run(
         self,
