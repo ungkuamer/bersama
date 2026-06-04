@@ -86,6 +86,33 @@ None - can start immediately
     assert parsed.diagnostics == ()
 
 
+def test_parse_implementation_issue_with_parent_prd_url() -> None:
+    issue = GitHubIssue(
+        number=3,
+        title="Parse and validate PRD Issues and Implementation Issues",
+        body="""
+## Parent PRD
+https://github.com/ungkuamer/saringan/issues/20
+
+## What to Build
+Implement the Issue Model and Parser for PRD Issues and Implementation Issues.
+
+## Acceptance Criteria
+- [ ] PRD Issues are recognized from the prd label.
+
+## Blocked By
+None - can start immediately
+""".strip(),
+        labels=("implementation", "ready-for-agent"),
+    )
+
+    parsed = parse_issue(issue)
+
+    assert isinstance(parsed, ImplementationIssue)
+    assert parsed.parent_prd_number == 20
+    assert parsed.diagnostics == ()
+
+
 def test_parse_missing_required_sections_reports_missing_info() -> None:
     issue = GitHubIssue(
         number=4,

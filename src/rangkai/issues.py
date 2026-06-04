@@ -5,7 +5,7 @@ from enum import Enum
 import re
 
 
-ISSUE_REFERENCE_RE = re.compile(r"#(\d+)")
+ISSUE_REFERENCE_RE = re.compile(r"(?:#|/issues/)(\d+)")
 SECTION_RE = re.compile(r"^## (?P<name>.+)$", re.MULTILINE)
 CHECKLIST_ITEM_RE = re.compile(r"^\s*-\s*\[[ xX]\]\s+(?P<text>.+?)\s*$", re.MULTILINE)
 ORCHESTRATION_ITEM_RE = re.compile(r"^\s*-\s*(?P<key>[^:]+):\s*(?P<value>.+?)\s*$", re.MULTILINE)

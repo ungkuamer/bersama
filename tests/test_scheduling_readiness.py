@@ -608,6 +608,60 @@ def test_provider_builds_prd_grouped_implementation_issue_state_capacity_and_war
     assert all("x" not in item and "y" not in item for item in implementation_issue_state["items"])
 
 
+def test_provider_handles_implementation_issue_with_no_parent_prd(tmp_path: Path) -> None:
+    repo_path = tmp_path / "repo"
+    repo_path.mkdir()
+    (repo_path / ".git").mkdir()
+    worktree_root = tmp_path / "worktrees"
+    worktree_root.mkdir()
+    provider = SchedulingReadinessProvider(build_config(repo_path=repo_path, worktree_root=worktree_root))
+
+    with (
+        patch("rangkai.scheduling_readiness.shutil.which", return_value="/usr/bin/gh"),
+        patch("rangkai.scheduling_readiness.os.access", return_value=True),
+        patch("rangkai.scheduling_readiness._run_command") as run_command,
+    ):
+        run_command.side_effect = [
+            _completed(stdout="WRITE"),
+            _completed(stdout="\n".join(["prd", "implementation", "ready-for-agent", "claimed", "needs-info", "needs-triage", "ready-for-human", "wontfix"])),
+            _completed(stdout=""),
+            _completed(),
+            _completed(stdout='{"name":"demo"}'),
+            _completed(stdout=json.dumps(
+                [
+                    {
+                        "number": 12,
+                        "title": "Orphan issue",
+                        "body": (
+                            "## What to Build\nSome issue without parent prd section.\n\n"
+                            "## Acceptance Criteria\n- [ ] Done.\n\n"
+                            "## Blocked By\nNone"
+                        ),
+                        "labels": [{"name": "implementation"}, {"name": "ready-for-agent"}],
+                        "state": "open",
+                    },
+                ]
+            )),
+        ]
+
+        snapshot = provider.build_snapshot("demo")
+
+    implementation_issue_state = snapshot["snapshot"]["implementation_issue_state"]
+    assert len(implementation_issue_state["items"]) == 1
+    item = implementation_issue_state["items"][0]
+    assert item["issue_number"] == 12
+    assert item["parent_prd_number"] is None
+
+    # Check grouping
+    groups = implementation_issue_state["groups"]
+    assert len(groups) == 1
+    assert groups[0]["parent_prd"]["issue_number"] is None
+    assert groups[0]["parent_prd"]["title"] == "Orphan/No Parent PRD"
+    assert groups[0]["parent_prd"]["prepared"] is False
+    assert len(groups[0]["items"]) == 1
+    assert groups[0]["items"][0]["issue_number"] == 12
+
+
 def _completed(
     *,
     returncode: int = 0,

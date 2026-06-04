@@ -808,16 +808,21 @@ def _build_implementation_issue_state(repo: RepoConfig | None) -> dict[str, obje
             parent_prd_number=None,
         )
 
-    groups_by_prd: dict[int, dict[str, object]] = {}
+    groups_by_prd: dict[int | None, dict[str, object]] = {}
     for item in items:
-        parent_prd_number = int(item["parent_prd_number"])
-        parent_prd = prds_by_number.get(parent_prd_number)
-        if parent_prd is None:
-            parent_title = f"PRD #{parent_prd_number}"
+        raw_parent = item["parent_prd_number"]
+        parent_prd_number = int(raw_parent) if raw_parent is not None else None
+        if parent_prd_number is None:
+            parent_title = "Orphan/No Parent PRD"
             prepared = False
         else:
-            parent_title = parent_prd.issue.title
-            prepared = bool(parent_prd.orchestration.prd_branch)
+            parent_prd = prds_by_number.get(parent_prd_number)
+            if parent_prd is None:
+                parent_title = f"PRD #{parent_prd_number}"
+                prepared = False
+            else:
+                parent_title = parent_prd.issue.title
+                prepared = bool(parent_prd.orchestration.prd_branch)
         groups_by_prd.setdefault(
             parent_prd_number,
             {
@@ -840,7 +845,10 @@ def _build_implementation_issue_state(repo: RepoConfig | None) -> dict[str, obje
         )
 
     empty["items"] = items
-    empty["groups"] = [groups_by_prd[number] for number in sorted(groups_by_prd)]
+    sorted_keys = sorted([k for k in groups_by_prd if k is not None])
+    if None in groups_by_prd:
+        sorted_keys.append(None)
+    empty["groups"] = [groups_by_prd[number] for number in sorted_keys]
     empty["summary"] = summary
     empty["agent_run_capacity"] = {
         "used": capacity_used,
