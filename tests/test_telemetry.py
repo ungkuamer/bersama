@@ -799,7 +799,7 @@ def test_get_run_metrics_endpoint_uses_telemetry_association_from_run_state(
         },
         observability=ObservabilityConfig(
             enabled=True,
-            url="http://localhost:8080",
+            url="http://localhost:9999",
             token="test-token",
         ),
     )

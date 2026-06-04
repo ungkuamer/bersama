@@ -156,3 +156,42 @@ def test_pi_rpc_harness_provider_model() -> None:
     assert "--model" in called_cmd
     assert "deepseek-v4-pro" in called_cmd
 
+
+def test_pi_rpc_harness_telemetry() -> None:
+    # 1. Setup mock process streams
+    mock_stdin = MagicMock()
+    events = [
+        {"type": "response", "command": "prompt", "success": True},
+        {"type": "agent_end"},
+    ]
+    stdout_lines = [json.dumps(event) + "\n" for event in events] + [""]
+
+    mock_stdout = MagicMock()
+    mock_stdout.readline.side_effect = stdout_lines
+
+    mock_proc = MagicMock()
+    mock_proc.stdin = mock_stdin
+    mock_proc.stdout = mock_stdout
+    mock_proc.wait.return_value = 0
+
+    # 2. Patch Popen, sys.argv, and os.environ
+    test_args = ["pi_rpc_harness.py", "--issue-number", "8", "--prompt", "solve issue 8"]
+    captured_stdout = StringIO()
+    telemetry_env = {
+        "RANGKAI_TELEMETRY_ASSOCIATION": json.dumps({"run_id": "test-run-123"})
+    }
+
+    with patch("subprocess.Popen", return_value=mock_proc) as mock_popen, \
+         patch("sys.argv", test_args), \
+         patch.dict("os.environ", telemetry_env), \
+         patch("sys.stdout", captured_stdout):
+        exit_code = main()
+
+    # 3. Assertions
+    assert exit_code == 0
+    mock_popen.assert_called_once()
+    called_cmd = mock_popen.call_args[0][0]
+    assert "--session-id" in called_cmd
+    assert "test-run-123" in called_cmd
+    assert "--no-session" not in called_cmd
+

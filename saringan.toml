@@ -1,0 +1,19 @@
+schema_version = 1
+
+[[checks]]
+id = "python-lint"
+type = "python_lint"
+command = ["uv", "run", "ruff", "check", "src"]
+advisory = true
+
+[[checks]]
+id = "python-typecheck"
+type = "python_typecheck"
+command = ["uv", "run", "mypy", "src"]
+advisory = true
+
+[[checks]]
+id = "python-tests"
+type = "python_tests"
+command = ["uv", "run", "pytest", "-q"]
+

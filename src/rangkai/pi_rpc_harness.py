@@ -44,6 +44,8 @@ def main() -> int:
             if run_id:
                 # --session-id forces pi to use this exact session ID for events
                 cmd.extend(["--session-id", run_id])
+                if "--no-session" in cmd:
+                    cmd.remove("--no-session")
         except Exception:
             pass
 
