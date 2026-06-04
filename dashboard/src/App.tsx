@@ -260,6 +260,7 @@ export default function App() {
   };
 
   const terminalViewportRef = useRef<HTMLDivElement>(null);
+  const harnessLogCardRef = useRef<HTMLDivElement>(null);
   const previousLogContentRef = useRef<string | null>(null);
   const previousSelectedRunIssueRef = useRef<number | null>(null);
 
@@ -274,6 +275,10 @@ export default function App() {
       setLogAutoScroll(true);
       setHasNewPausedLogOutput(false);
       previousSelectedRunIssueRef.current = selectedRunIssue;
+
+      if (selectedRunIssue !== null && typeof harnessLogCardRef.current?.scrollIntoView === 'function') {
+        harnessLogCardRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
     }
   }, [selectedRunIssue]);
 
@@ -935,7 +940,7 @@ export default function App() {
           </Card>
 
           {/* Local Log Tails Console */}
-          <Card className="dashboard-glass-panel flex min-h-0 grow shrink flex-col overflow-hidden">
+          <Card ref={harnessLogCardRef} className="dashboard-glass-panel flex h-[480px] shrink-0 flex-col overflow-hidden">
             <CardHeader className="flex flex-col gap-3 border-b border-border px-4 py-3.5 select-none sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <CardTitle className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-foreground">
