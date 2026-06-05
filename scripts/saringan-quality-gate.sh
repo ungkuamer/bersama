@@ -70,6 +70,15 @@ if [ ! -d "$WORKTREE_PATH" ]; then
 fi
 
 if ! command -v "$SARINGAN_BIN" >/dev/null 2>&1 && [ ! -x "$SARINGAN_BIN" ]; then
+  # Fallback to local virtual environment path of saringan project or worktree
+  if [ -x "/home/ungku/programming/saringan/.venv/bin/saringan" ]; then
+    SARINGAN_BIN="/home/ungku/programming/saringan/.venv/bin/saringan"
+  elif [ -x "$WORKTREE_PATH/.venv/bin/saringan" ]; then
+    SARINGAN_BIN="$WORKTREE_PATH/.venv/bin/saringan"
+  fi
+fi
+
+if ! command -v "$SARINGAN_BIN" >/dev/null 2>&1 && [ ! -x "$SARINGAN_BIN" ]; then
   error_result "Saringan executable not found: $SARINGAN_BIN"
 fi
 
