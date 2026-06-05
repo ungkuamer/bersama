@@ -1465,5 +1465,97 @@ describe('SideDrawer Judge Layer Panel', () => {
     expect(screen.getByText('Judge Failed')).toBeInTheDocument();
     expect(screen.getByText('Judge found issues: scope guard rejected, completion score 0.5.')).toBeInTheDocument();
   });
+
+  it('renders Judge Running badge with pulsing indicator and model metadata', () => {
+    vi.mocked(useQualityGateSummaryQuery).mockReturnValue({
+      data: {
+        status: 'passed',
+        checks: [],
+        judge: {
+          status: 'running',
+          message: 'Judge is evaluating context...',
+          model: 'gpt-4o-mini',
+          started_at: '2026-06-05T12:00:00Z',
+        },
+      },
+      isLoading: false,
+    } as any);
+
+    render(
+      <SideDrawer
+        issue={mockIssueWithRepo}
+        open={true}
+        onOpenChange={() => {}}
+        repo="demo"
+        readOnly={true}
+      />
+    );
+
+    expect(screen.getByText('Judge Layer')).toBeInTheDocument();
+    expect(screen.getByText('Judge Running')).toBeInTheDocument();
+    expect(screen.getByText('Judge is evaluating context...')).toBeInTheDocument();
+    expect(screen.getByText('gpt-4o-mini')).toBeInTheDocument();
+    expect(screen.getByText('2026-06-05T12:00:00Z')).toBeInTheDocument();
+
+    // Verify pulsing indicator is present on the badge
+    const runningBadge = screen.getByText('Judge Running').closest('[class*="rounded-full"]');
+    expect(runningBadge?.className).toContain('animate-pulse');
+  });
+
+  it('renders Judge Skipped badge when deterministic validation prevented judge', () => {
+    vi.mocked(useQualityGateSummaryQuery).mockReturnValue({
+      data: {
+        status: 'failed',
+        checks: [],
+        judge: {
+          status: 'skipped',
+          message: 'Judge skipped because deterministic validation did not pass.',
+        },
+      },
+      isLoading: false,
+    } as any);
+
+    render(
+      <SideDrawer
+        issue={mockIssueWithRepo}
+        open={true}
+        onOpenChange={() => {}}
+        repo="demo"
+        readOnly={true}
+      />
+    );
+
+    expect(screen.getByText('Judge Layer')).toBeInTheDocument();
+    expect(screen.getByText('Judge Skipped')).toBeInTheDocument();
+    expect(screen.getByText('Judge skipped because deterministic validation did not pass.')).toBeInTheDocument();
+  });
+
+  it('renders Judge Skipped badge when judge execution is explicitly disabled', () => {
+    vi.mocked(useQualityGateSummaryQuery).mockReturnValue({
+      data: {
+        status: 'passed',
+        checks: [],
+        judge: {
+          status: 'skipped',
+          message: 'Judge skipped because judge execution is disabled (SARINGAN_SKIP_JUDGE=1).',
+        },
+      },
+      isLoading: false,
+    } as any);
+
+    render(
+      <SideDrawer
+        issue={mockIssueWithRepo}
+        open={true}
+        onOpenChange={() => {}}
+        repo="demo"
+        readOnly={true}
+      />
+    );
+
+    expect(screen.getByText('Judge Layer')).toBeInTheDocument();
+    expect(screen.getByText('Judge Skipped')).toBeInTheDocument();
+    expect(screen.getByText('Judge skipped because judge execution is disabled (SARINGAN_SKIP_JUDGE=1).')).toBeInTheDocument();
+  });
 });
 

@@ -540,6 +540,14 @@ export default function SideDrawer({
                                   jBadgeStyle = "border-red-200 bg-red-50 text-red-800 dark:border-red-500/35 dark:bg-red-500/15 dark:text-red-300";
                                   jIcon = <AlertCircle className="size-3.5" />;
                                   jLabelText = "Judge Error";
+                                } else if (jStatus === 'running') {
+                                  jBadgeStyle = "border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-500/35 dark:bg-amber-500/15 dark:text-amber-300 animate-pulse";
+                                  jIcon = <Play className="size-3.5" />;
+                                  jLabelText = "Judge Running";
+                                } else if (jStatus === 'skipped') {
+                                  jBadgeStyle = "border-slate-200 bg-slate-50 text-slate-800 dark:border-slate-500/35 dark:bg-slate-500/15 dark:text-slate-300";
+                                  jIcon = <Info className="size-3.5" />;
+                                  jLabelText = "Judge Skipped";
                                 }
 
                                 return (
@@ -556,6 +564,22 @@ export default function SideDrawer({
                             {qualityGateSummary.judge.message && (
                               <div className="bg-muted/50 border border-border/50 rounded p-2 text-[9px] font-mono text-muted-foreground mt-1 max-h-24 overflow-y-auto">
                                 {qualityGateSummary.judge.message}
+                              </div>
+                            )}
+                            {(qualityGateSummary.judge.model || qualityGateSummary.judge.started_at) && (
+                              <div className="flex flex-col gap-1 text-[9px] font-mono text-muted-foreground bg-muted/30 border border-border/40 rounded p-2">
+                                {qualityGateSummary.judge.model && (
+                                  <div className="flex items-center justify-between">
+                                    <span>Model</span>
+                                    <span className="text-foreground">{String(qualityGateSummary.judge.model)}</span>
+                                  </div>
+                                )}
+                                {qualityGateSummary.judge.started_at && (
+                                  <div className="flex items-center justify-between">
+                                    <span>Started</span>
+                                    <span className="text-foreground">{String(qualityGateSummary.judge.started_at)}</span>
+                                  </div>
+                                )}
                               </div>
                             )}
                           </div>

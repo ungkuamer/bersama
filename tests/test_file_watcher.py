@@ -148,3 +148,20 @@ async def test_quality_gate_result_change_emits_quality_gate_updated_event(tmp_p
     assert event.type == QUALITY_GATE_UPDATED
     assert event.data == {"repo": tmp_path.name, "issue_number": 18}
 
+
+@pytest.mark.asyncio
+async def test_judge_layer_artifact_change_emits_quality_gate_updated_event(tmp_path: Path) -> None:
+    from rangkai.event_bus import QUALITY_GATE_UPDATED
+    bus = EventBus()
+    watcher = FileWatcherService(event_bus=bus, worktree_roots=[tmp_path])
+    judge_path = tmp_path / "issue-18" / "quality-gate" / "judge.json"
+    judge_path.parent.mkdir(parents=True)
+    judge_path.write_text('{"status":"running"}', encoding="utf-8")
+
+    async with bus.subscribe() as subscriber:
+        await watcher.handle_changes({(None, str(judge_path))})
+        event = await asyncio.wait_for(subscriber.__anext__(), timeout=1.0)
+
+    assert event.type == QUALITY_GATE_UPDATED
+    assert event.data == {"repo": tmp_path.name, "issue_number": 18}
+
