@@ -996,6 +996,23 @@ def create_dashboard_app(
                 })
         
         response["checks"] = normalized_checks
+
+        # Judge Layer summary: read optional judge.json from the same quality-gate directory
+        judge_json_path = diag_dir / "judge.json"
+        if judge_json_path.exists():
+            try:
+                judge_data = json.loads(judge_json_path.read_text(encoding="utf-8"))
+                if isinstance(judge_data, dict):
+                    judge_status = judge_data.get("status")
+                    judge_message = judge_data.get("message")
+                    if judge_status is not None:
+                        judge_summary: dict[str, object] = {"status": str(judge_status)}
+                        if isinstance(judge_message, str) and judge_message:
+                            judge_summary["message"] = judge_message
+                        response["judge"] = judge_summary
+            except (json.JSONDecodeError, OSError):
+                pass
+
         return response
 
     dist_dir = Path("dashboard/dist")

@@ -11,10 +11,16 @@ export interface QualityGateCheck {
   message?: string | null
 }
 
+export interface QualityGateJudgeSummary {
+  status: string
+  message?: string
+}
+
 export interface QualityGateSummary {
   status: 'passed' | 'failed' | 'error' | 'not run' | 'not_run' | 'invalid' | 'unavailable'
   message?: string
   checks?: QualityGateCheck[]
+  judge?: QualityGateJudgeSummary
 }
 
 export function useQualityGateSummaryQuery(

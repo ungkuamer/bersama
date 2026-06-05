@@ -517,6 +517,49 @@ export default function SideDrawer({
                             })}
                           </div>
                         )}
+                        {/* Judge Layer Panel */}
+                        {qualityGateSummary.judge && (
+                          <div className="flex flex-col gap-2 mt-2 border-t border-border/40 pt-2">
+                            <h5 className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Judge Layer</h5>
+                            <div className="flex items-center gap-2">
+                              {(() => {
+                                const jStatus = qualityGateSummary.judge.status;
+                                let jBadgeStyle = "border-muted-foreground/30 bg-muted text-muted-foreground";
+                                let jIcon = <Clock className="size-3.5" />;
+                                let jLabelText = "Judge Unknown";
+
+                                if (jStatus === 'passed') {
+                                  jBadgeStyle = "border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-500/35 dark:bg-emerald-500/15 dark:text-emerald-300";
+                                  jIcon = <CheckCircle2 className="size-3.5" />;
+                                  jLabelText = "Judge Passed";
+                                } else if (jStatus === 'failed') {
+                                  jBadgeStyle = "border-red-200 bg-red-50 text-red-800 dark:border-red-500/35 dark:bg-red-500/15 dark:text-red-300";
+                                  jIcon = <AlertCircle className="size-3.5" />;
+                                  jLabelText = "Judge Failed";
+                                } else if (jStatus === 'error') {
+                                  jBadgeStyle = "border-red-200 bg-red-50 text-red-800 dark:border-red-500/35 dark:bg-red-500/15 dark:text-red-300";
+                                  jIcon = <AlertCircle className="size-3.5" />;
+                                  jLabelText = "Judge Error";
+                                }
+
+                                return (
+                                  <Badge
+                                    variant="outline"
+                                    className={`text-[9px] font-bold uppercase tracking-wider h-5 flex items-center gap-1 rounded-full ${jBadgeStyle}`}
+                                  >
+                                    {jIcon}
+                                    <span>{jLabelText}</span>
+                                  </Badge>
+                                );
+                              })()}
+                            </div>
+                            {qualityGateSummary.judge.message && (
+                              <div className="bg-muted/50 border border-border/50 rounded p-2 text-[9px] font-mono text-muted-foreground mt-1 max-h-24 overflow-y-auto">
+                                {qualityGateSummary.judge.message}
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
                     ) : (
                       <div className="text-[10px] text-muted-foreground italic py-1">

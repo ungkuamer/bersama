@@ -1990,3 +1990,94 @@ def test_quality_gate_api_checks(tmp_path: Path) -> None:
         "message": None
     }
 
+
+def test_quality_gate_api_judge_layer_summary(tmp_path: Path) -> None:
+    """When judge.json exists, the Quality Gate summary API includes a nested Judge Layer summary."""
+    import dataclasses
+    config = build_config()
+    config.repos["demo"] = dataclasses.replace(
+        config.repos["demo"],
+        quality_gate=QualityGateConfig(enabled=True, command="true"),
+        worktree_root=tmp_path
+    )
+
+    app = create_dashboard_app(config=config)
+    client = TestClient(app)
+
+    issue_wt = tmp_path / "issue-18"
+    diag_dir = issue_wt / "quality-gate"
+    diag_dir.mkdir(parents=True)
+
+    # Write the existing quality gate result.json
+    (diag_dir / "result.json").write_text('{"status": "passed", "message": "All checks passed", "checks": []}')
+
+    # Write the judge layer artifact
+    judge_data = {
+        "status": "passed",
+        "message": "Judge completed: completion score 1.0, all acceptance criteria met.",
+    }
+    (diag_dir / "judge.json").write_text(json.dumps(judge_data))
+
+    response = client.get("/api/repos/demo/implementation-issues/18/quality-gate")
+    assert response.status_code == 200
+    res_json = response.json()
+    assert res_json["status"] == "passed"
+    assert res_json["message"] == "All checks passed"
+    assert res_json["checks"] == []
+    assert "judge" in res_json
+    assert res_json["judge"]["status"] == "passed"
+    assert "completion score" in res_json["judge"]["message"]
+
+
+def test_quality_gate_api_judge_layer_missing(tmp_path: Path) -> None:
+    """When judge.json does not exist, the response does not include a judge field."""
+    import dataclasses
+    config = build_config()
+    config.repos["demo"] = dataclasses.replace(
+        config.repos["demo"],
+        quality_gate=QualityGateConfig(enabled=True, command="true"),
+        worktree_root=tmp_path
+    )
+
+    app = create_dashboard_app(config=config)
+    client = TestClient(app)
+
+    issue_wt = tmp_path / "issue-18"
+    diag_dir = issue_wt / "quality-gate"
+    diag_dir.mkdir(parents=True)
+
+    (diag_dir / "result.json").write_text('{"status": "passed", "message": "All checks passed"}')
+
+    response = client.get("/api/repos/demo/implementation-issues/18/quality-gate")
+    assert response.status_code == 200
+    res_json = response.json()
+    assert res_json["status"] == "passed"
+    assert "judge" not in res_json
+
+
+def test_quality_gate_api_judge_layer_invalid_json(tmp_path: Path) -> None:
+    """When judge.json is malformed, it is ignored and not included in the response."""
+    import dataclasses
+    config = build_config()
+    config.repos["demo"] = dataclasses.replace(
+        config.repos["demo"],
+        quality_gate=QualityGateConfig(enabled=True, command="true"),
+        worktree_root=tmp_path
+    )
+
+    app = create_dashboard_app(config=config)
+    client = TestClient(app)
+
+    issue_wt = tmp_path / "issue-18"
+    diag_dir = issue_wt / "quality-gate"
+    diag_dir.mkdir(parents=True)
+
+    (diag_dir / "result.json").write_text('{"status": "passed"}')
+    (diag_dir / "judge.json").write_text('{invalid json')
+
+    response = client.get("/api/repos/demo/implementation-issues/18/quality-gate")
+    assert response.status_code == 200
+    res_json = response.json()
+    assert res_json["status"] == "passed"
+    assert "judge" not in res_json
+

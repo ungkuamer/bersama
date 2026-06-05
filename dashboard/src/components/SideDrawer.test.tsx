@@ -1373,3 +1373,97 @@ describe('SideDrawer Quality Gate Status', () => {
   });
 });
 
+describe('SideDrawer Judge Layer Panel', () => {
+  const mockIssueWithRepo: Issue = {
+    number: 150,
+    title: 'Judge Layer Test Issue',
+    labels: ['implementation', 'ready-for-agent'],
+    state: 'open',
+    kind: 'implementation',
+    status: 'ready',
+    parent_prd_number: 1,
+    blocked_by: [],
+    active_blockers: [],
+  };
+
+  it('renders Judge Layer panel when judge data is present', () => {
+    vi.mocked(useQualityGateSummaryQuery).mockReturnValue({
+      data: {
+        status: 'passed',
+        message: 'All checks passed',
+        checks: [],
+        judge: {
+          status: 'passed',
+          message: 'Judge completed: completion score 1.0, all acceptance criteria met.',
+        },
+      },
+      isLoading: false,
+    } as any);
+
+    render(
+      <SideDrawer
+        issue={mockIssueWithRepo}
+        open={true}
+        onOpenChange={() => {}}
+        repo="demo"
+        readOnly={true}
+      />
+    );
+
+    expect(screen.getByText('Judge Layer')).toBeInTheDocument();
+    expect(screen.getByText('Judge Passed')).toBeInTheDocument();
+    expect(screen.getByText('Judge completed: completion score 1.0, all acceptance criteria met.')).toBeInTheDocument();
+  });
+
+  it('does not render Judge Layer panel when judge data is absent', () => {
+    vi.mocked(useQualityGateSummaryQuery).mockReturnValue({
+      data: {
+        status: 'passed',
+        message: 'All checks passed',
+        checks: [],
+      },
+      isLoading: false,
+    } as any);
+
+    render(
+      <SideDrawer
+        issue={mockIssueWithRepo}
+        open={true}
+        onOpenChange={() => {}}
+        repo="demo"
+        readOnly={true}
+      />
+    );
+
+    expect(screen.queryByText('Judge Layer')).not.toBeInTheDocument();
+  });
+
+  it('renders Judge Failed badge when judge status is failed', () => {
+    vi.mocked(useQualityGateSummaryQuery).mockReturnValue({
+      data: {
+        status: 'passed',
+        checks: [],
+        judge: {
+          status: 'failed',
+          message: 'Judge found issues: scope guard rejected, completion score 0.5.',
+        },
+      },
+      isLoading: false,
+    } as any);
+
+    render(
+      <SideDrawer
+        issue={mockIssueWithRepo}
+        open={true}
+        onOpenChange={() => {}}
+        repo="demo"
+        readOnly={true}
+      />
+    );
+
+    expect(screen.getByText('Judge Layer')).toBeInTheDocument();
+    expect(screen.getByText('Judge Failed')).toBeInTheDocument();
+    expect(screen.getByText('Judge found issues: scope guard rejected, completion score 0.5.')).toBeInTheDocument();
+  });
+});
+
