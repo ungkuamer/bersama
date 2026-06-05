@@ -2081,3 +2081,106 @@ def test_quality_gate_api_judge_layer_invalid_json(tmp_path: Path) -> None:
     assert res_json["status"] == "passed"
     assert "judge" not in res_json
 
+
+def test_quality_gate_api_judge_layer_running(tmp_path: Path) -> None:
+    """When judge.json has status running, the API exposes it with model/timing metadata."""
+    import dataclasses
+    config = build_config()
+    config.repos["demo"] = dataclasses.replace(
+        config.repos["demo"],
+        quality_gate=QualityGateConfig(enabled=True, command="true"),
+        worktree_root=tmp_path
+    )
+
+    app = create_dashboard_app(config=config)
+    client = TestClient(app)
+
+    issue_wt = tmp_path / "issue-18"
+    diag_dir = issue_wt / "quality-gate"
+    diag_dir.mkdir(parents=True)
+
+    (diag_dir / "result.json").write_text('{"status": "passed", "checks": []}')
+    judge_data = {
+        "status": "running",
+        "message": "Judge is evaluating...",
+        "model": "gpt-4o-mini",
+        "started_at": "2026-06-05T12:00:00Z",
+    }
+    (diag_dir / "judge.json").write_text(json.dumps(judge_data))
+
+    response = client.get("/api/repos/demo/implementation-issues/18/quality-gate")
+    assert response.status_code == 200
+    res_json = response.json()
+    assert res_json["status"] == "passed"
+    assert "judge" in res_json
+    assert res_json["judge"]["status"] == "running"
+    assert res_json["judge"]["message"] == "Judge is evaluating..."
+    assert res_json["judge"]["model"] == "gpt-4o-mini"
+    assert res_json["judge"]["started_at"] == "2026-06-05T12:00:00Z"
+
+
+def test_quality_gate_api_judge_layer_skipped_validation_failed(tmp_path: Path) -> None:
+    """When judge.json has status skipped because deterministic validation failed."""
+    import dataclasses
+    config = build_config()
+    config.repos["demo"] = dataclasses.replace(
+        config.repos["demo"],
+        quality_gate=QualityGateConfig(enabled=True, command="true"),
+        worktree_root=tmp_path
+    )
+
+    app = create_dashboard_app(config=config)
+    client = TestClient(app)
+
+    issue_wt = tmp_path / "issue-18"
+    diag_dir = issue_wt / "quality-gate"
+    diag_dir.mkdir(parents=True)
+
+    (diag_dir / "result.json").write_text('{"status": "failed", "message": "Lint failed"}')
+    judge_data = {
+        "status": "skipped",
+        "message": "Judge skipped because deterministic validation did not pass.",
+    }
+    (diag_dir / "judge.json").write_text(json.dumps(judge_data))
+
+    response = client.get("/api/repos/demo/implementation-issues/18/quality-gate")
+    assert response.status_code == 200
+    res_json = response.json()
+    assert res_json["status"] == "failed"
+    assert "judge" in res_json
+    assert res_json["judge"]["status"] == "skipped"
+    assert "deterministic validation" in res_json["judge"]["message"].lower()
+
+
+def test_quality_gate_api_judge_layer_skipped_disabled(tmp_path: Path) -> None:
+    """When judge.json has status skipped because judge execution is explicitly disabled."""
+    import dataclasses
+    config = build_config()
+    config.repos["demo"] = dataclasses.replace(
+        config.repos["demo"],
+        quality_gate=QualityGateConfig(enabled=True, command="true"),
+        worktree_root=tmp_path
+    )
+
+    app = create_dashboard_app(config=config)
+    client = TestClient(app)
+
+    issue_wt = tmp_path / "issue-18"
+    diag_dir = issue_wt / "quality-gate"
+    diag_dir.mkdir(parents=True)
+
+    (diag_dir / "result.json").write_text('{"status": "passed", "checks": []}')
+    judge_data = {
+        "status": "skipped",
+        "message": "Judge skipped because judge execution is disabled (SARINGAN_SKIP_JUDGE=1).",
+    }
+    (diag_dir / "judge.json").write_text(json.dumps(judge_data))
+
+    response = client.get("/api/repos/demo/implementation-issues/18/quality-gate")
+    assert response.status_code == 200
+    res_json = response.json()
+    assert res_json["status"] == "passed"
+    assert "judge" in res_json
+    assert res_json["judge"]["status"] == "skipped"
+    assert "disabled" in res_json["judge"]["message"].lower()
+

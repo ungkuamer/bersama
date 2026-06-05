@@ -83,7 +83,7 @@ class FileWatcherService:
                             },
                         )
                     )
-            elif path.parent.name == "quality-gate" and path.name == "result.json":
+            elif path.parent.name == "quality-gate" and path.name in ("result.json", "judge.json"):
                 payload = {"repo": repo_name, "issue_number": issue_number}
                 await self._event_bus.publish(Event(type=QUALITY_GATE_UPDATED, data=payload))
 

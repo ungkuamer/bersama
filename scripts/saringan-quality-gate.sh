@@ -42,6 +42,35 @@ print(json.dumps({"status": sys.argv[1], "message": sys.argv[2]}))
 PY
 }
 
+write_judge_status() {
+  local status="$1"
+  local message="$2"
+  local model="${3:-}"
+  local started_at="${4:-}"
+  local diag_dir="$WORKTREE_PATH/quality-gate"
+  mkdir -p "$diag_dir"
+  python3 - "$status" "$message" "$model" "$started_at" "$diag_dir/judge.json" <<'PY'
+import json
+import sys
+from datetime import datetime, timezone
+
+payload = {"status": sys.argv[1]}
+msg = sys.argv[2]
+model = sys.argv[3]
+started = sys.argv[4]
+if msg:
+    payload["message"] = msg
+if model:
+    payload["model"] = model
+if started:
+    payload["started_at"] = started
+else:
+    payload["started_at"] = datetime.now(timezone.utc).isoformat()
+with open(sys.argv[5], "w") as f:
+    json.dump(payload, f, indent=2)
+PY
+}
+
 fail_result() {
   emit_json "failed" "$1"
   exit 0
@@ -160,6 +189,7 @@ printf '%s\n' "$VALIDATE_OUTPUT" > "$INPUT_DIR/validate.result.json"
 if [ "$VALIDATE_EXIT" -ne 0 ]; then
   # Saringan validate uses non-zero for failed/error. Rangkai expects command
   # success plus status JSON to classify the gate, so forward stdout and exit 0.
+  write_judge_status "skipped" "Judge skipped because deterministic validation did not pass."
   if [ -n "$VALIDATE_OUTPUT" ]; then
     printf '%s\n' "$VALIDATE_OUTPUT"
   else
@@ -170,11 +200,13 @@ fi
 
 VALIDATE_STATUS="$(printf '%s' "$VALIDATE_OUTPUT" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("status", "error"))' 2>/dev/null || printf 'error')"
 if [ "$VALIDATE_STATUS" != "passed" ]; then
+  write_judge_status "skipped" "Judge skipped because deterministic validation did not pass."
   printf '%s\n' "$VALIDATE_OUTPUT"
   exit 0
 fi
 
 if [ "$SARINGAN_SKIP_JUDGE" = "1" ]; then
+  write_judge_status "skipped" "Judge skipped because judge execution is disabled (SARINGAN_SKIP_JUDGE=1)."
   printf '%s\n' "$VALIDATE_OUTPUT"
   exit 0
 fi
@@ -182,6 +214,9 @@ fi
 if [ -z "${SARINGAN_JUDGE_MODEL:-}" ]; then
   error_result "SARINGAN_JUDGE_MODEL is required for saringan judge, or set SARINGAN_SKIP_JUDGE=1."
 fi
+
+# Write running state before invoking the judge subprocess
+write_judge_status "running" "Judge is evaluating..." "$SARINGAN_JUDGE_MODEL"
 
 # Run advisory Contextual Judge Gate. Current Saringan semantics are advisory:
 # if the judge completes, status is passed and evidence contains advisories,
@@ -196,6 +231,7 @@ JUDGE_EXIT=$?
 printf '%s\n' "$JUDGE_OUTPUT" > "$INPUT_DIR/judge.result.json"
 
 if [ "$JUDGE_EXIT" -ne 0 ]; then
+  write_judge_status "error" "Saringan judge exited $JUDGE_EXIT. See $JUDGE_STDERR"
   if [ -n "$JUDGE_OUTPUT" ]; then
     printf '%s\n' "$JUDGE_OUTPUT"
   else
@@ -203,6 +239,11 @@ if [ "$JUDGE_EXIT" -ne 0 ]; then
   fi
   exit 0
 fi
+
+# Parse judge result and write final artifact
+JUDGE_STATUS="$(printf '%s' "$JUDGE_OUTPUT" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("status", "error"))' 2>/dev/null || printf 'error')"
+JUDGE_MSG="$(printf '%s' "$JUDGE_OUTPUT" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("message", ""))' 2>/dev/null || printf '')"
+write_judge_status "$JUDGE_STATUS" "$JUDGE_MSG"
 
 printf '%s\n' "$JUDGE_OUTPUT"
 exit 0

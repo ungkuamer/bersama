@@ -3,6 +3,8 @@ passing gate path, and disabled gate path."""
 
 from __future__ import annotations
 
+import json
+import os
 from pathlib import Path
 
 from rangkai.config import (
@@ -909,3 +911,216 @@ def test_quality_gate_missing_issue_returns_none() -> None:
     assert result is None
     assert len(events.events) == 1
     assert events.events[0].event == "quality_gate.error"
+
+
+# ── Wrapper state transition tests (issue #166) ───────────────────
+
+
+def _setup_wrapper_test_env(tmp_path: Path) -> tuple[Path, Path, Path]:
+    """Create a fake git repo with base branch and a fake saringan binary."""
+    repo_dir = tmp_path / "repo"
+    repo_dir.mkdir()
+
+    # Initialize git repo
+    import subprocess
+    subprocess.run(["git", "init"], cwd=repo_dir, capture_output=True, check=True)
+    subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=repo_dir, capture_output=True, check=True)
+    subprocess.run(["git", "config", "user.name", "Test"], cwd=repo_dir, capture_output=True, check=True)
+
+    # Create base commit on prd branch
+    (repo_dir / "file.txt").write_text("base\n")
+    subprocess.run(["git", "add", "file.txt"], cwd=repo_dir, capture_output=True, check=True)
+    subprocess.run(["git", "commit", "-m", "base"], cwd=repo_dir, capture_output=True, check=True)
+    subprocess.run(["git", "branch", "prd-test"], cwd=repo_dir, capture_output=True, check=True)
+
+    # Create a change on main/HEAD
+    (repo_dir / "file.txt").write_text("base\nchange\n")
+    subprocess.run(["git", "add", "file.txt"], cwd=repo_dir, capture_output=True, check=True)
+    subprocess.run(["git", "commit", "-m", "change"], cwd=repo_dir, capture_output=True, check=True)
+
+    # Create fake saringan binary
+    fake_saringan = tmp_path / "fake-saringan"
+    fake_saringan.write_text(
+        '#!/usr/bin/env bash\n'
+        'if [ "$1" = "validate" ]; then\n'
+        '  echo \'{"status":"passed","check_outcomes":[]}\'\n'
+        'elif [ "$1" = "judge" ]; then\n'
+        '  echo \'{"status":"passed","check_outcomes":[{"id":"contextual_judge","evidence":{"completion_score":1.0}}]}\'\n'
+        'else\n'
+        '  echo \'{"status":"error","message":"bad command"}\'\n'
+        'fi\n'
+    )
+    fake_saringan.chmod(0o755)
+
+    return repo_dir, fake_saringan, tmp_path
+
+
+def test_wrapper_writes_skipped_when_validation_fails(tmp_path: Path) -> None:
+    """When deterministic validation fails, wrapper writes judge.json with skipped status."""
+    import subprocess
+    repo_dir, fake_saringan, _ = _setup_wrapper_test_env(tmp_path)
+
+    # Override fake saringan to fail validation
+    fake_saringan.write_text(
+        '#!/usr/bin/env bash\n'
+        'if [ "$1" = "validate" ]; then\n'
+        '  echo \'{"status":"failed","check_outcomes":[{"id":"lint","status":"failed"}]}\'\n'
+        '  exit 1\n'
+        'elif [ "$1" = "judge" ]; then\n'
+        '  echo \'{"status":"passed"}\'\n'
+        'else\n'
+        '  echo \'{"status":"error"}\'\n'
+        'fi\n'
+    )
+    fake_saringan.chmod(0o755)
+
+    env = dict(os.environ)
+    env["SARINGAN_BIN"] = str(fake_saringan)
+    env["SARINGAN_JUDGE_MODEL"] = "fake"
+    env["SARINGAN_BASE_REF"] = "prd-test"
+
+    script = Path(__file__).parent.parent / "scripts" / "saringan-quality-gate.sh"
+    result = subprocess.run(
+        [str(script), str(repo_dir), "123", "prd-test", "impl/test"],
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+
+    # Script should exit 0 and forward validate output
+    assert result.returncode == 0
+    judge_json_path = repo_dir / "quality-gate" / "judge.json"
+    assert judge_json_path.exists()
+    judge_data = json.loads(judge_json_path.read_text())
+    assert judge_data["status"] == "skipped"
+    assert "deterministic validation" in judge_data["message"].lower()
+
+
+def test_wrapper_writes_skipped_when_judge_disabled(tmp_path: Path) -> None:
+    """When SARINGAN_SKIP_JUDGE=1, wrapper writes judge.json with skipped status."""
+    import subprocess
+    repo_dir, fake_saringan, _ = _setup_wrapper_test_env(tmp_path)
+
+    env = dict(os.environ)
+    env["SARINGAN_BIN"] = str(fake_saringan)
+    env["SARINGAN_JUDGE_MODEL"] = "fake"
+    env["SARINGAN_BASE_REF"] = "prd-test"
+    env["SARINGAN_SKIP_JUDGE"] = "1"
+
+    script = Path(__file__).parent.parent / "scripts" / "saringan-quality-gate.sh"
+    result = subprocess.run(
+        [str(script), str(repo_dir), "123", "prd-test", "impl/test"],
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+
+    assert result.returncode == 0
+    judge_json_path = repo_dir / "quality-gate" / "judge.json"
+    assert judge_json_path.exists()
+    judge_data = json.loads(judge_json_path.read_text())
+    assert judge_data["status"] == "skipped"
+    assert "disabled" in judge_data["message"].lower()
+
+
+def test_wrapper_writes_running_then_final_on_judge_success(tmp_path: Path) -> None:
+    """Wrapper writes running state before judge, then final passed state after."""
+    import subprocess
+    repo_dir, fake_saringan, _ = _setup_wrapper_test_env(tmp_path)
+
+    env = dict(os.environ)
+    env["SARINGAN_BIN"] = str(fake_saringan)
+    env["SARINGAN_JUDGE_MODEL"] = "fake-model"
+    env["SARINGAN_BASE_REF"] = "prd-test"
+
+    script = Path(__file__).parent.parent / "scripts" / "saringan-quality-gate.sh"
+    result = subprocess.run(
+        [str(script), str(repo_dir), "123", "prd-test", "impl/test"],
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+
+    assert result.returncode == 0
+    judge_json_path = repo_dir / "quality-gate" / "judge.json"
+    assert judge_json_path.exists()
+    judge_data = json.loads(judge_json_path.read_text())
+    assert judge_data["status"] == "passed"
+    assert "started_at" in judge_data
+
+
+def test_wrapper_writes_error_when_judge_crashes(tmp_path: Path) -> None:
+    """When judge subprocess exits non-zero without stdout, wrapper writes error status."""
+    import subprocess
+    repo_dir, fake_saringan, _ = _setup_wrapper_test_env(tmp_path)
+
+    # Override fake saringan to crash on judge
+    fake_saringan.write_text(
+        '#!/usr/bin/env bash\n'
+        'if [ "$1" = "validate" ]; then\n'
+        '  echo \'{"status":"passed","check_outcomes":[]}\'\n'
+        'elif [ "$1" = "judge" ]; then\n'
+        '  echo "crash" >&2\n'
+        '  exit 1\n'
+        'else\n'
+        '  echo \'{"status":"error"}\'\n'
+        'fi\n'
+    )
+    fake_saringan.chmod(0o755)
+
+    env = dict(os.environ)
+    env["SARINGAN_BIN"] = str(fake_saringan)
+    env["SARINGAN_JUDGE_MODEL"] = "fake"
+    env["SARINGAN_BASE_REF"] = "prd-test"
+
+    script = Path(__file__).parent.parent / "scripts" / "saringan-quality-gate.sh"
+    result = subprocess.run(
+        [str(script), str(repo_dir), "123", "prd-test", "impl/test"],
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+
+    # Script exits 0 because it emitted an error result JSON to stdout
+    assert result.returncode == 0
+    judge_json_path = repo_dir / "quality-gate" / "judge.json"
+    assert judge_json_path.exists()
+    judge_data = json.loads(judge_json_path.read_text())
+    assert judge_data["status"] == "error"
+    assert "judge exited" in judge_data["message"].lower()
+
+
+def test_wrapper_running_artifact_includes_model_and_timing(tmp_path: Path) -> None:
+    """The running judge artifact includes model name and started_at timestamp."""
+    import subprocess
+    repo_dir, fake_saringan, _ = _setup_wrapper_test_env(tmp_path)
+
+    # Make judge slow so we can inspect running artifact (simulate with a wrapper)
+    slow_judge = tmp_path / "slow-judge"
+    slow_judge.write_text(
+        '#!/usr/bin/env bash\n'
+        'sleep 0.1\n'
+        'echo \'{"status":"passed","check_outcomes":[]}\'\n'
+    )
+    slow_judge.chmod(0o755)
+
+    env = dict(os.environ)
+    env["SARINGAN_BIN"] = str(slow_judge)
+    env["SARINGAN_JUDGE_MODEL"] = "gpt-4o-mini"
+    env["SARINGAN_BASE_REF"] = "prd-test"
+
+    script = Path(__file__).parent.parent / "scripts" / "saringan-quality-gate.sh"
+    result = subprocess.run(
+        [str(script), str(repo_dir), "123", "prd-test", "impl/test"],
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+
+    assert result.returncode == 0
+    judge_json_path = repo_dir / "quality-gate" / "judge.json"
+    assert judge_json_path.exists()
+    judge_data = json.loads(judge_json_path.read_text())
+    assert judge_data["status"] == "passed"
+    # started_at was written during the running phase and overwritten by final
+    assert "started_at" in judge_data

@@ -1009,6 +1009,13 @@ def create_dashboard_app(
                         judge_summary: dict[str, object] = {"status": str(judge_status)}
                         if isinstance(judge_message, str) and judge_message:
                             judge_summary["message"] = judge_message
+                        # Forward optional model and timing metadata for running state visibility
+                        judge_model = judge_data.get("model")
+                        if isinstance(judge_model, str) and judge_model:
+                            judge_summary["model"] = judge_model
+                        judge_started_at = judge_data.get("started_at")
+                        if isinstance(judge_started_at, str) and judge_started_at:
+                            judge_summary["started_at"] = judge_started_at
                         response["judge"] = judge_summary
             except (json.JSONDecodeError, OSError):
                 pass
