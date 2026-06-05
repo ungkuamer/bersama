@@ -264,6 +264,7 @@ export default function SideDrawer({
 }: SideDrawerProps) {
   const [selectedTab, setSelectedTab] = useState<TabId>(() => readOnly ? 'overview' : 'operations');
   const [claimFormOpen, setClaimFormOpen] = useState(false);
+  const [judgeRawExpanded, setJudgeRawExpanded] = useState(false);
 
   const isImplementation = issue?.kind === 'implementation';
 
@@ -580,6 +581,73 @@ export default function SideDrawer({
                                     <span className="text-foreground">{String(qualityGateSummary.judge.started_at)}</span>
                                   </div>
                                 )}
+                              </div>
+                            )}
+                            {/* Evidence Summary */}
+                            {qualityGateSummary.judge.evidence && qualityGateSummary.judge.evidence.length > 0 && (
+                              <div className="flex flex-col gap-1.5 mt-1">
+                                {qualityGateSummary.judge.evidence.map((ev, idx) => (
+                                  <div key={ev.id || idx} className="flex flex-col gap-1 text-[10px] bg-muted/20 border border-border/30 rounded p-2">
+                                    <div className="flex items-center justify-between gap-2">
+                                      <span className="font-semibold text-foreground">{ev.id || 'unknown'}</span>
+                                      {ev.completion_score !== undefined && (
+                                        <span className="font-mono text-[9px] text-muted-foreground">
+                                          {typeof ev.completion_score === 'number' ? ev.completion_score.toFixed(2) : String(ev.completion_score)}
+                                        </span>
+                                      )}
+                                    </div>
+                                    {ev.scope_guard !== undefined && (
+                                      <div className="flex items-center gap-1 text-[9px]">
+                                        <span className="text-muted-foreground">Scope Guard:</span>
+                                        <span className={ev.scope_guard ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}>
+                                          {ev.scope_guard ? 'Passed' : 'Rejected'}
+                                        </span>
+                                      </div>
+                                    )}
+                                    {ev.acceptance_criteria && ev.acceptance_criteria.length > 0 && (
+                                      <div className="flex flex-col gap-0.5 mt-0.5">
+                                        <span className="text-[8px] font-bold uppercase tracking-wider text-muted-foreground">Acceptance Criteria</span>
+                                        {ev.acceptance_criteria.map((ac, acIdx) => (
+                                          <div key={acIdx} className="flex items-start gap-1.5 pl-2 border-l border-border/40">
+                                            <span className={`text-[8px] font-mono uppercase shrink-0 ${ac.status === 'passed' ? 'text-emerald-600 dark:text-emerald-400' : ac.status === 'failed' ? 'text-red-600 dark:text-red-400' : 'text-muted-foreground'}`}>
+                                              {ac.status || 'unknown'}
+                                            </span>
+                                            <span className="text-[8px] text-foreground truncate">{ac.id || '—'}</span>
+                                            {ac.message && (
+                                              <span className="text-[8px] text-muted-foreground">{ac.message}</span>
+                                            )}
+                                          </div>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                            {/* Expandable Raw Output */}
+                            {qualityGateSummary.judge.raw && (
+                              <div className="flex flex-col gap-1 mt-1">
+                                <button
+                                  onClick={() => setJudgeRawExpanded(!judgeRawExpanded)}
+                                  className="flex items-center gap-1 text-[9px] font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors"
+                                >
+                                  <span>{judgeRawExpanded ? 'Hide' : 'Raw Output'}</span>
+                                  <span className="font-mono text-[8px] text-muted-foreground/60">(bounded)</span>
+                                </button>
+                                {judgeRawExpanded && (
+                                  <div className="bg-muted/30 border border-border/40 rounded p-2 text-[8px] font-mono text-muted-foreground max-h-48 overflow-y-auto whitespace-pre-wrap break-all">
+                                    {qualityGateSummary.judge.raw}
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                            {/* Bounded Stderr */}
+                            {qualityGateSummary.judge.stderr && (
+                              <div className="flex flex-col gap-1 mt-1">
+                                <span className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">Stderr</span>
+                                <div className="bg-amber-500/5 border border-amber-500/10 rounded p-2 text-[8px] font-mono text-amber-700 dark:text-amber-300 max-h-32 overflow-y-auto whitespace-pre-wrap">
+                                  {qualityGateSummary.judge.stderr}
+                                </div>
                               </div>
                             )}
                           </div>

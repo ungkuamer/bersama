@@ -64,6 +64,56 @@ def _issue_number_from_worktree(worktree_path: Path) -> int | None:
         return None
 
 
+def _normalize_judge_evidence(check_outcomes: list[object]) -> list[dict[str, object]]:
+    evidence: list[dict[str, object]] = []
+    for outcome in check_outcomes:
+        if not isinstance(outcome, dict):
+            continue
+        outcome_id = outcome.get("id")
+        resolved_id = str(outcome_id) if outcome_id is not None else "unknown"
+        outcome_evidence = outcome.get("evidence")
+        if not isinstance(outcome_evidence, dict):
+            continue
+        normalized: dict[str, object] = {"id": resolved_id}
+        completion_score = outcome_evidence.get("completion_score")
+        if completion_score is not None:
+            normalized["completion_score"] = completion_score
+        scope_guard = outcome_evidence.get("scope_guard")
+        if scope_guard is not None:
+            normalized["scope_guard"] = scope_guard
+        acceptance_criteria = outcome_evidence.get("acceptance_criteria")
+        if isinstance(acceptance_criteria, list):
+            normalized_ac: list[dict[str, object]] = []
+            for ac in acceptance_criteria:
+                if isinstance(ac, dict):
+                    normalized_ac.append({
+                        "id": str(ac.get("id")) if ac.get("id") is not None else None,
+                        "status": str(ac.get("status")) if ac.get("status") is not None else None,
+                        "message": str(ac.get("message")) if ac.get("message") is not None else None,
+                    })
+            if normalized_ac:
+                normalized["acceptance_criteria"] = normalized_ac
+        if len(normalized) > 1:
+            evidence.append(normalized)
+    return evidence
+
+
+def _bounded_file_content(path: Path, max_lines: int = 50, max_chars: int = 5000) -> str | None:
+    if not path.exists():
+        return None
+    try:
+        text = path.read_text(encoding="utf-8")
+        lines = text.splitlines()
+        if len(lines) > max_lines:
+            lines = lines[-max_lines:]
+            text = "\n".join(lines)
+        if len(text) > max_chars:
+            text = text[:max_chars]
+        return text
+    except (OSError, UnicodeDecodeError):
+        return None
+
+
 class ClaimImplementationIssueRequest(BaseModel):
     agent_run_id: str
 
@@ -1016,6 +1066,32 @@ def create_dashboard_app(
                         judge_started_at = judge_data.get("started_at")
                         if isinstance(judge_started_at, str) and judge_started_at:
                             judge_summary["started_at"] = judge_started_at
+
+                        # Evidence drilldown: read full judge result from quality-gate-inputs
+                        judge_result_path = worktree_path / "quality-gate-inputs" / "judge.result.json"
+                        if judge_result_path.exists():
+                            try:
+                                judge_result_data = json.loads(judge_result_path.read_text(encoding="utf-8"))
+                                if isinstance(judge_result_data, dict):
+                                    check_outcomes = judge_result_data.get("check_outcomes")
+                                    if isinstance(check_outcomes, list):
+                                        normalized_evidence = _normalize_judge_evidence(check_outcomes)
+                                        if normalized_evidence:
+                                            judge_summary["evidence"] = normalized_evidence
+                                    # Bounded raw JSON view
+                                    raw_text = judge_result_path.read_text(encoding="utf-8")
+                                    if len(raw_text) > 5000:
+                                        raw_text = raw_text[:5000]
+                                    judge_summary["raw"] = raw_text
+                            except (json.JSONDecodeError, OSError):
+                                pass
+
+                        # Bounded stderr diagnostics
+                        judge_stderr_path = worktree_path / "quality-gate-inputs" / "judge.stderr"
+                        stderr_preview = _bounded_file_content(judge_stderr_path, max_lines=50, max_chars=5000)
+                        if stderr_preview is not None:
+                            judge_summary["stderr"] = stderr_preview
+
                         response["judge"] = judge_summary
             except (json.JSONDecodeError, OSError):
                 pass
