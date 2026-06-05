@@ -16,4 +16,3 @@ advisory = true
 id = "python-tests"
 type = "python_tests"
 command = ["uv", "run", "pytest", "-q"]
-

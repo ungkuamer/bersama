@@ -636,20 +636,21 @@ def test_repo_lock_serializes_across_processes() -> None:
         )
 
 
+def _child_increment(repo_path: str, counter: multiprocessing.Value) -> None:
+    lock = RepoLock(repo_path=repo_path)
+    with lock:
+        current = counter.value
+        # Simulate work that would collide if not serialized
+        time.sleep(0.01)
+        counter.value = current + 1
+
+
 def test_repo_lock_serializes_concurrent_cli_processes() -> None:
     """Simulates concurrent CLI processes using the lock and verifies they
     serialize safely without colliding."""
     with tempfile.TemporaryDirectory() as tmpdir:
         shared_counter = multiprocessing.Value("i", 0)
         num_processes = 4
-
-        def _child_increment(repo_path: str, counter: multiprocessing.Value) -> None:
-            lock = RepoLock(repo_path=repo_path)
-            with lock:
-                current = counter.value
-                # Simulate work that would collide if not serialized
-                time.sleep(0.01)
-                counter.value = current + 1
 
         processes = []
         for _ in range(num_processes):
@@ -666,3 +667,4 @@ def test_repo_lock_serializes_concurrent_cli_processes() -> None:
             f"Expected counter={num_processes}, got {shared_counter.value}. "
             "Processes likely collided without proper serialization."
         )
+
