@@ -39,6 +39,8 @@ Present the proposed breakdown as a numbered list. For each slice, show:
 - **Type**: HITL / AFK
 - **Blocked by**: which other slices (if any) must complete first
 - **User stories covered**: which user stories this addresses (if the source material has them)
+- **Decision anchors**: which ADRs, CONTEXT.md definitions, or earlier decisions this slice must not reopen
+- **Scope fences**: what this slice must NOT touch (explicitly out of scope)
 
 Ask the user:
 
@@ -46,6 +48,7 @@ Ask the user:
 - Are the dependency relationships correct?
 - Should any slices be merged or split further?
 - Are the correct slices marked as HITL and AFK?
+- Do the decision anchors and scope fences accurately bound each slice?
 
 Iterate until the user approves the breakdown.
 
@@ -65,6 +68,22 @@ A reference to the parent issue on the issue tracker (if the source was an exist
 A concise description of this vertical slice. Describe the end-to-end behavior, not layer-by-layer implementation.
 
 Avoid specific file paths or code snippets — they go stale fast. Exception: if a prototype produced a snippet that encodes a decision more precisely than prose can (state machine, reducer, schema, type shape), inline it here and note briefly that it came from a prototype. Trim to the decision-rich parts — not a working demo, just the important bits.
+
+## Decision anchors
+
+Decisions that are already made and must NOT be reopened by this issue:
+
+- Link to specific ADRs that constrain this slice
+- Reference specific CONTEXT.md definitions this slice must respect
+- Note any earlier architecture decisions that apply
+
+## Scope fences
+
+Explicit boundaries this slice must not cross:
+
+- Modules, services, or layers this slice must NOT touch
+- Features that are out of scope (deferred or rejected)
+- Behavioural constraints (e.g. "no new API endpoints beyond those specified")
 
 ## Acceptance criteria
 
