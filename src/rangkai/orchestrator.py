@@ -383,6 +383,33 @@ class Orchestrator:
         # Poll pending integration PRs asynchronously during scheduling.
         self._poll_pending_integrations(state)
 
+        # Determine if there are any pending integrations
+        has_pending = False
+        for record in records:
+            if record.state != "open":
+                continue
+            try:
+                parsed = parse_issue(
+                    GitHubIssue(
+                        number=record.number,
+                        title=record.title,
+                        body=record.body,
+                        labels=record.labels,
+                    )
+                )
+                if isinstance(parsed, ImplementationIssue):
+                    orchestration = parsed.orchestration
+                    if (
+                        orchestration.integration_status == "pending_validation"
+                        and orchestration.integration_pr
+                        and orchestration.integration_pr != "N/A"
+                    ):
+                        has_pending = True
+                        break
+            except Exception:
+                pass
+        state["has_pending_integrations"] = has_pending
+
         return state
 
     def _run_quality_gate(
@@ -1068,10 +1095,11 @@ class Orchestrator:
             claimable = state.get("claimable_issues", [])
 
             # ---- Stop Condition ----
-            # Stop only when truly idle: nothing claimable and no active
-            # Agent Runs.
+            # Stop only when truly idle: nothing claimable, no active
+            # Agent Runs, and no pending integrations.
             active_runs = bool(self._active_agent_run_issue_numbers)
-            if not claimable and not active_runs:
+            has_pending = state.get("has_pending_integrations", False)
+            if not claimable and not active_runs and not has_pending:
                 break
 
             if claimable:
@@ -1086,6 +1114,12 @@ class Orchestrator:
             # integration PRs for CI completion.
             self.reconciliation_service.reconcile()
             self._poll_pending_integrations(state)
+
+            # If we are waiting on pending integrations to progress (and have
+            # no active/new claimable runs to dispatch), sleep to pace polling.
+            if not claimable and not active_runs and has_pending:
+                import time
+                time.sleep(15)
 
         # Phase 4: Final reconciliation at orchestrator end.
         self.reconciliation_service.reconcile()
