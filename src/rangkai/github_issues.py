@@ -111,6 +111,7 @@ class GitHubIssueGateway:
         label: str | None = None,
         labels: tuple[str, ...] | None = None,
         updated_since: str | None = None,
+        limit: int = 30,
     ) -> tuple[GitHubIssueRecord, ...]:
         if label is not None and labels is not None:
             raise ValueError(
@@ -123,6 +124,8 @@ class GitHubIssueGateway:
             "list",
             "--state",
             state,
+            "--limit",
+            str(limit),
             "--json",
             "number,title,body,labels,state",
         ]
