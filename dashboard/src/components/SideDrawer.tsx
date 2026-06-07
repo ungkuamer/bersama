@@ -549,6 +549,14 @@ export default function SideDrawer({
                                   jBadgeStyle = "border-slate-200 bg-slate-50 text-slate-800 dark:border-slate-500/35 dark:bg-slate-500/15 dark:text-slate-300";
                                   jIcon = <Info className="size-3.5" />;
                                   jLabelText = "Judge Skipped";
+                                } else if (jStatus === 'not_run' || jStatus === 'not run') {
+                                  jBadgeStyle = "border-muted-foreground/30 bg-muted text-muted-foreground";
+                                  jIcon = <Clock className="size-3.5" />;
+                                  jLabelText = "Judge Not Run";
+                                } else if (jStatus === 'invalid') {
+                                  jBadgeStyle = "border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-500/35 dark:bg-amber-500/15 dark:text-amber-300";
+                                  jIcon = <AlertTriangle className="size-3.5" />;
+                                  jLabelText = "Judge Invalid";
                                 }
 
                                 return (

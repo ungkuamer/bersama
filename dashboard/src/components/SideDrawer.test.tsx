@@ -1438,6 +1438,62 @@ describe('SideDrawer Judge Layer Panel', () => {
     expect(screen.queryByText('Judge Layer')).not.toBeInTheDocument();
   });
 
+  it('renders explicit Judge Layer not-run state when the artifact is missing', () => {
+    vi.mocked(useQualityGateSummaryQuery).mockReturnValue({
+      data: {
+        status: 'passed',
+        checks: [],
+        judge: {
+          status: 'not_run',
+          message: 'Judge Layer has not been run.',
+        },
+      },
+      isLoading: false,
+    } as any);
+
+    render(
+      <SideDrawer
+        issue={mockIssueWithRepo}
+        open={true}
+        onOpenChange={() => {}}
+        repo="demo"
+        readOnly={true}
+      />
+    );
+
+    expect(screen.getByText('Judge Layer')).toBeInTheDocument();
+    expect(screen.getByText('Judge Not Run')).toBeInTheDocument();
+    expect(screen.getByText('Judge Layer has not been run.')).toBeInTheDocument();
+  });
+
+  it('renders explicit Judge Layer invalid state when the artifact is malformed', () => {
+    vi.mocked(useQualityGateSummaryQuery).mockReturnValue({
+      data: {
+        status: 'passed',
+        checks: [],
+        judge: {
+          status: 'invalid',
+          message: 'Malformed JSON in judge.json: unexpected end of input.',
+        },
+      },
+      isLoading: false,
+    } as any);
+
+    render(
+      <SideDrawer
+        issue={mockIssueWithRepo}
+        open={true}
+        onOpenChange={() => {}}
+        repo="demo"
+        readOnly={true}
+      />
+    );
+
+    expect(screen.getByText('Judge Layer')).toBeInTheDocument();
+    expect(screen.getByText('Judge Invalid')).toBeInTheDocument();
+    expect(screen.getByText('Malformed JSON in judge.json: unexpected end of input.')).toBeInTheDocument();
+  });
+
   it('renders Judge Failed badge when judge status is failed', () => {
     vi.mocked(useQualityGateSummaryQuery).mockReturnValue({
       data: {
@@ -1663,4 +1719,3 @@ describe('SideDrawer Judge Layer Panel', () => {
     expect(screen.getByText(/Trace: some trace/)).toBeInTheDocument();
   });
 });
-
