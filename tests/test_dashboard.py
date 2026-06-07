@@ -1825,19 +1825,34 @@ def test_quality_gate_api_states(tmp_path: Path) -> None:
     (diag_dir / "stderr.txt").write_text("dummy stderr")
     response = client.get("/api/repos/demo/implementation-issues/18/quality-gate")
     assert response.status_code == 200
-    assert response.json() == {"status": "passed", "message": "All checks passed", "checks": []}
+    assert response.json() == {
+        "status": "passed",
+        "message": "All checks passed",
+        "checks": [],
+        "judge": {"status": "not_run", "message": "Judge Layer has not been run."},
+    }
 
     # 2. Failed state
     (diag_dir / "result.json").write_text('{"status": "failed", "message": "Coverage is 40%"}')
     response = client.get("/api/repos/demo/implementation-issues/18/quality-gate")
     assert response.status_code == 200
-    assert response.json() == {"status": "failed", "message": "Coverage is 40%", "checks": []}
+    assert response.json() == {
+        "status": "failed",
+        "message": "Coverage is 40%",
+        "checks": [],
+        "judge": {"status": "not_run", "message": "Judge Layer has not been run."},
+    }
 
     # 3. Error state
     (diag_dir / "result.json").write_text('{"status": "error", "message": "Command not found"}')
     response = client.get("/api/repos/demo/implementation-issues/18/quality-gate")
     assert response.status_code == 200
-    assert response.json() == {"status": "error", "message": "Command not found", "checks": []}
+    assert response.json() == {
+        "status": "error",
+        "message": "Command not found",
+        "checks": [],
+        "judge": {"status": "not_run", "message": "Judge Layer has not been run."},
+    }
 
     # 4. Invalid JSON state (malformed JSON)
     (diag_dir / "result.json").write_text('{invalid json')
@@ -1926,14 +1941,19 @@ def test_quality_gate_api_checks(tmp_path: Path) -> None:
                 "advisory": False,
                 "message": None
             }
-        ]
+        ],
+        "judge": {"status": "not_run", "message": "Judge Layer has not been run."},
     }
 
     # 2. Check normalization with missing checks array
     (diag_dir / "result.json").write_text('{"status": "passed"}')
     response = client.get("/api/repos/demo/implementation-issues/18/quality-gate")
     assert response.status_code == 200
-    assert response.json() == {"status": "passed", "checks": []}
+    assert response.json() == {
+        "status": "passed",
+        "checks": [],
+        "judge": {"status": "not_run", "message": "Judge Layer has not been run."},
+    }
 
     # 3. Check normalization with partial checks (fallback behavior)
     result_data_partial = {
@@ -2030,7 +2050,7 @@ def test_quality_gate_api_judge_layer_summary(tmp_path: Path) -> None:
 
 
 def test_quality_gate_api_judge_layer_missing(tmp_path: Path) -> None:
-    """When judge.json does not exist, the response does not include a judge field."""
+    """When judge.json does not exist, the response exposes an explicit nested not_run state."""
     import dataclasses
     config = build_config()
     config.repos["demo"] = dataclasses.replace(
@@ -2052,11 +2072,14 @@ def test_quality_gate_api_judge_layer_missing(tmp_path: Path) -> None:
     assert response.status_code == 200
     res_json = response.json()
     assert res_json["status"] == "passed"
-    assert "judge" not in res_json
+    assert res_json["judge"] == {
+        "status": "not_run",
+        "message": "Judge Layer has not been run.",
+    }
 
 
 def test_quality_gate_api_judge_layer_invalid_json(tmp_path: Path) -> None:
-    """When judge.json is malformed, it is ignored and not included in the response."""
+    """When judge.json is malformed, the response surfaces an explicit invalid nested state."""
     import dataclasses
     config = build_config()
     config.repos["demo"] = dataclasses.replace(
@@ -2079,7 +2102,81 @@ def test_quality_gate_api_judge_layer_invalid_json(tmp_path: Path) -> None:
     assert response.status_code == 200
     res_json = response.json()
     assert res_json["status"] == "passed"
-    assert "judge" not in res_json
+    assert res_json["judge"]["status"] == "invalid"
+    assert "malformed" in res_json["judge"]["message"].lower()
+
+
+def test_quality_gate_api_judge_layer_missing_status_field(tmp_path: Path) -> None:
+    """When judge.json lacks a status field, the response stays safe and marks the Judge Layer invalid."""
+    import dataclasses
+
+    config = build_config()
+    config.repos["demo"] = dataclasses.replace(
+        config.repos["demo"],
+        quality_gate=QualityGateConfig(enabled=True, command="true"),
+        worktree_root=tmp_path,
+    )
+
+    app = create_dashboard_app(config=config)
+    client = TestClient(app)
+
+    issue_wt = tmp_path / "issue-18"
+    diag_dir = issue_wt / "quality-gate"
+    diag_dir.mkdir(parents=True)
+
+    (diag_dir / "result.json").write_text('{"status": "passed"}')
+    (diag_dir / "judge.json").write_text(json.dumps({"message": "missing status"}))
+
+    response = client.get("/api/repos/demo/implementation-issues/18/quality-gate")
+    assert response.status_code == 200
+    res_json = response.json()
+    assert res_json["status"] == "passed"
+    assert res_json["judge"] == {
+        "status": "invalid",
+        "message": "Judge Layer status field is missing in judge.json.",
+    }
+
+
+def test_quality_gate_api_judge_layer_unexpected_schema_still_returns_safe_nested_summary(
+    tmp_path: Path,
+) -> None:
+    """Unexpected Judge Layer schemas should render safely without crashing the dashboard contract."""
+    import dataclasses
+
+    config = build_config()
+    config.repos["demo"] = dataclasses.replace(
+        config.repos["demo"],
+        quality_gate=QualityGateConfig(enabled=True, command="true"),
+        worktree_root=tmp_path,
+    )
+
+    app = create_dashboard_app(config=config)
+    client = TestClient(app)
+
+    issue_wt = tmp_path / "issue-18"
+    diag_dir = issue_wt / "quality-gate"
+    diag_dir.mkdir(parents=True)
+
+    (diag_dir / "result.json").write_text('{"status": "passed"}')
+    (diag_dir / "judge.json").write_text(
+        json.dumps(
+            {
+                "status": {"nested": "passed"},
+                "message": ["not", "a", "string"],
+                "model": {"name": "gpt-4o-mini"},
+                "started_at": 1234,
+            }
+        )
+    )
+
+    response = client.get("/api/repos/demo/implementation-issues/18/quality-gate")
+    assert response.status_code == 200
+    res_json = response.json()
+    assert res_json["status"] == "passed"
+    assert res_json["judge"] == {
+        "status": "invalid",
+        "message": "Judge Layer status field in judge.json must be a string.",
+    }
 
 
 def test_quality_gate_api_judge_layer_running(tmp_path: Path) -> None:
@@ -2366,3 +2463,129 @@ def test_quality_gate_api_judge_layer_bounded_stderr_truncation(tmp_path: Path) 
     # Should be bounded/truncated
     assert stderr.count("\n") < 100
 
+
+def test_quality_gate_api_judge_layer_bounded_raw_truncation(tmp_path: Path) -> None:
+    """Judge raw output is bounded before reaching the browser."""
+    import dataclasses
+
+    config = build_config()
+    config.repos["demo"] = dataclasses.replace(
+        config.repos["demo"],
+        quality_gate=QualityGateConfig(enabled=True, command="true"),
+        worktree_root=tmp_path,
+    )
+
+    app = create_dashboard_app(config=config)
+    client = TestClient(app)
+
+    issue_wt = tmp_path / "issue-18"
+    diag_dir = issue_wt / "quality-gate"
+    diag_dir.mkdir(parents=True)
+    inputs_dir = issue_wt / "quality-gate-inputs"
+    inputs_dir.mkdir(parents=True)
+
+    (diag_dir / "result.json").write_text('{"status": "passed", "checks": []}')
+    (diag_dir / "judge.json").write_text(json.dumps({"status": "passed"}))
+    oversized_raw = json.dumps({"payload": "x" * 8000})
+    (inputs_dir / "judge.result.json").write_text(oversized_raw)
+
+    response = client.get("/api/repos/demo/implementation-issues/18/quality-gate")
+
+    assert response.status_code == 200
+    raw = response.json()["judge"]["raw"]
+    assert isinstance(raw, str)
+    assert len(raw) == 5000
+
+
+def test_quality_gate_api_judge_layer_inaccessible_result_uses_existing_quality_gate_error_behavior(
+    tmp_path: Path,
+) -> None:
+    """Unreadable nested Judge Layer artifacts should surface via the existing read-error path."""
+    import dataclasses
+    from unittest.mock import patch
+
+    config = build_config()
+    config.repos["demo"] = dataclasses.replace(
+        config.repos["demo"],
+        quality_gate=QualityGateConfig(enabled=True, command="true"),
+        worktree_root=tmp_path,
+    )
+
+    app = create_dashboard_app(config=config)
+    client = TestClient(app)
+
+    issue_wt = tmp_path / "issue-18"
+    diag_dir = issue_wt / "quality-gate"
+    diag_dir.mkdir(parents=True)
+    inputs_dir = issue_wt / "quality-gate-inputs"
+    inputs_dir.mkdir(parents=True)
+
+    (diag_dir / "result.json").write_text('{"status": "passed", "checks": []}')
+    (diag_dir / "judge.json").write_text(json.dumps({"status": "passed"}))
+    (inputs_dir / "judge.result.json").write_text('{"status":"passed"}')
+
+    original_read_text = Path.read_text
+
+    def raising_read_text(self: Path, *args: object, **kwargs: object) -> str:
+        if self.name == "judge.result.json":
+            raise OSError("permission denied")
+        return original_read_text(self, *args, **kwargs)
+
+    with patch.object(Path, "read_text", autospec=True, side_effect=raising_read_text):
+        response = client.get("/api/repos/demo/implementation-issues/18/quality-gate")
+
+    assert response.status_code == 500
+    assert response.json() == {
+        "detail": {
+            "code": "unreadable-quality-gate",
+            "kind": "read-error",
+            "message": "Repository or worktree access failure on judge.result.json: permission denied",
+        }
+    }
+
+
+def test_quality_gate_api_judge_layer_inaccessible_stderr_uses_existing_quality_gate_error_behavior(
+    tmp_path: Path,
+) -> None:
+    """Unreadable Judge Layer stderr should surface via the existing read-error path."""
+    import dataclasses
+    from unittest.mock import patch
+
+    config = build_config()
+    config.repos["demo"] = dataclasses.replace(
+        config.repos["demo"],
+        quality_gate=QualityGateConfig(enabled=True, command="true"),
+        worktree_root=tmp_path,
+    )
+
+    app = create_dashboard_app(config=config)
+    client = TestClient(app)
+
+    issue_wt = tmp_path / "issue-18"
+    diag_dir = issue_wt / "quality-gate"
+    diag_dir.mkdir(parents=True)
+    inputs_dir = issue_wt / "quality-gate-inputs"
+    inputs_dir.mkdir(parents=True)
+
+    (diag_dir / "result.json").write_text('{"status": "passed", "checks": []}')
+    (diag_dir / "judge.json").write_text(json.dumps({"status": "passed"}))
+    (inputs_dir / "judge.stderr").write_text("warning")
+
+    original_read_text = Path.read_text
+
+    def raising_read_text(self: Path, *args: object, **kwargs: object) -> str:
+        if self.name == "judge.stderr":
+            raise OSError("permission denied")
+        return original_read_text(self, *args, **kwargs)
+
+    with patch.object(Path, "read_text", autospec=True, side_effect=raising_read_text):
+        response = client.get("/api/repos/demo/implementation-issues/18/quality-gate")
+
+    assert response.status_code == 500
+    assert response.json() == {
+        "detail": {
+            "code": "unreadable-quality-gate",
+            "kind": "read-error",
+            "message": "Repository or worktree access failure on judge.stderr: permission denied",
+        }
+    }

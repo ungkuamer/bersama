@@ -98,7 +98,13 @@ def _normalize_judge_evidence(check_outcomes: list[object]) -> list[dict[str, ob
     return evidence
 
 
-def _bounded_file_content(path: Path, max_lines: int = 50, max_chars: int = 5000) -> str | None:
+def _bounded_file_content(
+    path: Path,
+    max_lines: int = 50,
+    max_chars: int = 5000,
+    *,
+    suppress_read_errors: bool = True,
+) -> str | None:
     if not path.exists():
         return None
     try:
@@ -110,8 +116,128 @@ def _bounded_file_content(path: Path, max_lines: int = 50, max_chars: int = 5000
         if len(text) > max_chars:
             text = text[:max_chars]
         return text
-    except (OSError, UnicodeDecodeError):
+    except UnicodeDecodeError:
         return None
+    except OSError:
+        if suppress_read_errors:
+            return None
+        raise
+
+
+def _invalid_judge_summary(message: str) -> dict[str, object]:
+    return {"status": "invalid", "message": message}
+
+
+def _normalize_judge_summary(
+    *,
+    worktree_path: Path,
+    diag_dir: Path,
+) -> dict[str, object]:
+    judge_json_path = diag_dir / "judge.json"
+    if not judge_json_path.exists():
+        return {
+            "status": "not_run",
+            "message": "Judge Layer has not been run.",
+        }
+
+    try:
+        judge_data = json.loads(judge_json_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        return _invalid_judge_summary(f"Malformed JSON in judge.json: {exc}")
+    except OSError as exc:
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "code": "unreadable-quality-gate",
+                "kind": "read-error",
+                "message": f"Repository or worktree access failure on judge.json: {exc}",
+            },
+        ) from exc
+
+    if not isinstance(judge_data, dict):
+        return _invalid_judge_summary(
+            "Judge Layer judge.json does not contain a JSON object."
+        )
+
+    judge_status = judge_data.get("status")
+    if judge_status is None:
+        return _invalid_judge_summary(
+            "Judge Layer status field is missing in judge.json."
+        )
+    if not isinstance(judge_status, str):
+        return _invalid_judge_summary(
+            "Judge Layer status field in judge.json must be a string."
+        )
+
+    judge_summary: dict[str, object] = {"status": judge_status}
+    judge_message = judge_data.get("message")
+    if isinstance(judge_message, str) and judge_message:
+        judge_summary["message"] = judge_message
+
+    judge_model = judge_data.get("model")
+    if isinstance(judge_model, str) and judge_model:
+        judge_summary["model"] = judge_model
+    judge_started_at = judge_data.get("started_at")
+    if isinstance(judge_started_at, str) and judge_started_at:
+        judge_summary["started_at"] = judge_started_at
+
+    judge_result_path = worktree_path / "quality-gate-inputs" / "judge.result.json"
+    if judge_result_path.exists():
+        try:
+            judge_result_text = judge_result_path.read_text(encoding="utf-8")
+            judge_result_data = json.loads(judge_result_text)
+        except json.JSONDecodeError as exc:
+            judge_summary.setdefault(
+                "message",
+                f"Malformed JSON in judge.result.json: {exc}",
+            )
+        except OSError as exc:
+            raise HTTPException(
+                status_code=500,
+                detail={
+                    "code": "unreadable-quality-gate",
+                    "kind": "read-error",
+                    "message": (
+                        "Repository or worktree access failure on "
+                        f"judge.result.json: {exc}"
+                    ),
+                },
+            ) from exc
+        else:
+            if isinstance(judge_result_data, dict):
+                check_outcomes = judge_result_data.get("check_outcomes")
+                if isinstance(check_outcomes, list):
+                    normalized_evidence = _normalize_judge_evidence(check_outcomes)
+                    if normalized_evidence:
+                        judge_summary["evidence"] = normalized_evidence
+                bounded_raw = judge_result_text[:5000]
+                judge_summary["raw"] = bounded_raw
+
+    judge_stderr_path = worktree_path / "quality-gate-inputs" / "judge.stderr"
+    if judge_stderr_path.exists():
+        try:
+            stderr_preview = _bounded_file_content(
+                judge_stderr_path,
+                max_lines=50,
+                max_chars=5000,
+                suppress_read_errors=False,
+            )
+        except OSError as exc:
+            raise HTTPException(
+                status_code=500,
+                detail={
+                    "code": "unreadable-quality-gate",
+                    "kind": "read-error",
+                    "message": (
+                        "Repository or worktree access failure on "
+                        f"judge.stderr: {exc}"
+                    ),
+                },
+            ) from exc
+        if stderr_preview is not None:
+            judge_summary["stderr"] = stderr_preview
+
+    return judge_summary
 
 
 class ClaimImplementationIssueRequest(BaseModel):
@@ -1047,54 +1173,10 @@ def create_dashboard_app(
         
         response["checks"] = normalized_checks
 
-        # Judge Layer summary: read optional judge.json from the same quality-gate directory
-        judge_json_path = diag_dir / "judge.json"
-        if judge_json_path.exists():
-            try:
-                judge_data = json.loads(judge_json_path.read_text(encoding="utf-8"))
-                if isinstance(judge_data, dict):
-                    judge_status = judge_data.get("status")
-                    judge_message = judge_data.get("message")
-                    if judge_status is not None:
-                        judge_summary: dict[str, object] = {"status": str(judge_status)}
-                        if isinstance(judge_message, str) and judge_message:
-                            judge_summary["message"] = judge_message
-                        # Forward optional model and timing metadata for running state visibility
-                        judge_model = judge_data.get("model")
-                        if isinstance(judge_model, str) and judge_model:
-                            judge_summary["model"] = judge_model
-                        judge_started_at = judge_data.get("started_at")
-                        if isinstance(judge_started_at, str) and judge_started_at:
-                            judge_summary["started_at"] = judge_started_at
-
-                        # Evidence drilldown: read full judge result from quality-gate-inputs
-                        judge_result_path = worktree_path / "quality-gate-inputs" / "judge.result.json"
-                        if judge_result_path.exists():
-                            try:
-                                judge_result_data = json.loads(judge_result_path.read_text(encoding="utf-8"))
-                                if isinstance(judge_result_data, dict):
-                                    check_outcomes = judge_result_data.get("check_outcomes")
-                                    if isinstance(check_outcomes, list):
-                                        normalized_evidence = _normalize_judge_evidence(check_outcomes)
-                                        if normalized_evidence:
-                                            judge_summary["evidence"] = normalized_evidence
-                                    # Bounded raw JSON view
-                                    raw_text = judge_result_path.read_text(encoding="utf-8")
-                                    if len(raw_text) > 5000:
-                                        raw_text = raw_text[:5000]
-                                    judge_summary["raw"] = raw_text
-                            except (json.JSONDecodeError, OSError):
-                                pass
-
-                        # Bounded stderr diagnostics
-                        judge_stderr_path = worktree_path / "quality-gate-inputs" / "judge.stderr"
-                        stderr_preview = _bounded_file_content(judge_stderr_path, max_lines=50, max_chars=5000)
-                        if stderr_preview is not None:
-                            judge_summary["stderr"] = stderr_preview
-
-                        response["judge"] = judge_summary
-            except (json.JSONDecodeError, OSError):
-                pass
+        response["judge"] = _normalize_judge_summary(
+            worktree_path=worktree_path,
+            diag_dir=diag_dir,
+        )
 
         return response
 
