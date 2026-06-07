@@ -2282,6 +2282,114 @@ def test_quality_gate_api_judge_layer_skipped_disabled(tmp_path: Path) -> None:
     assert "disabled" in res_json["judge"]["message"].lower()
 
 
+def test_quality_gate_api_operator_smoke_path_with_wrapper_artifacts(tmp_path: Path) -> None:
+    """The operator smoke path can use real wrapper artifacts and the dashboard API together."""
+    import dataclasses
+    import os
+    import subprocess
+
+    config = build_config()
+    config.repos["demo"] = dataclasses.replace(
+        config.repos["demo"],
+        quality_gate=QualityGateConfig(enabled=True, command="true"),
+        worktree_root=tmp_path / "worktrees",
+    )
+
+    app = create_dashboard_app(config=config)
+    client = TestClient(app)
+
+    worktree_path = config.repos["demo"].worktree_root / "issue-18"
+    worktree_path.mkdir(parents=True)
+
+    subprocess.run(["git", "init"], cwd=worktree_path, capture_output=True, check=True)
+    subprocess.run(
+        ["git", "config", "user.email", "test@example.com"],
+        cwd=worktree_path,
+        capture_output=True,
+        check=True,
+    )
+    subprocess.run(
+        ["git", "config", "user.name", "Test"],
+        cwd=worktree_path,
+        capture_output=True,
+        check=True,
+    )
+    (worktree_path / "file.txt").write_text("base\n", encoding="utf-8")
+    subprocess.run(["git", "add", "file.txt"], cwd=worktree_path, capture_output=True, check=True)
+    subprocess.run(
+        ["git", "commit", "-m", "base"],
+        cwd=worktree_path,
+        capture_output=True,
+        check=True,
+    )
+    subprocess.run(["git", "branch", "prd-test"], cwd=worktree_path, capture_output=True, check=True)
+    (worktree_path / "file.txt").write_text("base\nchange\n", encoding="utf-8")
+    subprocess.run(["git", "add", "file.txt"], cwd=worktree_path, capture_output=True, check=True)
+    subprocess.run(
+        ["git", "commit", "-m", "change"],
+        cwd=worktree_path,
+        capture_output=True,
+        check=True,
+    )
+
+    fake_saringan = tmp_path / "fake-saringan"
+    fake_saringan.write_text(
+        '#!/usr/bin/env bash\n'
+        'if [ "$1" = "validate" ]; then\n'
+        '  echo \'{"status":"passed","check_outcomes":[] }\'\n'
+        'elif [ "$1" = "judge" ]; then\n'
+        '  echo \'{"status":"passed","check_outcomes":[{"id":"contextual_judge","evidence":{"completion_score":1.0,"scope_guard":true,"acceptance_criteria":[{"id":"ac-1","status":"passed","message":"Satisfied"}]}}]}\'\n'
+        'else\n'
+        '  echo \'{"status":"error","message":"bad command"}\'\n'
+        'fi\n',
+        encoding="utf-8",
+    )
+    fake_saringan.chmod(0o755)
+
+    script = Path(__file__).parent.parent / "scripts" / "saringan-quality-gate.sh"
+    env = dict(os.environ)
+    env["SARINGAN_BIN"] = str(fake_saringan)
+    env["SARINGAN_JUDGE_MODEL"] = "fake-model"
+    env["SARINGAN_BASE_REF"] = "prd-test"
+
+    wrapper_run = subprocess.run(
+        [str(script), str(worktree_path), "18", "prd-test", "impl/15/18-demo"],
+        cwd=worktree_path,
+        capture_output=True,
+        text=True,
+        check=True,
+        env=env,
+    )
+
+    diag_dir = worktree_path / "quality-gate"
+    diag_dir.mkdir(exist_ok=True)
+    (diag_dir / "result.json").write_text(wrapper_run.stdout, encoding="utf-8")
+
+    response = client.get("/api/repos/demo/implementation-issues/18/quality-gate")
+
+    assert response.status_code == 200
+    res_json = response.json()
+    assert res_json["status"] == "passed"
+    assert res_json["checks"] == []
+    assert res_json["judge"]["status"] == "passed"
+    assert isinstance(res_json["judge"]["started_at"], str)
+    assert res_json["judge"]["evidence"] == [
+        {
+            "id": "contextual_judge",
+            "completion_score": 1.0,
+            "scope_guard": True,
+            "acceptance_criteria": [
+                {
+                    "id": "ac-1",
+                    "status": "passed",
+                    "message": "Satisfied",
+                }
+            ],
+        }
+    ]
+    assert '"id":"contextual_judge"' in res_json["judge"]["raw"]
+
+
 # ── Judge Layer evidence drilldown tests (issue #167) ──────────────
 
 

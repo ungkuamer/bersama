@@ -186,6 +186,43 @@ Rangkai also persists quality-gate diagnostics under:
 <worktree>/quality-gate/
 ```
 
+## Orchestration Control Center
+
+The Orchestration Control Center reads the Quality Gate summary API for each Implementation Issue:
+
+```text
+GET /api/repos/<repo>/implementation-issues/<issue_number>/quality-gate
+```
+
+The Implementation Issue drawer shows overall Quality Gate state and Judge Layer state separately. This preserves the advisory-first Judge Layer policy: operators can inspect Judge Layer findings without changing Integration Pull Request policy.
+
+### Judge Layer lifecycle
+
+The drawer renders these Judge Layer states from `<worktree>/quality-gate/judge.json`:
+
+| Judge Layer state | Meaning in the Orchestration Control Center |
+| --- | --- |
+| `not_run` | No Judge Layer artifact exists yet. The drawer shows `Judge Not Run`. |
+| `running` | The wrapper wrote the pre-judge artifact and the judge subprocess is still in progress. The drawer shows `Judge Running`. |
+| `skipped` | The judge did not run because deterministic validation failed or `SARINGAN_SKIP_JUDGE=1` disabled it. The drawer shows `Judge Skipped`. |
+| `passed` | The judge completed successfully. The drawer shows `Judge Passed`. |
+| `failed` | The judge completed with failed status. The drawer shows `Judge Failed`. |
+| `error` | The judge subprocess or its output errored. The drawer shows `Judge Error`. |
+| `invalid` | The artifact exists but is malformed or missing required fields. The drawer shows `Judge Invalid`. |
+
+### Artifact sources behind the drawer
+
+The Judge Layer panel is fed by these generated files:
+
+| File | Drawer/API usage |
+| --- | --- |
+| `<worktree>/quality-gate/judge.json` | Primary Judge Layer status, message, and `started_at` metadata |
+| `<worktree>/quality-gate-inputs/judge.result.json` | Raw judge JSON plus normalized evidence such as `completion_score`, `scope_guard`, and acceptance criteria verdicts |
+| `<worktree>/quality-gate-inputs/judge.stderr` | Bounded stderr preview for troubleshooting |
+| `<worktree>/quality-gate/result.json` | Overall Quality Gate status shown above the Judge Layer panel |
+
+If `judge.json` is malformed, unreadable, or missing a string `status`, the API returns a safe nested `invalid` Judge Layer summary instead of crashing the Orchestration Control Center.
+
 ## Blocking policy
 
 Current policy:
@@ -245,3 +282,30 @@ Expected stdout:
 ```json
 {"status":"passed","check_outcomes":[{"id":"contextual_judge","evidence":{"completion_score":1.0}}]}
 ```
+
+To verify the Orchestration Control Center path, persist that stdout as the Quality Gate result artifact that the dashboard API reads:
+
+```bash
+mkdir -p "$tmp/quality-gate"
+SARINGAN_BIN="$tmp/fake-saringan" \
+SARINGAN_JUDGE_MODEL=fake \
+SARINGAN_BASE_REF=prd-test \
+/home/ungku/programming/rangkai/scripts/saringan-quality-gate.sh \
+  "$tmp" 123 prd-test impl/test > "$tmp/quality-gate/result.json"
+```
+
+Then inspect the API payload:
+
+```bash
+curl http://localhost:8000/api/repos/rangkai/implementation-issues/123/quality-gate
+```
+
+Operator verification checklist:
+
+- Quality Gate `status` is `passed`
+- nested `judge.status` is `passed`
+- nested `judge.started_at` is present
+- nested `judge.evidence` includes normalized contextual judge evidence from `judge.result.json`
+- nested `judge.raw` includes bounded raw judge output
+
+Equivalent regression coverage lives in `tests/test_dashboard.py::test_quality_gate_api_operator_smoke_path_with_wrapper_artifacts`.
