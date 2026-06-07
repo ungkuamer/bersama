@@ -11,9 +11,25 @@ export interface QualityGateCheck {
   message?: string | null
 }
 
+export interface QualityGateJudgeEvidence {
+  id: string
+  completion_score?: number
+  scope_guard?: boolean
+  acceptance_criteria?: Array<{
+    id?: string | null
+    status?: string | null
+    message?: string | null
+  }>
+}
+
 export interface QualityGateJudgeSummary {
   status: string
   message?: string
+  model?: string
+  started_at?: string
+  evidence?: QualityGateJudgeEvidence[]
+  raw?: string
+  stderr?: string
 }
 
 export interface QualityGateSummary {

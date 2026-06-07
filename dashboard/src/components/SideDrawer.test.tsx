@@ -1557,5 +1557,110 @@ describe('SideDrawer Judge Layer Panel', () => {
     expect(screen.getByText('Judge Skipped')).toBeInTheDocument();
     expect(screen.getByText('Judge skipped because judge execution is disabled (SARINGAN_SKIP_JUDGE=1).')).toBeInTheDocument();
   });
+
+  it('renders compact evidence summary with completion score, scope guard, and acceptance criteria', () => {
+    vi.mocked(useQualityGateSummaryQuery).mockReturnValue({
+      data: {
+        status: 'passed',
+        checks: [],
+        judge: {
+          status: 'passed',
+          message: 'Judge completed.',
+          evidence: [
+            {
+              id: 'contextual_judge',
+              completion_score: 0.92,
+              scope_guard: true,
+              acceptance_criteria: [
+                { id: 'ac-1', status: 'passed', message: 'Criterion 1 met' },
+                { id: 'ac-2', status: 'failed', message: 'Criterion 2 missing' },
+              ],
+            },
+          ],
+        },
+      },
+      isLoading: false,
+    } as any);
+
+    render(
+      <SideDrawer
+        issue={mockIssueWithRepo}
+        open={true}
+        onOpenChange={() => {}}
+        repo="demo"
+        readOnly={true}
+      />
+    );
+
+    expect(screen.getByText('Judge Layer')).toBeInTheDocument();
+    expect(screen.getByText('contextual_judge')).toBeInTheDocument();
+    expect(screen.getByText('0.92')).toBeInTheDocument();
+    expect(screen.getByText('ac-1')).toBeInTheDocument();
+    expect(screen.getByText('ac-2')).toBeInTheDocument();
+    expect(screen.getByText('Criterion 1 met')).toBeInTheDocument();
+    expect(screen.getByText('Criterion 2 missing')).toBeInTheDocument();
+  });
+
+  it('provides expandable bounded raw output view for judge JSON', () => {
+    vi.mocked(useQualityGateSummaryQuery).mockReturnValue({
+      data: {
+        status: 'passed',
+        checks: [],
+        judge: {
+          status: 'passed',
+          message: 'Judge completed.',
+          raw: '{"status":"passed","check_outcomes":[]}',
+        },
+      },
+      isLoading: false,
+    } as any);
+
+    render(
+      <SideDrawer
+        issue={mockIssueWithRepo}
+        open={true}
+        onOpenChange={() => {}}
+        repo="demo"
+        readOnly={true}
+      />
+    );
+
+    expect(screen.getByText('Judge Layer')).toBeInTheDocument();
+    // Expand button
+    const expandBtn = screen.getByText('Raw Output');
+    expect(expandBtn).toBeInTheDocument();
+    fireEvent.click(expandBtn);
+    expect(screen.getByText('{"status":"passed","check_outcomes":[]}')).toBeInTheDocument();
+  });
+
+  it('renders bounded stderr diagnostics when available', () => {
+    vi.mocked(useQualityGateSummaryQuery).mockReturnValue({
+      data: {
+        status: 'passed',
+        checks: [],
+        judge: {
+          status: 'passed',
+          message: 'Judge completed.',
+          stderr: 'Warning: token limit exceeded\nTrace: some trace',
+        },
+      },
+      isLoading: false,
+    } as any);
+
+    render(
+      <SideDrawer
+        issue={mockIssueWithRepo}
+        open={true}
+        onOpenChange={() => {}}
+        repo="demo"
+        readOnly={true}
+      />
+    );
+
+    expect(screen.getByText('Judge Layer')).toBeInTheDocument();
+    expect(screen.getByText('Stderr')).toBeInTheDocument();
+    expect(screen.getByText(/Warning: token limit exceeded/)).toBeInTheDocument();
+    expect(screen.getByText(/Trace: some trace/)).toBeInTheDocument();
+  });
 });
 

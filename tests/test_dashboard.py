@@ -2184,3 +2184,185 @@ def test_quality_gate_api_judge_layer_skipped_disabled(tmp_path: Path) -> None:
     assert res_json["judge"]["status"] == "skipped"
     assert "disabled" in res_json["judge"]["message"].lower()
 
+
+# ── Judge Layer evidence drilldown tests (issue #167) ──────────────
+
+
+def test_quality_gate_api_judge_layer_evidence_normalization(tmp_path: Path) -> None:
+    """When judge.result.json contains check outcomes, the API normalizes evidence."""
+    import dataclasses
+    config = build_config()
+    config.repos["demo"] = dataclasses.replace(
+        config.repos["demo"],
+        quality_gate=QualityGateConfig(enabled=True, command="true"),
+        worktree_root=tmp_path
+    )
+
+    app = create_dashboard_app(config=config)
+    client = TestClient(app)
+
+    issue_wt = tmp_path / "issue-18"
+    diag_dir = issue_wt / "quality-gate"
+    diag_dir.mkdir(parents=True)
+    inputs_dir = issue_wt / "quality-gate-inputs"
+    inputs_dir.mkdir(parents=True)
+
+    (diag_dir / "result.json").write_text('{"status": "passed", "checks": []}')
+    (diag_dir / "judge.json").write_text(json.dumps({"status": "passed", "message": "Judge passed"}))
+
+    judge_result = {
+        "status": "passed",
+        "message": "Judge passed",
+        "check_outcomes": [
+            {
+                "id": "contextual_judge",
+                "status": "passed",
+                "evidence": {
+                    "completion_score": 0.92,
+                    "scope_guard": True,
+                    "acceptance_criteria": [
+                        {"id": "ac-1", "status": "passed", "message": "Criterion 1 met"},
+                        {"id": "ac-2", "status": "failed", "message": "Criterion 2 missing"},
+                    ],
+                },
+            },
+            {
+                "id": "security_judge",
+                "status": "passed",
+                "evidence": {
+                    "completion_score": 1.0,
+                },
+            },
+        ],
+    }
+    (inputs_dir / "judge.result.json").write_text(json.dumps(judge_result))
+
+    response = client.get("/api/repos/demo/implementation-issues/18/quality-gate")
+    assert response.status_code == 200
+    res_json = response.json()
+    assert res_json["status"] == "passed"
+    assert "judge" in res_json
+    judge = res_json["judge"]
+    assert judge["status"] == "passed"
+    assert "evidence" in judge
+    evidence = judge["evidence"]
+    assert len(evidence) == 2
+
+    # First evidence item
+    assert evidence[0]["id"] == "contextual_judge"
+    assert evidence[0]["completion_score"] == 0.92
+    assert evidence[0]["scope_guard"] is True
+    assert len(evidence[0]["acceptance_criteria"]) == 2
+    assert evidence[0]["acceptance_criteria"][0] == {"id": "ac-1", "status": "passed", "message": "Criterion 1 met"}
+    assert evidence[0]["acceptance_criteria"][1] == {"id": "ac-2", "status": "failed", "message": "Criterion 2 missing"}
+
+    # Second evidence item
+    assert evidence[1]["id"] == "security_judge"
+    assert evidence[1]["completion_score"] == 1.0
+    assert "scope_guard" not in evidence[1]
+    assert "acceptance_criteria" not in evidence[1]
+
+
+def test_quality_gate_api_judge_layer_bounded_raw_and_stderr(tmp_path: Path) -> None:
+    """The API returns bounded raw judge JSON and bounded stderr diagnostics."""
+    import dataclasses
+    config = build_config()
+    config.repos["demo"] = dataclasses.replace(
+        config.repos["demo"],
+        quality_gate=QualityGateConfig(enabled=True, command="true"),
+        worktree_root=tmp_path
+    )
+
+    app = create_dashboard_app(config=config)
+    client = TestClient(app)
+
+    issue_wt = tmp_path / "issue-18"
+    diag_dir = issue_wt / "quality-gate"
+    diag_dir.mkdir(parents=True)
+    inputs_dir = issue_wt / "quality-gate-inputs"
+    inputs_dir.mkdir(parents=True)
+
+    (diag_dir / "result.json").write_text('{"status": "passed", "checks": []}')
+    (diag_dir / "judge.json").write_text(json.dumps({"status": "passed", "message": "Judge passed"}))
+
+    judge_result = {"status": "passed", "check_outcomes": [{"id": "judge", "evidence": {"completion_score": 0.85}}]}
+    (inputs_dir / "judge.result.json").write_text(json.dumps(judge_result))
+    (inputs_dir / "judge.stderr").write_text("Warning: token limit exceeded\nTrace: some trace\n")
+
+    response = client.get("/api/repos/demo/implementation-issues/18/quality-gate")
+    assert response.status_code == 200
+    res_json = response.json()
+    judge = res_json["judge"]
+    assert "raw" in judge
+    assert judge["raw"] == json.dumps(judge_result)
+    assert "stderr" in judge
+    assert "Warning: token limit exceeded" in judge["stderr"]
+    assert "Trace: some trace" in judge["stderr"]
+
+
+def test_quality_gate_api_judge_layer_missing_result_json_no_evidence(tmp_path: Path) -> None:
+    """When judge.result.json is missing, judge summary still works but without evidence/raw/stderr."""
+    import dataclasses
+    config = build_config()
+    config.repos["demo"] = dataclasses.replace(
+        config.repos["demo"],
+        quality_gate=QualityGateConfig(enabled=True, command="true"),
+        worktree_root=tmp_path
+    )
+
+    app = create_dashboard_app(config=config)
+    client = TestClient(app)
+
+    issue_wt = tmp_path / "issue-18"
+    diag_dir = issue_wt / "quality-gate"
+    diag_dir.mkdir(parents=True)
+
+    (diag_dir / "result.json").write_text('{"status": "passed", "checks": []}')
+    (diag_dir / "judge.json").write_text(json.dumps({"status": "passed", "message": "Judge passed"}))
+
+    response = client.get("/api/repos/demo/implementation-issues/18/quality-gate")
+    assert response.status_code == 200
+    res_json = response.json()
+    judge = res_json["judge"]
+    assert judge["status"] == "passed"
+    assert "evidence" not in judge
+    assert "raw" not in judge
+    assert "stderr" not in judge
+
+
+def test_quality_gate_api_judge_layer_bounded_stderr_truncation(tmp_path: Path) -> None:
+    """The API bounds stderr to a limited number of lines."""
+    import dataclasses
+    config = build_config()
+    config.repos["demo"] = dataclasses.replace(
+        config.repos["demo"],
+        quality_gate=QualityGateConfig(enabled=True, command="true"),
+        worktree_root=tmp_path
+    )
+
+    app = create_dashboard_app(config=config)
+    client = TestClient(app)
+
+    issue_wt = tmp_path / "issue-18"
+    diag_dir = issue_wt / "quality-gate"
+    diag_dir.mkdir(parents=True)
+    inputs_dir = issue_wt / "quality-gate-inputs"
+    inputs_dir.mkdir(parents=True)
+
+    (diag_dir / "result.json").write_text('{"status": "passed", "checks": []}')
+    (diag_dir / "judge.json").write_text(json.dumps({"status": "passed"}))
+    (inputs_dir / "judge.result.json").write_text('{"status":"passed"}')
+
+    long_stderr = "\n".join([f"Line {i}" for i in range(1, 100)])
+    (inputs_dir / "judge.stderr").write_text(long_stderr)
+
+    response = client.get("/api/repos/demo/implementation-issues/18/quality-gate")
+    assert response.status_code == 200
+    res_json = response.json()
+    judge = res_json["judge"]
+    assert "stderr" in judge
+    stderr = judge["stderr"]
+    assert isinstance(stderr, str)
+    # Should be bounded/truncated
+    assert stderr.count("\n") < 100
+
